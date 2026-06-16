@@ -1,1 +1,131 @@
-Hello
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>disbit — привычки со ставкой</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ШАПКА -->
+    <header class="header">
+      <div class="logo">dis<span>bit</span></div>
+      <button class="icon-btn" id="btn-summary" title="Подвести итог дня">📊</button>
+    </header>
+
+    <!-- ПОЛОСКА ДНЕЙ НЕДЕЛИ (рендерится из JS) -->
+    <div class="week-strip" id="week-strip"></div>
+
+    <!-- КАРТОЧКА ПРОГРЕССА ЗА ДЕНЬ -->
+    <section class="progress-card">
+      <div class="progress-info">
+        <h2 class="progress-title">Сегодня</h2>
+        <p class="progress-sub"><span id="done-count">0</span> из <span id="total-count">0</span> выполнено</p>
+        <!-- сумма «под риском»: сколько спишется если не выполнить -->
+        <p class="at-risk" id="at-risk"></p>
+      </div>
+      <!-- кольцо прогресса (SVG, заполнение из JS) -->
+      <div class="ring">
+        <svg viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="ring-label" id="ring-label">0%</div>
+      </div>
+    </section>
+
+    <!-- СПИСОК ПРИВЫЧЕК -->
+    <h3 class="section-title">Мои привычки</h3>
+    <div class="habit-list" id="habit-list"></div>
+
+    <!-- пустое состояние (показывается когда привычек нет) -->
+    <div class="empty" id="empty-state" hidden>
+      <div class="empty-emoji">🌱</div>
+      <p>Пока нет ни одной привычки.<br/>Добавь первую и поставь на неё ставку.</p>
+    </div>
+
+    <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
+
+    <!-- НИЖНЕЕ МЕНЮ -->
+    <nav class="bottom-nav">
+      <button class="nav-item active">▦<span>Сегодня</span></button>
+      <button class="nav-item" disabled>📈<span>Статистика</span></button>
+      <button class="fab" id="btn-add">+</button>
+      <button class="nav-item" disabled>🔥<span>Стрики</span></button>
+      <button class="nav-item" disabled>👤<span>Профиль</span></button>
+    </nav>
+  </div>
+
+  <!-- ===== ШТОРКА: ДОБАВИТЬ ПРИВЫЧКУ ===== -->
+  <div class="sheet-overlay" id="add-overlay" hidden>
+    <div class="sheet" id="add-sheet">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="add-title">Новая привычка</h2>
+
+      <label class="field-label">Название</label>
+      <input class="field-input" id="f-name" type="text" placeholder="Например: Читать 20 страниц" maxlength="40" />
+
+      <label class="field-label">Иконка</label>
+      <div class="picker" id="icon-picker"></div>
+
+      <label class="field-label">Цвет</label>
+      <div class="picker" id="color-picker"></div>
+
+      <label class="field-label">Цель</label>
+      <div class="seg" id="goal-type">
+        <button class="seg-btn active" data-goal="check">Отметить ✓</button>
+        <button class="seg-btn" data-goal="count">Счётчик</button>
+      </div>
+      <div class="count-fields" id="count-fields" hidden>
+        <input class="field-input small" id="f-target" type="number" min="1" value="5" />
+        <input class="field-input" id="f-unit" type="text" placeholder="ед. (страниц, стаканов…)" maxlength="14" />
+      </div>
+
+      <!-- СТАВКА — главная фишка -->
+      <label class="field-label">Ставка при невыполнении</label>
+      <div class="seg" id="stake-mode">
+        <button class="seg-btn active" data-stake="money">💸 Деньги</button>
+        <button class="seg-btn" data-stake="lock">🔒 Блокировка</button>
+      </div>
+
+      <div class="stake-money" id="stake-money">
+        <div class="count-fields">
+          <input class="field-input small" id="f-amount" type="number" min="10" step="10" value="100" />
+          <span class="suffix">₽ за пропуск</span>
+        </div>
+        <div class="seg" id="recipient">
+          <button class="seg-btn active" data-rec="charity">❤️ Благотворительность</button>
+          <button class="seg-btn" data-rec="creators">🛠️ Создателям</button>
+        </div>
+      </div>
+
+      <div class="stake-lock" id="stake-lock" hidden>
+        <input class="field-input" id="f-apps" type="text" placeholder="Приложения через запятую: Instagram, TikTok" />
+        <p class="hint">В прототипе блокировка симулируется. Реальная блокировка — в нативной версии.</p>
+      </div>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="btn-cancel">Отмена</button>
+        <button class="btn-primary" id="btn-save">Создать привычку</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== МОДАЛКА: ИТОГ ДНЯ (СИМУЛЯЦИЯ) ===== -->
+  <div class="sheet-overlay" id="summary-overlay" hidden>
+    <div class="sheet" id="summary-sheet">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">Итог дня</h2>
+      <p class="sim-note">⚠️ Это симуляция. Реальные деньги не списываются, приложения не блокируются.</p>
+      <div id="summary-body"></div>
+      <div class="sheet-actions">
+        <button class="btn-primary full" id="btn-summary-close">Понятно</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

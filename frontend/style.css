@@ -1,49 +1,353 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+/* ============================================================
+   disbit — стили (тёмная тема)
+   Палитра построена на твоём исходном фоне #0A0F1E
+   ============================================================ */
+
+:root {
+  --bg:            #0A0F1E;   /* фон приложения */
+  --surface:       #151B2E;   /* карточки */
+  --surface-2:     #1E2640;   /* вложенные элементы / hover */
+  --line:          rgba(255, 255, 255, 0.07);
+  --text:          #F1F5F9;   /* основной текст */
+  --muted:         #64748B;   /* приглушённый текст */
+  --muted-2:       #94A3B8;
+  --accent:        #3B82F6;   /* основной акцент (синий, как FAB в референсе) */
+  --flame:         #FB923C;   /* стрик / огонёк */
+  --money:         #FBBF24;   /* ставка деньгами */
+  --lock:          #A78BFA;   /* ставка блокировкой */
+  --good:          #34D399;   /* выполнено */
+  --radius:        18px;
 }
 
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
 body {
-    background-color: #0A0F1E;
-    color: #F1F5F9;
-    font-family: 'Segoe UI', sans-serif;
-    min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .app {
-    margin: 0 auto;
-    padding: 20px;
-    max-width: 390px;
+  margin: 0 auto;
+  padding: 20px 18px 120px;   /* снизу место под нижнее меню */
+  max-width: 420px;
 }
 
+/* ---------- ШАПКА ---------- */
 .header {
-    display: flex;
-    margin-bottom: 24px;
-    align-items: center;
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.logo {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.logo span { color: var(--accent); }
+
+.icon-btn {
+  margin-left: auto;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.icon-btn:hover { background: var(--surface-2); }
+
+/* ---------- ПОЛОСКА ДНЕЙ НЕДЕЛИ ---------- */
+.week-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.day .dnum {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+.day.today {
+  background: var(--surface);
+}
+.day.today .dnum { color: var(--text); }
+.day.today .dname { color: var(--accent); }
+
+/* ---------- КАРТОЧКА ПРОГРЕССА ---------- */
+.progress-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.progress-title { font-size: 20px; font-weight: 700; }
+.progress-sub { color: var(--muted-2); font-size: 14px; margin-top: 4px; }
+.at-risk { font-size: 13px; margin-top: 10px; color: var(--money); font-weight: 600; }
+.at-risk:empty { display: none; }
+
+/* кольцо прогресса */
+.ring { position: relative; width: 84px; height: 84px; flex-shrink: 0; }
+.ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+.ring circle { fill: none; stroke-width: 9; }
+.ring-bg { stroke: var(--surface-2); }
+.ring-fg {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: 327;   /* 2*pi*52 ≈ 327 */
+  stroke-dashoffset: 327;  /* пусто; меняем из JS */
+  transition: stroke-dashoffset 0.5s ease;
+}
+.ring-label {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700;
 }
 
-.add-btn {
-    margin-left: auto;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255, 255, 255, 0.1);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* ---------- СПИСОК ПРИВЫЧЕК ---------- */
+.section-title { font-size: 15px; color: var(--muted-2); margin-bottom: 12px; }
+.habit-list { display: flex; flex-direction: column; gap: 12px; }
+
+.habit {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.habit.done { border-color: var(--good); }
+
+.habit-icon {
+  width: 46px; height: 46px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
 }
 
-.date {
-    font-size: 50px;
-    color: #64748B;
-    margin-bottom: 4px;
-    letter-spacing: 1px;
+.habit-main { flex: 1; min-width: 0; cursor: pointer; }   /* тап → редактирование */
+.habit-name { font-size: 16px; font-weight: 600; }
+.habit-meta { display: flex; gap: 8px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
+
+.streak {
+  font-size: 12px; color: var(--flame); font-weight: 700;
+  display: inline-flex; align-items: center; gap: 2px;
+}
+.streak.zero { color: var(--muted); }
+
+/* бейдж ставки */
+.stake-badge {
+  font-size: 11px; font-weight: 700;
+  padding: 3px 8px; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.stake-badge.money { color: var(--money); background: rgba(251, 191, 36, 0.12); }
+.stake-badge.lock  { color: var(--lock);  background: rgba(167, 139, 250, 0.12); }
+
+/* кнопка отметки справа */
+.habit-check {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--surface-2);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.habit.done .habit-check {
+  background: var(--good);
+  border-color: var(--good);
+  color: #07210F;
 }
 
-.title {
-    font-size: 24px;
-    font-weight: 700;
+/* кнопка удаления (маленькая, появляется в углу) */
+.habit-del {
+  border: none; background: transparent; color: var(--muted);
+  font-size: 16px; cursor: pointer; padding: 4px;
 }
+.habit-del:hover { color: #F87171; }
+
+/* ---------- ПУСТОЕ СОСТОЯНИЕ ---------- */
+.empty { text-align: center; color: var(--muted-2); padding: 40px 20px; }
+.empty-emoji { font-size: 44px; margin-bottom: 12px; }
+
+/* ---------- КНОПКА ИТОГ ДНЯ ---------- */
+.day-summary-btn {
+  width: 100%;
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 15px; font-weight: 600;
+  cursor: pointer;
+}
+.day-summary-btn:hover { background: var(--surface); color: var(--text); }
+
+/* ---------- НИЖНЕЕ МЕНЮ ---------- */
+.bottom-nav {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: 0;
+  width: 100%; max-width: 420px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-around;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+}
+.nav-item {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted);
+  font-size: 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.nav-item span { font-size: 10px; }
+.nav-item.active { color: var(--accent); }
+.nav-item:disabled { opacity: 0.45; cursor: default; }
+
+.fab {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 30px; line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+  margin-top: -24px;   /* приподнимаем над меню */
+}
+
+/* ============================================================
+   ШТОРКИ / МОДАЛКИ
+   ============================================================ */
+.sheet-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 100;
+}
+/* атрибут hidden должен перебивать display:flex выше */
+.sheet-overlay[hidden] { display: none; }
+.sheet {
+  background: var(--bg);
+  width: 100%; max-width: 420px;
+  border-radius: 24px 24px 0 0;
+  padding: 12px 18px calc(24px + env(safe-area-inset-bottom));
+  max-height: 90vh; overflow-y: auto;
+  animation: slideUp 0.25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.sheet-handle {
+  width: 40px; height: 4px; border-radius: 4px;
+  background: var(--surface-2);
+  margin: 6px auto 16px;
+}
+.sheet-title { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+
+.field-label {
+  display: block;
+  font-size: 13px; color: var(--muted-2);
+  margin: 16px 0 8px;
+}
+.field-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 14px;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+}
+.field-input:focus { border-color: var(--accent); }
+.field-input.small { width: 90px; }
+
+.count-fields { display: flex; gap: 10px; align-items: center; }
+.suffix { color: var(--muted-2); font-size: 14px; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+/* пикеры иконок/цветов */
+.picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.pick {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: var(--surface);
+  font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.pick.color { border-radius: 50%; }
+.pick.selected { border-color: var(--text); }
+
+/* сегменты-переключатели */
+.seg {
+  display: flex; gap: 6px;
+  background: var(--surface);
+  border-radius: 12px; padding: 4px;
+  flex-wrap: wrap;
+}
+.seg-btn {
+  flex: 1;
+  border: none; background: transparent;
+  color: var(--muted-2);
+  padding: 9px 10px; border-radius: 9px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  white-space: nowrap;
+}
+.seg-btn.active { background: var(--surface-2); color: var(--text); }
+
+.stake-money, .stake-lock { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+/* действия в шторке */
+.sheet-actions { display: flex; gap: 10px; margin-top: 24px; }
+.btn-ghost, .btn-primary {
+  flex: 1; padding: 14px; border-radius: 12px;
+  font-size: 15px; font-weight: 700; cursor: pointer; border: none;
+}
+.btn-ghost { background: var(--surface); color: var(--text); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary.full { flex: 1; }
+
+/* итог дня */
+.sim-note { font-size: 12px; color: var(--money); margin-bottom: 16px; line-height: 1.4; }
+.summary-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; border-radius: 12px;
+  background: var(--surface); margin-bottom: 10px;
+}
+.summary-row .big { font-size: 22px; font-weight: 800; }
+.summary-total {
+  text-align: center; padding: 18px;
+  border-radius: 14px; background: var(--surface);
+  margin: 6px 0 4px;
+}
+.summary-total .amount { font-size: 34px; font-weight: 800; color: var(--money); }
+.summary-total .label { color: var(--muted-2); font-size: 13px; margin-top: 4px; }
+.summary-ok { text-align: center; padding: 24px; color: var(--good); font-size: 16px; font-weight: 600; }
