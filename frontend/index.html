@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#050508" />
-  <title>disbit — привычки со ставкой</title>
+  <meta name="theme-color" content="#0C1422" />
+  <title>disbit — привычки со штрафом</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@700;800&display=swap" rel="stylesheet" />
@@ -19,6 +19,7 @@
       <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
       <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
       <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1.2-3 3.7-4.5 6.5-4.5s5.3 1.5 6.5 4.5M16 4.6a3.5 3.5 0 0 1 0 6.8M17.5 15.7c2 .6 3.4 2 4 4.3"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5 10 18 20 6"/></symbol>
@@ -27,6 +28,12 @@
       <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><path d="M14.2 4.5A6 6 0 1 1 19.5 14.2M6.5 9h5M9 6.5v5"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="3"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
       <symbol id="i-award" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-2.5L17 22l-1.5-8"/></symbol>
+      <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8M12 8v13M12 8c-2.5 0-4.5-1-4.5-3A2 2 0 0 1 12 4.6 2 2 0 0 1 16.5 5c0 2-2 3-4.5 3Z"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9L6.5 20.2l1-6.2L3 9.6l6.2-.9L12 3Z"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 1 9-9c0 2.5-1.5 3.5-3 3.5h-2a2 2 0 0 0-1.5 3.3c.4.5.2 2.2-2.5 2.2Z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h2.5L9 5h6l2.5 3H20a1.5 1.5 0 0 1 1.5 1.5V19a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 19V9.5A1.5 1.5 0 0 1 4 8Z"/><circle cx="12" cy="14" r="3.5"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21V3Z"/></symbol>
       <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M14.5 5 8 12l6.5 7"/></symbol>
       <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9.5 5 16 12l-6.5 7"/></symbol>
       <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4.5-4.5M12 15 7.5 10.5M4 19h16"/></symbol>
@@ -57,6 +64,12 @@
     <!-- ================= ЭКРАН: СЕГОДНЯ ================= -->
     <main class="screen active" id="screen-today">
 
+      <!-- баннер доступной награды -->
+      <div id="reward-banner" hidden></div>
+
+      <!-- полоска первой большой цели -->
+      <div id="goal-strip" hidden></div>
+
       <div class="week-strip" id="week-strip"></div>
 
       <section class="progress-card">
@@ -69,12 +82,6 @@
         </div>
         <div class="ring">
           <svg viewBox="0 0 120 120">
-            <defs>
-              <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#F59E0B" />
-                <stop offset="100%" stop-color="#F97316" />
-              </linearGradient>
-            </defs>
             <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
             <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="52"></circle>
           </svg>
@@ -92,7 +99,7 @@
 
       <div class="empty" id="empty-state" hidden>
         <div class="empty-art"><svg class="ic ic-xl"><use href="#i-target"/></svg></div>
-        <p>Пока нет ни одной привычки.<br/>Добавь первую и поставь на неё ставку.</p>
+        <p>Пока нет ни одной привычки.<br/>Добавь первую и назначь себе штраф за пропуск.</p>
         <button class="btn-primary empty-cta" id="btn-empty-add">Создать привычку</button>
       </div>
 
@@ -131,6 +138,16 @@
     <!-- ================= ЭКРАН: СТАТИСТИКА ================= -->
     <main class="screen" id="screen-stats">
 
+      <!-- недельная диаграмма -->
+      <section class="card">
+        <div class="week-chart-head">
+          <span class="wc-pct" id="wc-pct">0%</span>
+          <span class="wc-delta" id="wc-delta"></span>
+          <span class="wc-label">выполнено привычек за неделю</span>
+        </div>
+        <div id="week-chart-box"></div>
+      </section>
+
       <div class="stats-grid">
         <div class="stat-card">
           <svg class="ic stat-ic flame"><use href="#i-flame"/></svg>
@@ -150,7 +167,7 @@
         <div class="stat-card">
           <svg class="ic stat-ic bad"><use href="#i-coins"/></svg>
           <div class="stat-value" id="st-lost">0₽</div>
-          <div class="stat-label">потеряно на ставках</div>
+          <div class="stat-label">штрафов набежало</div>
         </div>
       </div>
 
@@ -177,7 +194,7 @@
       </section>
 
       <section class="card">
-        <h3 class="card-title">История списаний</h3>
+        <h3 class="card-title">История штрафов</h3>
         <p class="sim-note"><svg class="ic ic-s"><use href="#i-alert"/></svg> Симуляция: реальные деньги не списываются.</p>
         <div id="ledger-list"></div>
       </section>
@@ -212,10 +229,71 @@
         </div>
         <div class="stat-card">
           <div class="stat-value bad" id="pf-lost">0₽</div>
-          <div class="stat-label">потеряно на ставках</div>
+          <div class="stat-label">штрафов набежало</div>
         </div>
       </div>
 
+      <!-- мотивация -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-zap"/></svg> Мотивация</h3>
+        <div class="motivation-level">
+          <input type="range" class="slider" id="mot-level" min="0" max="100" step="5" value="50"
+            aria-label="Уровень мотивации" />
+          <output id="mot-out" for="mot-level">50%</output>
+        </div>
+        <textarea class="field-textarea" id="mot-text" maxlength="500"
+          placeholder="Что тебя мотивирует? Твои цели, желания, ради чего всё это…"></textarea>
+        <div class="sheet-actions" style="margin-top:12px">
+          <button class="btn-primary" id="mot-save">Сохранить мотивацию</button>
+        </div>
+      </section>
+
+      <!-- большие цели -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
+        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные привычки.</p>
+        <div id="goal-list"></div>
+        <button class="row-btn" id="btn-goal-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
+        </button>
+      </section>
+
+      <!-- награды -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-gift"/></svg> Награды за серии</h3>
+        <p class="hint" style="margin:0 0 8px">Сам выбираешь, чем себя порадовать за стрик. Дошёл до цели — получай.</p>
+        <div id="reward-list"></div>
+        <button class="row-btn" id="btn-reward-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить награду</span>
+        </button>
+      </section>
+
+      <!-- друзья -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-users"/></svg> Друзья</h3>
+        <div id="friend-list"></div>
+        <button class="row-btn" id="btn-friend-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить друга</span>
+        </button>
+        <p class="hint">Прототип: список локальный. Совместные стрики и вызовы появятся с аккаунтами.</p>
+      </section>
+
+      <!-- идеи на будущее -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-bookmark"/></svg> Привычки на будущее</h3>
+        <div id="backlog-list"></div>
+        <button class="row-btn" id="btn-backlog-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Записать идею</span>
+        </button>
+      </section>
+
+      <!-- тема -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-palette"/></svg> Цвет приложения</h3>
+        <div class="theme-grid" id="theme-grid"></div>
+      </section>
+
+      <!-- настройки -->
       <section class="card">
         <h3 class="card-title">Настройки</h3>
         <label class="setting-row">
@@ -224,11 +302,12 @@
         </label>
         <label class="setting-row">
           <span>Итог дня при запуске</span>
-          <input type="checkbox" id="set-autosettle" class="switch" checked disabled />
+          <input type="checkbox" class="switch" checked disabled />
         </label>
-        <p class="hint">Автоитог отключить нельзя — в этом весь смысл ставки 😉</p>
+        <p class="hint">Автоитог отключить нельзя — в этом весь смысл штрафа 😉</p>
       </section>
 
+      <!-- данные -->
       <section class="card">
         <h3 class="card-title">Данные</h3>
         <button class="row-btn" id="btn-export">
@@ -243,7 +322,7 @@
         </button>
       </section>
 
-      <p class="about-note">disbit v0.3 · прототип · ставки симулируются<br/>Реальные списания и блокировки — в нативной версии.</p>
+      <p class="about-note">disbit v0.4 · прототип · штрафы симулируются<br/>Реальные списания и блокировки — в нативной версии.</p>
     </main>
 
     <!-- НИЖНЕЕ МЕНЮ -->
@@ -294,15 +373,20 @@
         <input class="field-input" id="f-unit" type="text" placeholder="ед. (страниц, стаканов…)" maxlength="14" />
       </div>
 
-      <span class="field-label">Ставка при невыполнении</span>
+      <label class="field-label" for="f-min">Минимум — запасной вариант (необязательно)</label>
+      <input class="field-input" id="f-min" type="text" maxlength="60"
+        placeholder="Например: прочитать 1 страницу" />
+      <p class="hint">Нет сил — сделай минимум. Серия сохранится, дисциплина не прервётся.</p>
+
+      <span class="field-label">Штраф при невыполнении</span>
       <div class="seg" id="stake-mode">
-        <button class="seg-btn" data-stake="money"><svg class="ic ic-s"><use href="#i-coins"/></svg>Деньги</button>
+        <button class="seg-btn active" data-stake="money"><svg class="ic ic-s"><use href="#i-coins"/></svg>Деньги</button>
         <button class="seg-btn" data-stake="lock"><svg class="ic ic-s"><use href="#i-lock"/></svg>Блокировка</button>
       </div>
 
       <div class="stake-money" id="stake-money">
         <div class="count-fields">
-          <input class="field-input small" id="f-amount" type="number" inputmode="numeric" min="10" step="10" value="100" aria-label="Сумма ставки" />
+          <input class="field-input small" id="f-amount" type="number" inputmode="numeric" min="10" step="10" value="100" aria-label="Сумма штрафа" />
           <span class="suffix">₽ за пропуск</span>
         </div>
         <div class="seg" id="recipient">
@@ -335,18 +419,115 @@
     </div>
   </div>
 
-  <!-- ===== ШТОРКА: ПРОФИЛЬ ===== -->
+  <!-- ===== ШТОРКА: ПРОФИЛЬ (имя + аватар) ===== -->
   <div class="sheet-overlay" id="profile-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pf-sheet-title">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="pf-sheet-title">Профиль</h2>
+
+      <div class="avatar-preview"><div class="avatar" id="ava-preview">?</div></div>
+
       <label class="field-label" for="pf-name-input">Имя</label>
       <input class="field-input" id="pf-name-input" type="text" placeholder="Как тебя зовут?" maxlength="24" autocomplete="name" />
-      <span class="field-label">Цвет аватара</span>
+
+      <span class="field-label">Фотография</span>
+      <div class="sheet-actions" style="margin-top:0">
+        <button class="btn-ghost" id="btn-photo">
+          <svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-camera"/></svg> Загрузить фото
+        </button>
+        <button class="btn-ghost" id="btn-photo-remove">Убрать фото</button>
+      </div>
+      <input type="file" id="photo-file" accept="image/*" hidden />
+
+      <span class="field-label">Или эмодзи из каталога</span>
+      <div class="picker emoji-grid" id="ava-emoji-grid"></div>
+
+      <span class="field-label">Цвет монограммы</span>
       <div class="picker" id="pf-color-picker"></div>
+
       <div class="sheet-actions">
         <button class="btn-ghost" id="pf-cancel">Отмена</button>
         <button class="btn-primary" id="pf-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: БОЛЬШАЯ ЦЕЛЬ ===== -->
+  <div class="sheet-overlay" id="goal-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="goal-sheet-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="goal-sheet-title">Большая цель</h2>
+
+      <label class="field-label" for="g-name">Цель</label>
+      <input class="field-input" id="g-name" type="text" placeholder="Например: пробежать полумарафон" maxlength="60" />
+
+      <span class="field-label">Иконка</span>
+      <div class="picker" id="goal-icon-picker"></div>
+
+      <label class="field-label" for="g-deadline">Срок (необязательно)</label>
+      <input class="field-input" id="g-deadline" type="date" />
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="g-cancel">Отмена</button>
+        <button class="btn-primary" id="g-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ДРУГ ===== -->
+  <div class="sheet-overlay" id="friend-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="friend-sheet-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="friend-sheet-title">Добавить друга</h2>
+
+      <label class="field-label" for="fr-name">Имя</label>
+      <input class="field-input" id="fr-name" type="text" placeholder="Имя друга" maxlength="24" />
+
+      <span class="field-label">Аватар</span>
+      <div class="picker emoji-grid" id="fr-emoji-grid"></div>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="fr-cancel">Отмена</button>
+        <button class="btn-primary" id="fr-save">Добавить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: НАГРАДА ===== -->
+  <div class="sheet-overlay" id="reward-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="reward-sheet-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="reward-sheet-title">Награда за серию</h2>
+
+      <label class="field-label" for="rw-days">Длина серии (дней подряд)</label>
+      <input class="field-input small" id="rw-days" type="number" inputmode="numeric" min="1" max="365" value="7" />
+
+      <label class="field-label" for="rw-text">Чем себя наградишь?</label>
+      <input class="field-input" id="rw-text" type="text" maxlength="80"
+        placeholder="Например: поход в кино, любимый десерт…" />
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="rw-cancel">Отмена</button>
+        <button class="btn-primary" id="rw-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ИДЕЯ НА БУДУЩЕЕ ===== -->
+  <div class="sheet-overlay" id="idea-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="idea-sheet-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="idea-sheet-title">Привычка на будущее</h2>
+
+      <label class="field-label" for="idea-name">Идея</label>
+      <input class="field-input" id="idea-name" type="text" placeholder="Например: холодный душ по утрам" maxlength="40" />
+
+      <span class="field-label">Иконка</span>
+      <div class="picker" id="idea-icon-picker"></div>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="idea-cancel">Отмена</button>
+        <button class="btn-primary" id="idea-save">Записать</button>
       </div>
     </div>
   </div>
@@ -369,7 +550,7 @@
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settle-title">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="settle-title">Пока тебя не было…</h2>
-      <p class="sim-note"><svg class="ic ic-s"><use href="#i-alert"/></svg> Симуляция: итоги прошедших дней зафиксированы автоматически.</p>
+      <p class="sim-note"><svg class="ic ic-s"><use href="#i-alert"/></svg> Симуляция: штрафы прошедших дней зафиксированы автоматически.</p>
       <div id="settle-body"></div>
       <div class="sheet-actions">
         <button class="btn-primary full" id="btn-settle-close">Понятно</button>

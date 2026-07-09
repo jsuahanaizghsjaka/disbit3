@@ -1,8 +1,10 @@
 /* ============================================================
-   disbit — логика приложения (v0.3)
-   Данные: localStorage; если открыто через бэкенд (http) —
-   дополнительно синхронизируются с API (best-effort).
-   Ставки (деньги/блокировка) — СИМУЛЯЦИЯ, ничего реального не происходит.
+   disbit — логика приложения (v0.4)
+   Главная идея: не ставки, а ШТРАФЫ за пропуск привычки.
+   Грейс-день: один пропуск серию не рвёт, два подряд — рвёт.
+   «Минимум» — запасной вариант, продлевающий дисциплину.
+   Данные: localStorage; при работе через бэкенд (http) —
+   best-effort синхронизация с API. Штрафы — СИМУЛЯЦИЯ.
    ============================================================ */
 
 const STORAGE_KEY  = 'disbit_habits_v1';
@@ -10,25 +12,53 @@ const LEDGER_KEY   = 'disbit_ledger_v1';
 const SETTLED_KEY  = 'disbit_settled_v1';
 const PROFILE_KEY  = 'disbit_profile_v1';
 const SETTINGS_KEY = 'disbit_settings_v1';
+const FRIENDS_KEY  = 'disbit_friends_v1';
+const GOALS_KEY    = 'disbit_goals_v1';
+const REWARDS_KEY  = 'disbit_rewards_v1';
+const BACKLOG_KEY  = 'disbit_backlog_v1';
 
-// если страница открыта с сервера — работаем и с API
 const API = location.protocol.startsWith('http') ? '/api' : null;
 
 const ICONS  = ['📚','💧','🏃','🧘','🦷','💪','🥗','😴','✍️','🎯','🧹','🎸'];
-const COLORS = ['#F59E0B','#34D399','#38BDF8','#F472B6','#A78BFA','#F87171','#FBBF24','#3B82F6'];
+const COLORS = ['#5B8DFF','#4ADE80','#38BDF8','#F472B6','#A78BFA','#F87171','#FBBF24','#E8722A'];
+const AVA_EMOJIS = ['😀','😎','🦊','🐻','🐼','🦁','🐯','🐸','🦉','🐨','🦄','🐢','🚀','🔥','⚡','🌟','🍀','🌊','🎧','🎮','🏔️','🌙','🍕','☕'];
 const DAY_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const SCREENS = ['today','calendar','stats','profile'];
+
+// темы приложения: id → цвет свотча
+const THEMES = [
+  { id: 'blue',   c: '#5B8DFF' },
+  { id: 'red',    c: '#E06060' },
+  { id: 'black',  c: '#2A2C31' },
+  { id: 'white',  c: '#E9EDF3' },
+  { id: 'yellow', c: '#D4A528' },
+  { id: 'orange', c: '#E8722A' },
+  { id: 'green',  c: '#3EBE7D' },
+  { id: 'purple', c: '#9D7BFA' }
+];
 
 const HEATMAP_WEEKS = 16;
 
 let habits   = load();
 let ledger   = loadLedger();
-let profile  = loadJson(PROFILE_KEY, { name: '', color: COLORS[0], createdAt: null });
-let settings = loadJson(SETTINGS_KEY, { showOffday: true });
-let editingId = null;      // id привычки в режиме редактирования (null = создаём)
-let hmFilter  = 'all';     // фильтр heatmap
-let calCursor = null;      // {y, m} — отображаемый месяц календаря
-let daySheetKey = null;    // открытый день в шторке дня
+let profile  = loadJson(PROFILE_KEY, {
+  name: '', color: COLORS[0], createdAt: null,
+  photo: null, emoji: null,
+  motivation: { level: 50, text: '' }
+});
+let settings = loadJson(SETTINGS_KEY, { showOffday: true, theme: 'blue' });
+let friends  = loadArr(FRIENDS_KEY);
+let goals    = loadArr(GOALS_KEY);
+let rewards  = loadArr(REWARDS_KEY);
+let backlog  = loadArr(BACKLOG_KEY);
+
+let editingId = null;        // привычка в редактировании
+let editingGoalId = null;    // цель в редактировании
+let pendingBacklogId = null; // идея, превращаемая в привычку
+let hmFilter  = 'all';
+let calCursor = null;
+let daySheetKey = null;
+let avaDraft = {};           // черновик аватара в шторке профиля
 
 /* ---------- SVG-ИКОНКИ ---------- */
 function icon(id, cls = 'ic') {
@@ -39,14 +69,20 @@ function icon(id, cls = 'ic') {
 function loadJson(key, fallback) {
   try {
     const v = JSON.parse(localStorage.getItem(key));
-    return v && typeof v === 'object' ? { ...fallback, ...v } : fallback;
+    return v && typeof v === 'object' && !Array.isArray(v) ? { ...fallback, ...v } : fallback;
   } catch {
     return fallback;
   }
 }
-function saveJson(key, v) {
-  localStorage.setItem(key, JSON.stringify(v));
+function loadArr(key) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
 }
+function saveJson(key, v) { localStorage.setItem(key, JSON.stringify(v)); }
 function load() {
   try {
     const arr = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -56,10 +92,10 @@ function load() {
     return [];
   }
 }
-// миграция старых привычек на новую модель
 function migrate(h) {
   if (!Array.isArray(h.schedule) || !h.schedule.length) h.schedule = [0,1,2,3,4,5,6];
   if (!h.createdAt) h.createdAt = dateKey();
+  if (typeof h.min !== 'string') h.min = '';
   h.history = h.history || {};
   h.counts  = h.counts  || {};
 }
@@ -70,7 +106,7 @@ function loadLedger() {
 }
 function saveLedger() { localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger)); }
 
-/* ---------- API (best-effort синхронизация) ---------- */
+/* ---------- API (best-effort) ---------- */
 function apiCall(method, path, body) {
   if (!API) return Promise.resolve(null);
   return fetch(API + path, {
@@ -106,7 +142,7 @@ function keyToDate(key) {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
-function dayIdx(d) { return (d.getDay() + 6) % 7; }   // 0=Пн … 6=Вс
+function dayIdx(d) { return (d.getDay() + 6) % 7; }
 function addDays(d, n) {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
@@ -118,41 +154,48 @@ const TODAY = dateKey();
 function isScheduledOn(h, d) { return h.schedule.includes(dayIdx(d)); }
 function isScheduledToday(h) { return isScheduledOn(h, new Date()); }
 
+// выполнена ли (полностью или «минимумом»)
 function doneOn(h, key) {
+  if (h.history?.[key] === 'min') return true;
   if (h.goal.type === 'count') return (h.counts?.[key] || 0) >= h.goal.target;
   return !!h.history?.[key];
 }
+function isMinOn(h, key) { return h.history?.[key] === 'min'; }
 function isDoneToday(h) { return doneOn(h, TODAY); }
 
-// текущий стрик: незапланированные дни серию не рвут
+// ТЕКУЩИЙ СТРИК с грейс-днём: один пропуск не рвёт серию,
+// два запланированных пропуска подряд — рвут.
 function computeStreak(h) {
-  let streak = 0;
+  let streak = 0, misses = 0;
   let d = new Date();
-  if (isScheduledOn(h, d) && !doneOn(h, dateKey(d))) d = addDays(d, -1);
+  if (isScheduledOn(h, d) && !doneOn(h, dateKey(d))) d = addDays(d, -1); // сегодня не судим
 
   for (let i = 0; i < 3660; i++) {
     const key = dateKey(d);
     if (key < h.createdAt) break;
     if (isScheduledOn(h, d)) {
-      if (doneOn(h, key)) streak++;
-      else break;
+      if (doneOn(h, key)) { streak++; misses = 0; }
+      else { misses++; if (misses >= 2) break; }
     }
     d = addDays(d, -1);
   }
   return streak;
 }
 
+// лучший стрик за всё время (с тем же грейс-правилом)
 function computeBestStreak(h) {
-  let best = 0, cur = 0;
+  let best = 0, cur = 0, misses = 0;
   let d = keyToDate(h.createdAt);
   const end = new Date();
   for (let i = 0; i < 3660 && d <= end; i++) {
+    const key = dateKey(d);
     if (isScheduledOn(h, d)) {
-      if (doneOn(h, dateKey(d))) {
-        cur++;
+      if (doneOn(h, key)) {
+        cur++; misses = 0;
         if (cur > best) best = cur;
-      } else if (dateKey(d) !== TODAY) {
-        cur = 0;
+      } else if (key !== TODAY) {
+        misses++;
+        if (misses >= 2) cur = 0;
       }
     }
     d = addDays(d, 1);
@@ -160,11 +203,13 @@ function computeBestStreak(h) {
   return best;
 }
 
-// установить отметку за произвольный день (сегодня или задним числом)
+// отметка за произвольный день
 function setDayMark(h, key, { done, count }) {
   if (h.goal.type === 'count') {
     h.counts[key] = Math.max(0, Math.min(999, count ?? 0));
-    h.history[key] = h.counts[key] >= h.goal.target;
+    h.history[key] = h.counts[key] >= h.goal.target
+      ? true
+      : (h.history[key] === 'min' ? 'min' : false);
   } else {
     h.history[key] = !!done;
   }
@@ -175,17 +220,47 @@ function setDayMark(h, key, { done, count }) {
   });
 }
 
-// нажатие на кнопку отметки на экране «Сегодня»
+// отметка «сделал минимум» (вкл/выкл)
+function toggleMinMark(h, key) {
+  if (h.history[key] === 'min') {
+    h.history[key] = false;
+  } else if (!doneOn(h, key)) {
+    h.history[key] = 'min';
+  }
+  save();
+  apiCall('PUT', `/habits/${h.id}/day/${key}`, {
+    done: doneOn(h, key),
+    count: h.counts?.[key] || 0
+  });
+}
+
+function todayPct() {
+  const todays = habits.filter(isScheduledToday);
+  if (!todays.length) return 0;
+  return Math.round((todays.filter(isDoneToday).length / todays.length) * 100);
+}
+
+const PRAISES = [
+  'Красавчик! Все привычки дня закрыты 🎉',
+  'Идеальный день! Так и куётся дисциплина 🔥',
+  '100%! Штрафам сегодня ничего не светит 💪',
+  'День закрыт полностью. Гордись собой ⭐'
+];
+
 function toggleHabit(id) {
   const h = habits.find(x => x.id === id);
   if (!h) return;
+  const wasFull = todayPct() === 100;
   if (h.goal.type === 'count') {
     const cur = h.counts[TODAY] || 0;
     setDayMark(h, TODAY, { count: cur >= h.goal.target ? 0 : cur + 1 });
   } else {
-    setDayMark(h, TODAY, { done: !h.history[TODAY] });
+    setDayMark(h, TODAY, { done: h.history[TODAY] === 'min' ? true : !h.history[TODAY] });
   }
   render();
+  if (!wasFull && todayPct() === 100) {
+    toast(PRAISES[Math.floor(Math.random() * PRAISES.length)]);
+  }
 }
 
 function deleteHabit(id) {
@@ -196,7 +271,24 @@ function deleteHabit(id) {
   render();
 }
 
-/* ---------- АВТОИТОГ ПРОШЕДШИХ ДНЕЙ ---------- */
+/* ---------- ТОСТ ПОХВАЛЫ ---------- */
+let toastTimer = null;
+function toast(msg) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.add('hide');
+    setTimeout(() => el.remove(), 300);
+  }, 3200);
+}
+
+/* ---------- АВТОИТОГ ПРОШЕДШИХ ДНЕЙ (ШТРАФЫ) ---------- */
 function settlePastDays() {
   const yesterday = dateKey(addDays(new Date(), -1));
   const last = localStorage.getItem(SETTLED_KEY);
@@ -249,7 +341,7 @@ function showSettleModal(entries) {
     Пропущено привычек: <b style="color:var(--text)">${entries.length}</b></p>`;
   if (money) {
     html += `<div class="summary-total"><div class="amount">−${money}₽</div>
-      <div class="label">списалось бы за пропуски</div></div>`;
+      <div class="label">штрафов за пропуски</div></div>`;
   }
   if (apps.size) {
     html += `<div class="summary-row"><span class="big lock">${icon('i-lock')}</span>
@@ -271,12 +363,69 @@ function showSettleModal(entries) {
 
 /* ---------- ОБЩИЙ РЕНДЕР ---------- */
 function render() {
+  renderRewardBanner();
+  renderGoalStrip();
   renderWeek();
   renderHabits();
   renderProgress();
   renderCalendar();
   renderStats();
   renderProfile();
+}
+
+/* ---------- БАННЕР НАГРАДЫ ---------- */
+function bestCurrentStreak() {
+  return habits.length ? Math.max(...habits.map(computeStreak)) : 0;
+}
+function availableReward() {
+  const streak = bestCurrentStreak();
+  return rewards
+    .filter(r => !r.claimed && r.days <= streak)
+    .sort((a, b) => b.days - a.days)[0] || null;
+}
+function renderRewardBanner() {
+  const box = document.getElementById('reward-banner');
+  const r = availableReward();
+  if (!r) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="reward-banner">
+      ${icon('i-gift')}
+      <div class="rb-main">
+        <div class="rb-title">Серия ${r.days} дн. — награда доступна!</div>
+        <div class="rb-sub">${escapeHtml(r.text)}</div>
+      </div>
+      <button data-claim="${r.id}">Получил</button>
+    </div>`;
+  box.querySelector('[data-claim]').addEventListener('click', () => {
+    r.claimed = true;
+    saveJson(REWARDS_KEY, rewards);
+    render();
+    toast('Заслуженно! Наслаждайся наградой 🏆');
+  });
+}
+
+/* ---------- ПОЛОСКА БОЛЬШОЙ ЦЕЛИ ---------- */
+function renderGoalStrip() {
+  const box = document.getElementById('goal-strip');
+  const g = goals.find(x => (x.progress || 0) < 100);
+  if (!g) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  const pct = g.progress || 0;
+  box.innerHTML = `
+    <div class="goal-strip" role="button" tabindex="0" aria-label="Большая цель: ${escapeHtml(g.name)}">
+      <span class="gs-icon">${g.icon}</span>
+      <div class="gs-main">
+        <div class="gs-name">${escapeHtml(g.name)}</div>
+        <div class="gs-bar"><div class="gs-fill" style="width:${pct}%"></div></div>
+      </div>
+      <span class="gs-pct">${pct}%</span>
+    </div>`;
+  const el = box.firstElementChild;
+  el.addEventListener('click', () => switchScreen('profile'));
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchScreen('profile'); }
+  });
 }
 
 /* ---------- ЭКРАН «СЕГОДНЯ» ---------- */
@@ -316,6 +465,7 @@ function renderWeek() {
 
 function habitCard(h, off) {
   const done = isDoneToday(h);
+  const min = isMinOn(h, TODAY);
   const streak = computeStreak(h);
 
   let checkContent = icon('i-check');
@@ -334,17 +484,25 @@ function habitCard(h, off) {
     ? 'каждый день'
     : h.schedule.map(i => DAY_NAMES[i]).join(' · ');
 
+  // кнопка/бейдж минимума
+  let minHtml = '';
+  if (!off && h.min) {
+    if (min) minHtml = `<span class="min-badge">${icon('i-check', 'ic ic-s')} минимум</span>`;
+    else if (!done) minHtml = `<button class="min-btn" data-min="${h.id}" title="${escapeHtml(h.min)}">минимум</button>`;
+  }
+
   const card = document.createElement('div');
   card.className = 'habit' + (done ? ' done' : '') + (off ? ' off' : '');
   card.innerHTML = `
-    <div class="habit-icon" style="background:${h.color}22">${h.icon}</div>
+    <div class="habit-icon">${h.icon}</div>
     <div class="habit-main" data-edit="${h.id}" role="button" tabindex="0" aria-label="Редактировать: ${escapeHtml(h.name)}">
       <div class="habit-name">${escapeHtml(h.name)}</div>
       <div class="habit-meta">
         <span class="streak ${streak ? '' : 'zero'}">${icon('i-flame')}${streak}</span>
-        ${goalText && !off ? `<span class="goal-text">${goalText}</span>` : ''}
+        ${goalText && !off && !min ? `<span class="goal-text">${goalText}</span>` : ''}
         ${off ? `<span class="goal-text">${schedText}</span>` : ''}
         ${stake}
+        ${minHtml}
       </div>
     </div>
     <button class="habit-del" data-del="${h.id}" aria-label="Удалить привычку">${icon('i-x')}</button>
@@ -373,6 +531,14 @@ function renderHabits() {
 
   document.querySelectorAll('#screen-today [data-check]').forEach(b =>
     b.addEventListener('click', () => toggleHabit(b.dataset.check)));
+  document.querySelectorAll('#screen-today [data-min]').forEach(b =>
+    b.addEventListener('click', () => {
+      const h = habits.find(x => x.id === b.dataset.min);
+      if (!h) return;
+      toggleMinMark(h, TODAY);
+      render();
+      toast('Минимум сделан — серия продолжается 👊');
+    }));
   document.querySelectorAll('#screen-today [data-del]').forEach(b =>
     b.addEventListener('click', () => deleteHabit(b.dataset.del)));
   document.querySelectorAll('#screen-today [data-edit]').forEach(b => {
@@ -393,7 +559,7 @@ function renderProgress() {
   document.getElementById('total-count').textContent = total;
   document.getElementById('ring-label').textContent = pct + '%';
 
-  const C = 327;   // 2π·52
+  const C = 327;
   document.getElementById('ring-fg').style.strokeDashoffset = C - (C * pct) / 100;
 
   const notDone = todays.filter(h => !isDoneToday(h));
@@ -408,12 +574,10 @@ function renderProgress() {
   const pill = document.getElementById('at-risk');
   pill.hidden = parts.length === 0;
   document.getElementById('at-risk-text').textContent =
-    parts.length ? `Под риском: ${parts.join(' + ')}` : '';
+    parts.length ? `Штраф сегодня: ${parts.join(' + ')}` : '';
 }
 
 /* ---------- ЭКРАН «КАЛЕНДАРЬ» ---------- */
-
-// состояние дня для пула привычек: done | part | fail | off | plain
 function dayState(d) {
   const key = dateKey(d);
   const sched = habits.filter(h => h.createdAt <= key && isScheduledOn(h, d));
@@ -433,7 +597,6 @@ function renderCalendar() {
   const first = new Date(y, m, 1);
   const daysInMonth = new Date(y, m + 1, 0).getDate();
 
-  // заголовок «июль 2026»
   document.getElementById('cal-title').textContent =
     first.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(' г.', '');
 
@@ -444,7 +607,6 @@ function renderCalendar() {
   const grid = document.getElementById('cal-grid');
   grid.innerHTML = '';
 
-  // пустые ячейки до первого дня месяца
   for (let i = 0; i < dayIdx(first); i++) {
     const ghost = document.createElement('div');
     ghost.className = 'cal-cell ghost';
@@ -491,7 +653,7 @@ function renderCalMonthStats(y, m, daysInMonth) {
     <div class="cal-stats-row">
       <div class="cal-stat good"><b>${doneCount}</b><span>выполнено</span></div>
       <div class="cal-stat bad"><b>${failCount}</b><span>пропусков</span></div>
-      <div class="cal-stat gold"><b>${lost}₽</b><span>потеряно</span></div>
+      <div class="cal-stat gold"><b>${lost}₽</b><span>штрафов</span></div>
     </div>`;
 }
 
@@ -522,36 +684,39 @@ function renderDaySheet() {
   } else {
     html += scheduled.map(h => {
       const done = doneOn(h, key);
+      const min = isMinOn(h, key);
       let control;
       if (h.goal.type === 'count') {
         const val = h.counts?.[key] || 0;
         control = `
           <div class="stepper">
             <button data-step="-1" data-h="${h.id}" aria-label="Меньше">${icon('i-minus', 'ic ic-s')}</button>
-            <span class="stp-val ${done ? 'ok' : ''}">${val}/${h.goal.target}</span>
+            <span class="stp-val ${done ? 'ok' : ''}">${min ? 'мин' : `${val}/${h.goal.target}`}</span>
             <button data-step="1" data-h="${h.id}" aria-label="Больше">${icon('i-plus', 'ic ic-s')}</button>
           </div>`;
       } else {
         control = `
-          <button class="habit-check" style="width:42px;height:42px" data-dtoggle="${h.id}"
+          <button class="habit-check ${done ? '' : ''}" style="width:42px;height:42px" data-dtoggle="${h.id}"
             aria-label="Отметить: ${escapeHtml(h.name)}">${done ? icon('i-check') : ''}</button>`;
       }
+      const minBtn = h.min && !done
+        ? `<button class="min-btn" data-dmin="${h.id}" title="${escapeHtml(h.min)}">мин</button>` : '';
+      const minBadge = min ? `<span class="min-badge">минимум</span>` : '';
       return `
         <div class="day-habit-row ${done ? 'done' : ''}">
-          <div class="habit-icon" style="background:${h.color}22;width:42px;height:42px;font-size:19px">${h.icon}</div>
+          <div class="habit-icon" style="width:42px;height:42px;font-size:19px">${h.icon}</div>
           <div class="ledger-main">
             <div class="ledger-name">${escapeHtml(h.name)}</div>
-            <div class="ledger-day">${done ? 'выполнено' : 'не выполнено'}</div>
+            <div class="ledger-day">${done ? (min ? 'минимум — серия жива' : 'выполнено') : 'не выполнено'}</div>
           </div>
-          ${control}
+          ${minBadge}${minBtn}${control}
         </div>`;
     }).join('');
   }
 
-  // списания этого дня
   const charges = ledger.filter(e => e.day === key);
   if (charges.length) {
-    html += `<p class="field-label">Списания за этот день</p>`;
+    html += `<p class="field-label">Штрафы за этот день</p>`;
     html += charges.map(e => `
       <div class="ledger-row">
         <span class="ledger-icon">${e.icon || ''}</span>
@@ -563,17 +728,24 @@ function renderDaySheet() {
 
   if (key < TODAY && scheduled.length) {
     html += `<p class="hint">Отметки задним числом влияют на стрики и календарь.
-      Уже зафиксированные списания не отменяются.</p>`;
+      Уже зафиксированные штрафы не отменяются.</p>`;
   }
 
   body.innerHTML = html;
 
-  // обработчики
   body.querySelectorAll('[data-dtoggle]').forEach(b =>
     b.addEventListener('click', () => {
       const h = habits.find(x => x.id === b.dataset.dtoggle);
       if (!h) return;
-      setDayMark(h, key, { done: !h.history[key] });
+      setDayMark(h, key, { done: h.history[key] === 'min' ? true : !h.history[key] });
+      renderDaySheet();
+      render();
+    }));
+  body.querySelectorAll('[data-dmin]').forEach(b =>
+    b.addEventListener('click', () => {
+      const h = habits.find(x => x.id === b.dataset.dmin);
+      if (!h) return;
+      toggleMinMark(h, key);
       renderDaySheet();
       render();
     }));
@@ -581,6 +753,7 @@ function renderDaySheet() {
     b.addEventListener('click', () => {
       const h = habits.find(x => x.id === b.dataset.h);
       if (!h) return;
+      if (h.history[key] === 'min') h.history[key] = false;   // счётчик снимает «мин»
       const cur = h.counts?.[key] || 0;
       setDayMark(h, key, { count: cur + Number(b.dataset.step) });
       renderDaySheet();
@@ -589,8 +762,80 @@ function renderDaySheet() {
 }
 
 /* ---------- ЭКРАН «СТАТИСТИКА» ---------- */
+
+// доля выполнения за неделю, начинающуюся с monday (только прошедшие дни)
+function weekCompletion(monday) {
+  let sched = 0, done = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(monday, i);
+    const key = dateKey(d);
+    if (key > TODAY) break;
+    habits.forEach(h => {
+      if (h.createdAt > key || !isScheduledOn(h, d)) return;
+      sched++;
+      if (doneOn(h, key)) done++;
+    });
+  }
+  return sched ? Math.round((done / sched) * 100) : null;
+}
+
+function renderWeekChart() {
+  const now = new Date();
+  const monday = addDays(now, -dayIdx(now));
+  const lastMonday = addDays(monday, -7);
+
+  const thisPct = weekCompletion(monday);
+  const lastPct = weekCompletion(lastMonday);
+
+  document.getElementById('wc-pct').textContent = (thisPct ?? 0) + '%';
+  const deltaEl = document.getElementById('wc-delta');
+  if (thisPct !== null && lastPct !== null) {
+    const diff = thisPct - lastPct;
+    deltaEl.textContent = diff >= 0 ? `+${diff}% к прошлой неделе` : `${diff}% к прошлой неделе`;
+    deltaEl.className = 'wc-delta ' + (diff >= 0 ? 'up' : 'downish');
+  } else {
+    deltaEl.textContent = 'первая неделя — сравнивать пока не с чем';
+    deltaEl.className = 'wc-delta downish';
+  }
+
+  // бары по дням недели
+  const W = 320, H = 120, top = 8, lblH = 16;
+  const barW = 26, gap = (W - 7 * barW) / 8;
+  let bars = '';
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(monday, i);
+    const key = dateKey(d);
+    const x = gap + i * (barW + gap);
+    const isFuture = key > TODAY;
+    const isToday = key === TODAY;
+
+    let pct = 0;
+    if (!isFuture) {
+      let sched = 0, done = 0;
+      habits.forEach(h => {
+        if (h.createdAt > key || !isScheduledOn(h, d)) return;
+        sched++;
+        if (doneOn(h, key)) done++;
+      });
+      pct = sched ? done / sched : 0;
+    }
+    const maxH = H - top - lblH;
+    const bh = Math.max(4, Math.round(maxH * pct));
+    const y = top + (maxH - bh);
+
+    bars += `<rect class="bar-bg" x="${x}" y="${top}" width="${barW}" height="${maxH}" rx="6"/>`;
+    if (!isFuture && pct > 0) {
+      bars += `<rect class="bar-fill ${isToday ? '' : 'muted'}" x="${x}" y="${y}" width="${barW}" height="${bh}" rx="6"/>`;
+    }
+    bars += `<text class="bar-lbl ${isToday ? 'today' : ''}" x="${x + barW / 2}" y="${H - 3}">${DAY_NAMES[i]}</text>`;
+  }
+  document.getElementById('week-chart-box').innerHTML =
+    `<svg class="week-chart" viewBox="0 0 ${W} ${H}" role="img"
+       aria-label="Диаграмма выполнения привычек по дням недели">${bars}</svg>`;
+}
+
 function renderStats() {
-  const curStreak = habits.length ? Math.max(...habits.map(computeStreak)) : 0;
+  const curStreak = bestCurrentStreak();
   const bestStreak = habits.length ? Math.max(...habits.map(computeBestStreak)) : 0;
   const totalDone = habits.reduce(
     (s, h) => s + Object.keys(h.history).filter(k => doneOn(h, k)).length, 0);
@@ -601,6 +846,7 @@ function renderStats() {
   document.getElementById('st-total-done').textContent = totalDone;
   document.getElementById('st-lost').textContent = lost + '₽';
 
+  renderWeekChart();
   renderHmChips();
   renderHeatmap();
   renderStreakList();
@@ -678,7 +924,7 @@ function renderStreakList() {
 
   box.innerHTML = rows.map(({ h, cur, best }) => `
     <div class="ledger-row">
-      <span class="ledger-icon" style="background:${h.color}22">${h.icon}</span>
+      <span class="ledger-icon">${h.icon}</span>
       <div class="ledger-main">
         <div class="ledger-name">${escapeHtml(h.name)}</div>
         <div class="ledger-day">лучший: ${best}</div>
@@ -690,7 +936,7 @@ function renderStreakList() {
 function renderLedger() {
   const box = document.getElementById('ledger-list');
   if (!ledger.length) {
-    box.innerHTML = `<p class="hint">Пока пусто — ни одного пропуска. Так держать!</p>`;
+    box.innerHTML = `<p class="hint">Пока пусто — ни одного штрафа. Так держать!</p>`;
     return;
   }
   box.innerHTML = ledger.slice(-30).reverse().map(e => `
@@ -707,12 +953,22 @@ function renderLedger() {
 }
 
 /* ---------- ЭКРАН «ПРОФИЛЬ» ---------- */
+function avatarHtml(p) {
+  if (p.photo) return `<img src="${p.photo}" alt="" />`;
+  if (p.emoji) return escapeHtml(p.emoji);
+  const name = (p.name || '').trim();
+  return name ? escapeHtml(name[0]) : '?';
+}
+function applyAvatar(el, p) {
+  el.classList.toggle('emoji', !p.photo && !!p.emoji);
+  el.style.background = p.photo ? 'transparent' : (p.emoji ? '' : (p.color || COLORS[0]));
+  el.innerHTML = avatarHtml(p);
+}
+
 function renderProfile() {
   const name = profile.name?.trim();
   document.getElementById('profile-name').textContent = name || 'Без имени';
-  const av = document.getElementById('profile-avatar');
-  av.textContent = name ? name[0] : '?';
-  av.style.background = profile.color || COLORS[0];
+  applyAvatar(document.getElementById('profile-avatar'), profile);
 
   const firstDay = habits.length
     ? habits.map(h => h.createdAt).sort()[0]
@@ -730,33 +986,326 @@ function renderProfile() {
   document.getElementById('pf-best').textContent = best;
   document.getElementById('pf-lost').textContent = lost + '₽';
 
+  // мотивация
+  const lvl = profile.motivation?.level ?? 50;
+  document.getElementById('mot-level').value = lvl;
+  document.getElementById('mot-out').textContent = lvl + '%';
+  document.getElementById('mot-text').value = profile.motivation?.text || '';
+
   document.getElementById('set-offday').checked = !!settings.showOffday;
+
+  renderGoals();
+  renderRewards();
+  renderFriends();
+  renderBacklog();
+  renderThemeGrid();
 }
 
+/* большие цели */
+function renderGoals() {
+  const box = document.getElementById('goal-list');
+  if (!goals.length) {
+    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Пока нет больших целей.</p>`;
+    return;
+  }
+  box.innerHTML = goals.map(g => {
+    const pct = Math.max(0, Math.min(100, g.progress || 0));
+    const deadline = g.deadline ? `до ${formatDay(g.deadline)}` : '';
+    return `
+      <div class="goal-row">
+        <div class="goal-top">
+          <span class="g-icon">${g.icon}</span>
+          <span class="g-name">${escapeHtml(g.name)}</span>
+          <span class="g-deadline">${deadline}</span>
+        </div>
+        <div class="goal-bar"><div class="goal-fill" style="width:${pct}%"></div></div>
+        <div class="goal-controls">
+          <span class="g-pct">${pct}%</span>
+          <button class="mini-btn" data-gminus="${g.id}" aria-label="Минус 5%">−5</button>
+          <button class="mini-btn" data-gplus="${g.id}" aria-label="Плюс 5%">+5</button>
+          <button class="mini-btn" data-gedit="${g.id}">изменить</button>
+          <button class="mini-btn danger" data-gdel="${g.id}">удалить</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  box.querySelectorAll('[data-gplus]').forEach(b =>
+    b.addEventListener('click', () => bumpGoal(b.dataset.gplus, 5)));
+  box.querySelectorAll('[data-gminus]').forEach(b =>
+    b.addEventListener('click', () => bumpGoal(b.dataset.gminus, -5)));
+  box.querySelectorAll('[data-gedit]').forEach(b =>
+    b.addEventListener('click', () => openGoalSheet(b.dataset.gedit)));
+  box.querySelectorAll('[data-gdel]').forEach(b =>
+    b.addEventListener('click', () => {
+      if (!confirm('Удалить цель?')) return;
+      goals = goals.filter(g => g.id !== b.dataset.gdel);
+      saveJson(GOALS_KEY, goals);
+      render();
+    }));
+}
+function bumpGoal(id, delta) {
+  const g = goals.find(x => x.id === id);
+  if (!g) return;
+  const before = g.progress || 0;
+  g.progress = Math.max(0, Math.min(100, before + delta));
+  saveJson(GOALS_KEY, goals);
+  render();
+  if (before < 100 && g.progress === 100) {
+    toast(`Большая цель достигнута: ${g.name} 🏆`);
+  }
+}
+function openGoalSheet(id = null) {
+  editingGoalId = id;
+  const g = goals.find(x => x.id === id);
+  document.getElementById('goal-sheet-title').textContent = g ? 'Изменить цель' : 'Большая цель';
+  document.getElementById('g-name').value = g?.name || '';
+  document.getElementById('g-deadline').value = g?.deadline || '';
+  buildIconPicker('goal-icon-picker', g?.icon || ICONS[9]);
+  openSheet('goal-overlay');
+  document.getElementById('g-name').focus();
+}
+function saveGoal() {
+  const name = document.getElementById('g-name').value.trim();
+  if (!name) { alert('Опиши цель'); return; }
+  const iconSel = document.querySelector('#goal-icon-picker .selected')?.dataset.icon || ICONS[9];
+  const deadline = document.getElementById('g-deadline').value || null;
+
+  if (editingGoalId) {
+    const g = goals.find(x => x.id === editingGoalId);
+    if (g) Object.assign(g, { name, icon: iconSel, deadline });
+  } else {
+    goals.push({ id: 'g' + Date.now(), name, icon: iconSel, deadline, progress: 0 });
+  }
+  saveJson(GOALS_KEY, goals);
+  closeSheet('goal-overlay');
+  render();
+}
+
+/* награды */
+function renderRewards() {
+  const box = document.getElementById('reward-list');
+  const streak = bestCurrentStreak();
+  if (!rewards.length) {
+    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Например: 7 дней подряд → любимый десерт.</p>`;
+    return;
+  }
+  box.innerHTML = rewards
+    .slice()
+    .sort((a, b) => a.days - b.days)
+    .map(r => {
+      const state = r.claimed
+        ? `<span class="min-badge">получена</span>`
+        : (r.days <= streak
+            ? `<span class="min-badge">доступна!</span>`
+            : `<span class="goal-text">${streak}/${r.days} дн.</span>`);
+      return `
+        <div class="ledger-row">
+          <span class="ledger-icon">${icon('i-gift', 'ic')}</span>
+          <div class="ledger-main">
+            <div class="ledger-name">${escapeHtml(r.text)}</div>
+            <div class="ledger-day">серия ${r.days} дн.</div>
+          </div>
+          ${state}
+          <button class="mini-btn danger" data-rwdel="${r.id}">✕</button>
+        </div>`;
+    }).join('');
+
+  box.querySelectorAll('[data-rwdel]').forEach(b =>
+    b.addEventListener('click', () => {
+      rewards = rewards.filter(r => r.id !== b.dataset.rwdel);
+      saveJson(REWARDS_KEY, rewards);
+      render();
+    }));
+}
+function saveReward() {
+  const days = Math.max(1, Math.min(365, Number(document.getElementById('rw-days').value) || 7));
+  const text = document.getElementById('rw-text').value.trim();
+  if (!text) { alert('Напиши, чем себя наградишь'); return; }
+  rewards.push({ id: 'r' + Date.now(), days, text, claimed: false });
+  saveJson(REWARDS_KEY, rewards);
+  closeSheet('reward-overlay');
+  render();
+}
+
+/* друзья */
+function renderFriends() {
+  const box = document.getElementById('friend-list');
+  if (!friends.length) {
+    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Добавь друзей — вместе держать дисциплину проще.</p>`;
+    return;
+  }
+  box.innerHTML = friends.map(f => `
+    <div class="friend-row">
+      <span class="friend-ava">${escapeHtml(f.emoji || '🙂')}</span>
+      <span class="friend-name">${escapeHtml(f.name)}</span>
+      <button class="mini-btn danger" data-fdel="${f.id}">✕</button>
+    </div>`).join('');
+  box.querySelectorAll('[data-fdel]').forEach(b =>
+    b.addEventListener('click', () => {
+      friends = friends.filter(f => f.id !== b.dataset.fdel);
+      saveJson(FRIENDS_KEY, friends);
+      renderFriends();
+    }));
+}
+function saveFriend() {
+  const name = document.getElementById('fr-name').value.trim();
+  if (!name) { alert('Введи имя друга'); return; }
+  const emoji = document.querySelector('#fr-emoji-grid .selected')?.dataset.emoji || '🙂';
+  friends.push({ id: 'f' + Date.now(), name, emoji });
+  saveJson(FRIENDS_KEY, friends);
+  closeSheet('friend-overlay');
+  renderFriends();
+}
+
+/* идеи на будущее */
+function renderBacklog() {
+  const box = document.getElementById('backlog-list');
+  if (!backlog.length) {
+    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Идеи привычек, до которых дойдут руки позже.</p>`;
+    return;
+  }
+  box.innerHTML = backlog.map(b => `
+    <div class="ledger-row">
+      <span class="ledger-icon">${b.icon}</span>
+      <div class="ledger-main"><div class="ledger-name">${escapeHtml(b.name)}</div></div>
+      <button class="mini-btn" data-bstart="${b.id}">начать</button>
+      <button class="mini-btn danger" data-bdel="${b.id}">✕</button>
+    </div>`).join('');
+
+  box.querySelectorAll('[data-bstart]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      const idea = backlog.find(x => x.id === btn.dataset.bstart);
+      if (!idea) return;
+      pendingBacklogId = idea.id;
+      openAddSheet();
+      document.getElementById('f-name').value = idea.name;
+      setPickSelected('icon-picker', 'icon', idea.icon);
+    }));
+  box.querySelectorAll('[data-bdel]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      backlog = backlog.filter(x => x.id !== btn.dataset.bdel);
+      saveJson(BACKLOG_KEY, backlog);
+      renderBacklog();
+    }));
+}
+function saveIdea() {
+  const name = document.getElementById('idea-name').value.trim();
+  if (!name) { alert('Опиши идею'); return; }
+  const iconSel = document.querySelector('#idea-icon-picker .selected')?.dataset.icon || ICONS[0];
+  backlog.push({ id: 'b' + Date.now(), name, icon: iconSel });
+  saveJson(BACKLOG_KEY, backlog);
+  closeSheet('idea-overlay');
+  renderBacklog();
+}
+
+/* темы */
+function applyTheme() {
+  const t = THEMES.find(x => x.id === settings.theme) ? settings.theme : 'blue';
+  if (t === 'blue') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+}
+function renderThemeGrid() {
+  const box = document.getElementById('theme-grid');
+  box.innerHTML = '';
+  THEMES.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'theme-swatch' + (settings.theme === t.id ? ' active' : '');
+    b.style.background = t.c;
+    b.setAttribute('aria-label', 'Тема ' + t.id);
+    b.addEventListener('click', () => {
+      settings.theme = t.id;
+      saveJson(SETTINGS_KEY, settings);
+      applyTheme();
+      renderThemeGrid();
+    });
+    box.appendChild(b);
+  });
+}
+
+/* шторка профиля (имя + аватар) */
 function openProfileSheet() {
-  document.getElementById('pf-name-input').value = profile.name || '';
-  buildColorPicker('pf-color-picker', profile.color || COLORS[0]);
+  avaDraft = {
+    name: profile.name || '',
+    color: profile.color || COLORS[0],
+    photo: profile.photo || null,
+    emoji: profile.emoji || null
+  };
+  document.getElementById('pf-name-input').value = avaDraft.name;
+  buildColorPicker('pf-color-picker', avaDraft.color);
+  buildEmojiGrid('ava-emoji-grid', avaDraft.emoji, em => {
+    avaDraft.emoji = em;
+    avaDraft.photo = null;
+    updateAvaPreview();
+  });
+  updateAvaPreview();
   openSheet('profile-overlay');
   document.getElementById('pf-name-input').focus();
 }
-
+function updateAvaPreview() {
+  avaDraft.name = document.getElementById('pf-name-input').value;
+  applyAvatar(document.getElementById('ava-preview'), avaDraft);
+}
+// уменьшаем фото до 256px и сохраняем как JPEG dataURL
+function processPhoto(file) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const s = Math.min(img.width, img.height);
+    ctx.drawImage(img,
+      (img.width - s) / 2, (img.height - s) / 2, s, s,
+      0, 0, size, size);
+    avaDraft.photo = canvas.toDataURL('image/jpeg', 0.82);
+    avaDraft.emoji = null;
+    URL.revokeObjectURL(url);
+    updateAvaPreview();
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    alert('Не удалось прочитать изображение');
+  };
+  img.src = url;
+}
 function saveProfile() {
   profile.name = document.getElementById('pf-name-input').value.trim();
   const sel = document.querySelector('#pf-color-picker .selected');
   if (sel) profile.color = sel.dataset.color;
+  profile.photo = avaDraft.photo;
+  profile.emoji = avaDraft.emoji;
   if (!profile.createdAt) profile.createdAt = TODAY;
-  saveJson(PROFILE_KEY, profile);
+  try {
+    saveJson(PROFILE_KEY, profile);
+  } catch {
+    profile.photo = null;   // страховка от переполнения localStorage
+    saveJson(PROFILE_KEY, profile);
+    alert('Фото слишком большое для хранилища — сохранено без фото');
+  }
   closeSheet('profile-overlay');
   renderProfile();
+}
+
+/* мотивация */
+function saveMotivation() {
+  profile.motivation = {
+    level: Number(document.getElementById('mot-level').value) || 0,
+    text: document.getElementById('mot-text').value.trim()
+  };
+  if (!profile.createdAt) profile.createdAt = TODAY;
+  saveJson(PROFILE_KEY, profile);
+  toast('Мотивация сохранена ⚡');
 }
 
 /* ---------- ЭКСПОРТ / ИМПОРТ / ОЧИСТКА ---------- */
 function exportData() {
   const data = {
     app: 'disbit',
-    version: 3,
+    version: 4,
     exportedAt: new Date().toISOString(),
-    habits, ledger, profile, settings,
+    habits, ledger, profile, settings, friends, goals, rewards, backlog,
     settled: localStorage.getItem(SETTLED_KEY)
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -777,7 +1326,11 @@ function importData(file) {
 
       habits = data.habits;
       habits.forEach(migrate);
-      ledger = Array.isArray(data.ledger) ? data.ledger : [];
+      ledger  = Array.isArray(data.ledger)  ? data.ledger  : [];
+      friends = Array.isArray(data.friends) ? data.friends : [];
+      goals   = Array.isArray(data.goals)   ? data.goals   : [];
+      rewards = Array.isArray(data.rewards) ? data.rewards : [];
+      backlog = Array.isArray(data.backlog) ? data.backlog : [];
       if (data.profile && typeof data.profile === 'object') profile = { ...profile, ...data.profile };
       if (data.settings && typeof data.settings === 'object') settings = { ...settings, ...data.settings };
       if (data.settled) localStorage.setItem(SETTLED_KEY, data.settled);
@@ -785,8 +1338,13 @@ function importData(file) {
       save(); saveLedger();
       saveJson(PROFILE_KEY, profile);
       saveJson(SETTINGS_KEY, settings);
+      saveJson(FRIENDS_KEY, friends);
+      saveJson(GOALS_KEY, goals);
+      saveJson(REWARDS_KEY, rewards);
+      saveJson(BACKLOG_KEY, backlog);
+      applyTheme();
       render();
-      alert('Импорт завершён ✔');
+      toast('Импорт завершён ✔');
     } catch (e) {
       alert('Не удалось импортировать: ' + e.message);
     }
@@ -796,13 +1354,14 @@ function importData(file) {
 
 function wipeData() {
   if (!confirm('Стереть ВСЕ данные disbit? Это действие необратимо.')) return;
-  if (!confirm('Точно? Привычки, история и журнал списаний будут удалены.')) return;
-  [STORAGE_KEY, LEDGER_KEY, SETTLED_KEY, PROFILE_KEY, SETTINGS_KEY]
+  if (!confirm('Точно? Привычки, история, цели, друзья и журнал штрафов будут удалены.')) return;
+  [STORAGE_KEY, LEDGER_KEY, SETTLED_KEY, PROFILE_KEY, SETTINGS_KEY,
+   FRIENDS_KEY, GOALS_KEY, REWARDS_KEY, BACKLOG_KEY]
     .forEach(k => localStorage.removeItem(k));
   location.reload();
 }
 
-/* ---------- НАВИГАЦИЯ ПО ЭКРАНАМ (hash-роутинг) ---------- */
+/* ---------- НАВИГАЦИЯ (hash-роутинг) ---------- */
 function switchScreen(name, updateHash = true) {
   if (!SCREENS.includes(name)) name = 'today';
   document.querySelectorAll('.screen').forEach(s =>
@@ -821,14 +1380,28 @@ function switchScreen(name, updateHash = true) {
 function openSheet(id) { document.getElementById(id).hidden = false; }
 function closeSheet(id) {
   document.getElementById(id).hidden = true;
-  if (id === 'add-overlay') editingId = null;
+  if (id === 'add-overlay') { editingId = null; pendingBacklogId = null; }
   if (id === 'day-overlay') daySheetKey = null;
+  if (id === 'goal-overlay') editingGoalId = null;
 }
 function anyOpenSheet() {
   return [...document.querySelectorAll('.sheet-overlay')].find(o => !o.hidden);
 }
 
-/* ---------- ФОРМА ПРИВЫЧКИ ---------- */
+/* ---------- ПИКЕРЫ ---------- */
+function buildIconPicker(containerId, selectedIcon) {
+  const ip = document.getElementById(containerId);
+  ip.innerHTML = '';
+  ICONS.forEach(ic => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pick' + (ic === selectedIcon ? ' selected' : '');
+    b.textContent = ic;
+    b.dataset.icon = ic;
+    b.addEventListener('click', () => selectIn(ip, b));
+    ip.appendChild(b);
+  });
+}
 function buildColorPicker(containerId, selectedColor) {
   const cp = document.getElementById(containerId);
   cp.innerHTML = '';
@@ -843,19 +1416,24 @@ function buildColorPicker(containerId, selectedColor) {
     cp.appendChild(b);
   });
 }
-
-function buildPickers() {
-  const ip = document.getElementById('icon-picker');
-  ip.innerHTML = '';
-  ICONS.forEach((ic, i) => {
+function buildEmojiGrid(containerId, selected, onPick) {
+  const box = document.getElementById(containerId);
+  box.innerHTML = '';
+  AVA_EMOJIS.forEach(em => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'pick' + (i === 0 ? ' selected' : '');
-    b.textContent = ic;
-    b.dataset.icon = ic;
-    b.addEventListener('click', () => selectIn(ip, b));
-    ip.appendChild(b);
+    b.className = 'pick' + (em === selected ? ' selected' : '');
+    b.textContent = em;
+    b.dataset.emoji = em;
+    b.addEventListener('click', () => {
+      selectIn(box, b);
+      if (onPick) onPick(em);
+    });
+    box.appendChild(b);
   });
+}
+function buildPickers() {
+  buildIconPicker('icon-picker', ICONS[0]);
   buildColorPicker('color-picker', COLORS[0]);
 }
 function selectIn(container, btn) {
@@ -899,6 +1477,7 @@ function segValue(segId, attr) {
   return document.querySelector(`#${segId} .seg-btn.active`).dataset[attr];
 }
 
+/* ---------- ФОРМА ПРИВЫЧКИ ---------- */
 function openAddSheet() {
   editingId = null;
   document.getElementById('add-title').textContent = 'Новая привычка';
@@ -920,6 +1499,7 @@ function openEditSheet(id) {
   setPickSelected('color-picker', 'color', h.color);
   buildDayPicker(h.schedule);
   document.getElementById('f-name').value = h.name;
+  document.getElementById('f-min').value = h.min || '';
 
   setSegActive('goal-type', 'goal', h.goal.type);
   document.getElementById('count-fields').hidden = h.goal.type !== 'count';
@@ -956,6 +1536,7 @@ function resetAddForm() {
   document.getElementById('f-unit').value = '';
   document.getElementById('f-amount').value = 100;
   document.getElementById('f-apps').value = '';
+  document.getElementById('f-min').value = '';
   buildPickers();
   buildDayPicker();
   ['goal-type','stake-mode','recipient'].forEach(id => {
@@ -982,6 +1563,7 @@ function submitHabit() {
     icon: document.querySelector('#icon-picker .selected').dataset.icon,
     color: document.querySelector('#color-picker .selected').dataset.color,
     schedule,
+    min: document.getElementById('f-min').value.trim(),
     goal: {
       type: goalType,
       target: goalType === 'count' ? Math.max(1, Number(document.getElementById('f-target').value) || 1) : 1,
@@ -1010,6 +1592,12 @@ function submitHabit() {
     const h = { id: 'h' + Date.now(), ...data, createdAt: TODAY, counts: {}, history: {} };
     habits.push(h);
     apiCall('POST', '/habits', h);
+    // идея из бэклога стала привычкой — убираем её из списка
+    if (pendingBacklogId) {
+      backlog = backlog.filter(x => x.id !== pendingBacklogId);
+      saveJson(BACKLOG_KEY, backlog);
+      pendingBacklogId = null;
+    }
   }
 
   save();
@@ -1026,7 +1614,7 @@ function showDaySummary() {
   if (habits.length === 0) {
     body.innerHTML = `<div class="summary-ok">Сначала добавь привычки 🌱</div>`;
   } else if (notDone.length === 0) {
-    body.innerHTML = `<div class="summary-ok">Все привычки выполнены!<br/>Ничего бы не списалось. 🎉</div>`;
+    body.innerHTML = `<div class="summary-ok">Все привычки выполнены!<br/>Никаких штрафов. 🎉</div>`;
   } else {
     let charity = 0, creators = 0;
     const apps = new Set();
@@ -1045,7 +1633,7 @@ function showDaySummary() {
 
     if (total > 0) {
       html += `<div class="summary-total"><div class="amount">${total}₽</div>
-        <div class="label">спишется, если не выполнить до конца дня</div></div>`;
+        <div class="label">штраф, если не выполнить до конца дня</div></div>`;
       if (charity) html += `<div class="summary-row"><span class="big heart">${icon('i-heart')}</span>
         <div><div>Благотворительность</div><b>${charity}₽</b></div></div>`;
       if (creators) html += `<div class="summary-row"><span class="big tool">${icon('i-tool')}</span>
@@ -1073,6 +1661,7 @@ function formatDay(key) {
 
 /* ---------- ИНИЦИАЛИЗАЦИЯ ---------- */
 function init() {
+  applyTheme();
   document.getElementById('header-date').textContent = formatDay(TODAY);
   if (!profile.createdAt) {
     profile.createdAt = TODAY;
@@ -1106,7 +1695,7 @@ function init() {
     renderCalendar();
   });
 
-  // кнопки
+  // кнопки «Сегодня»
   document.getElementById('btn-add').addEventListener('click', openAddSheet);
   document.getElementById('btn-empty-add').addEventListener('click', openAddSheet);
   document.getElementById('btn-cancel').addEventListener('click', () => closeSheet('add-overlay'));
@@ -1117,10 +1706,61 @@ function init() {
   document.getElementById('btn-settle-close').addEventListener('click', () => closeSheet('settle-overlay'));
   document.getElementById('btn-day-close').addEventListener('click', () => closeSheet('day-overlay'));
 
-  // профиль
+  // профиль: аватар/имя
   document.getElementById('btn-profile-edit').addEventListener('click', openProfileSheet);
   document.getElementById('pf-cancel').addEventListener('click', () => closeSheet('profile-overlay'));
   document.getElementById('pf-save').addEventListener('click', saveProfile);
+  document.getElementById('pf-name-input').addEventListener('input', updateAvaPreview);
+  document.getElementById('btn-photo').addEventListener('click', () =>
+    document.getElementById('photo-file').click());
+  document.getElementById('photo-file').addEventListener('change', e => {
+    if (e.target.files?.[0]) processPhoto(e.target.files[0]);
+    e.target.value = '';
+  });
+  document.getElementById('btn-photo-remove').addEventListener('click', () => {
+    avaDraft.photo = null;
+    updateAvaPreview();
+  });
+
+  // мотивация
+  document.getElementById('mot-level').addEventListener('input', e => {
+    document.getElementById('mot-out').textContent = e.target.value + '%';
+  });
+  document.getElementById('mot-save').addEventListener('click', saveMotivation);
+
+  // цели, награды, друзья, идеи
+  document.getElementById('btn-goal-add').addEventListener('click', () => openGoalSheet());
+  document.getElementById('g-cancel').addEventListener('click', () => closeSheet('goal-overlay'));
+  document.getElementById('g-save').addEventListener('click', saveGoal);
+
+  document.getElementById('btn-reward-add').addEventListener('click', () => {
+    document.getElementById('rw-days').value = 7;
+    document.getElementById('rw-text').value = '';
+    openSheet('reward-overlay');
+    document.getElementById('rw-text').focus();
+  });
+  document.getElementById('rw-cancel').addEventListener('click', () => closeSheet('reward-overlay'));
+  document.getElementById('rw-save').addEventListener('click', saveReward);
+
+  document.getElementById('btn-friend-add').addEventListener('click', () => {
+    document.getElementById('fr-name').value = '';
+    buildEmojiGrid('fr-emoji-grid', AVA_EMOJIS[0]);
+    openSheet('friend-overlay');
+    document.getElementById('fr-name').focus();
+  });
+  document.getElementById('fr-cancel').addEventListener('click', () => closeSheet('friend-overlay'));
+  document.getElementById('fr-save').addEventListener('click', saveFriend);
+
+  document.getElementById('btn-backlog-add').addEventListener('click', () => {
+    document.getElementById('idea-name').value = '';
+    buildIconPicker('idea-icon-picker', ICONS[0]);
+    openSheet('idea-overlay');
+    document.getElementById('idea-name').focus();
+  });
+  document.getElementById('idea-cancel').addEventListener('click', () => closeSheet('idea-overlay'));
+  document.getElementById('idea-save').addEventListener('click', saveIdea);
+
+  // настройки и данные
   document.getElementById('set-offday').addEventListener('change', e => {
     settings.showOffday = e.target.checked;
     saveJson(SETTINGS_KEY, settings);
@@ -1135,7 +1775,7 @@ function init() {
   });
   document.getElementById('btn-wipe').addEventListener('click', wipeData);
 
-  // закрытие шторок: клик по затемнению и Esc
+  // закрытие шторок
   document.querySelectorAll('.sheet-overlay').forEach(ov => {
     ov.addEventListener('click', e => {
       if (e.target === ov) closeSheet(ov.id);
@@ -1148,7 +1788,7 @@ function init() {
     }
   });
 
-  // стартовый экран из URL (deep link)
+  // стартовый экран из URL
   switchScreen(location.hash.slice(1) || 'today', false);
 
   // автоитог прошедших дней
@@ -1156,7 +1796,6 @@ function init() {
   render();
   if (fresh.length) showSettleModal(fresh);
 
-  // подтягиваем данные с сервера, если он есть
   apiBootstrap();
 }
 
