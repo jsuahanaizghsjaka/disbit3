@@ -2,14 +2,45 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#050508" />
   <title>disbit — привычки со ставкой</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- ===== СПРАЙТ SVG-ИКОНОК (Lucide-style, stroke 2) ===== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5 10 18 20 6"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 22c4.4 0 7-2.8 7-6.5 0-3-1.6-5-3.2-6.9C14.3 6.8 13 5 13 2c-3 2-4.2 4.8-4 7.5.1 1.5-1 2-2 1-.6-.6-1-1.5-1-2.5-1.3 1.6-2 3.6-2 5.5C4 19.2 7.6 22 12 22Z"/></symbol>
+      <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><path d="M14.2 4.5A6 6 0 1 1 19.5 14.2M6.5 9h5M9 6.5v5"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="3"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+      <symbol id="i-award" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-2.5L17 22l-1.5-8"/></symbol>
+      <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M14.5 5 8 12l6.5 7"/></symbol>
+      <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9.5 5 16 12l-6.5 7"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4.5-4.5M12 15 7.5 10.5M4 19h16"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 19h16"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3Zm0 7v4m0 3v.5"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 19a2.2 2.2 0 0 0 4 0"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="m4 20 1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1Z"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5C7 16.5 3 13.3 3 9.2 3 6.4 5.2 4.5 7.7 4.5c1.7 0 3.3.8 4.3 2.3 1-1.5 2.6-2.3 4.3-2.3 2.5 0 4.7 1.9 4.7 4.7 0 4.1-4 7.3-9 11.3Z"/></symbol>
+      <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 5 5l-9 9a2.1 2.1 0 0 1-3-3l9-9Z"/><path d="M15 4a5 5 0 0 1 5 5"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    </defs>
+  </svg>
+
   <div class="app">
 
     <!-- ШАПКА -->
@@ -18,30 +49,30 @@
         <div class="logo">dis<span>bit</span></div>
         <div class="header-date" id="header-date"></div>
       </div>
-      <button class="icon-btn" id="btn-summary" title="Подвести итог дня">📊</button>
+      <button class="icon-btn" id="btn-summary" aria-label="Итог дня">
+        <svg class="ic"><use href="#i-bell"/></svg>
+      </button>
     </header>
 
     <!-- ================= ЭКРАН: СЕГОДНЯ ================= -->
     <main class="screen active" id="screen-today">
 
-      <!-- полоска дней недели (рендерится из JS) -->
       <div class="week-strip" id="week-strip"></div>
 
-      <!-- карточка прогресса за день -->
       <section class="progress-card">
         <div class="progress-info">
           <h2 class="progress-title">Сегодня</h2>
           <p class="progress-sub"><span id="done-count">0</span> из <span id="total-count">0</span> выполнено</p>
-          <!-- сумма «под риском»: сколько спишется, если не выполнить -->
-          <p class="at-risk" id="at-risk"></p>
+          <p class="at-risk" id="at-risk" hidden>
+            <svg class="ic ic-s"><use href="#i-alert"/></svg><span id="at-risk-text"></span>
+          </p>
         </div>
-        <!-- кольцо прогресса (SVG, заполнение из JS) -->
         <div class="ring">
           <svg viewBox="0 0 120 120">
             <defs>
               <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#3B82F6" />
-                <stop offset="100%" stop-color="#22D3EE" />
+                <stop offset="0%" stop-color="#F59E0B" />
+                <stop offset="100%" stop-color="#F97316" />
               </linearGradient>
             </defs>
             <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
@@ -51,49 +82,78 @@
         </div>
       </section>
 
-      <!-- список привычек на сегодня -->
       <h3 class="section-title">Мои привычки</h3>
       <div class="habit-list" id="habit-list"></div>
 
-      <!-- привычки, не запланированные на сегодня -->
       <div id="offday-block" hidden>
         <h3 class="section-title dim">Не сегодня</h3>
         <div class="habit-list" id="offday-list"></div>
       </div>
 
-      <!-- пустое состояние -->
       <div class="empty" id="empty-state" hidden>
-        <div class="empty-emoji">🌱</div>
+        <div class="empty-art"><svg class="ic ic-xl"><use href="#i-target"/></svg></div>
         <p>Пока нет ни одной привычки.<br/>Добавь первую и поставь на неё ставку.</p>
+        <button class="btn-primary empty-cta" id="btn-empty-add">Создать привычку</button>
       </div>
 
       <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
     </main>
 
+    <!-- ================= ЭКРАН: КАЛЕНДАРЬ ================= -->
+    <main class="screen" id="screen-calendar">
+      <div class="cal-head">
+        <button class="icon-btn" id="cal-prev" aria-label="Предыдущий месяц">
+          <svg class="ic"><use href="#i-chev-l"/></svg>
+        </button>
+        <div class="cal-title-box">
+          <h2 class="cal-title" id="cal-title">Июль 2026</h2>
+          <button class="cal-today-chip" id="cal-today-btn" hidden>к сегодня</button>
+        </div>
+        <button class="icon-btn" id="cal-next" aria-label="Следующий месяц">
+          <svg class="ic"><use href="#i-chev-r"/></svg>
+        </button>
+      </div>
+
+      <div class="cal-weekdays">
+        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+
+      <div class="cal-legend">
+        <span><i class="lg-dot done"></i>всё выполнено</span>
+        <span><i class="lg-dot part"></i>частично</span>
+        <span><i class="lg-dot fail"></i>пропуск</span>
+      </div>
+
+      <section class="card" id="cal-month-stats"></section>
+    </main>
+
     <!-- ================= ЭКРАН: СТАТИСТИКА ================= -->
     <main class="screen" id="screen-stats">
 
-      <!-- сводные карточки -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value flame" id="st-current-streak">0</div>
-          <div class="stat-label">текущая серия 🔥</div>
+          <svg class="ic stat-ic flame"><use href="#i-flame"/></svg>
+          <div class="stat-value" id="st-current-streak">0</div>
+          <div class="stat-label">текущая серия</div>
         </div>
         <div class="stat-card">
+          <svg class="ic stat-ic gold"><use href="#i-award"/></svg>
           <div class="stat-value" id="st-best-streak">0</div>
-          <div class="stat-label">лучший стрик 🏆</div>
+          <div class="stat-label">лучший стрик</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value good" id="st-total-done">0</div>
-          <div class="stat-label">всего выполнено ✓</div>
+          <svg class="ic stat-ic good"><use href="#i-check"/></svg>
+          <div class="stat-value" id="st-total-done">0</div>
+          <div class="stat-label">всего выполнено</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value money" id="st-lost">0₽</div>
+          <svg class="ic stat-ic bad"><use href="#i-coins"/></svg>
+          <div class="stat-value" id="st-lost">0₽</div>
           <div class="stat-label">потеряно на ставках</div>
         </div>
       </div>
 
-      <!-- heatmap -->
       <section class="card">
         <h3 class="card-title">История · <span id="hm-weeks-label"></span></h3>
         <div class="chips" id="hm-chips"></div>
@@ -111,73 +171,143 @@
         </div>
       </section>
 
-      <!-- стрики по привычкам -->
       <section class="card">
         <h3 class="card-title">Стрики</h3>
         <div id="streak-list"></div>
       </section>
 
-      <!-- история списаний -->
       <section class="card">
         <h3 class="card-title">История списаний</h3>
-        <p class="sim-note">⚠️ Симуляция: реальные деньги не списываются.</p>
+        <p class="sim-note"><svg class="ic ic-s"><use href="#i-alert"/></svg> Симуляция: реальные деньги не списываются.</p>
         <div id="ledger-list"></div>
       </section>
     </main>
 
+    <!-- ================= ЭКРАН: ПРОФИЛЬ ================= -->
+    <main class="screen" id="screen-profile">
+
+      <section class="profile-hero">
+        <div class="avatar" id="profile-avatar">?</div>
+        <div class="profile-name-box">
+          <h2 class="profile-name" id="profile-name">Без имени</h2>
+          <p class="profile-since" id="profile-since"></p>
+        </div>
+        <button class="icon-btn" id="btn-profile-edit" aria-label="Редактировать профиль">
+          <svg class="ic"><use href="#i-pencil"/></svg>
+        </button>
+      </section>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="pf-habits">0</div>
+          <div class="stat-label">активных привычек</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value good" id="pf-done">0</div>
+          <div class="stat-label">отметок всего</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value flame" id="pf-best">0</div>
+          <div class="stat-label">рекордный стрик</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value bad" id="pf-lost">0₽</div>
+          <div class="stat-label">потеряно на ставках</div>
+        </div>
+      </div>
+
+      <section class="card">
+        <h3 class="card-title">Настройки</h3>
+        <label class="setting-row">
+          <span>Показывать блок «Не сегодня»</span>
+          <input type="checkbox" id="set-offday" class="switch" />
+        </label>
+        <label class="setting-row">
+          <span>Итог дня при запуске</span>
+          <input type="checkbox" id="set-autosettle" class="switch" checked disabled />
+        </label>
+        <p class="hint">Автоитог отключить нельзя — в этом весь смысл ставки 😉</p>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title">Данные</h3>
+        <button class="row-btn" id="btn-export">
+          <svg class="ic"><use href="#i-download"/></svg><span>Экспорт данных (JSON)</span>
+        </button>
+        <button class="row-btn" id="btn-import">
+          <svg class="ic"><use href="#i-upload"/></svg><span>Импорт данных</span>
+        </button>
+        <input type="file" id="import-file" accept="application/json" hidden />
+        <button class="row-btn danger" id="btn-wipe">
+          <svg class="ic"><use href="#i-trash"/></svg><span>Стереть все данные</span>
+        </button>
+      </section>
+
+      <p class="about-note">disbit v0.3 · прототип · ставки симулируются<br/>Реальные списания и блокировки — в нативной версии.</p>
+    </main>
+
     <!-- НИЖНЕЕ МЕНЮ -->
-    <nav class="bottom-nav">
-      <button class="nav-item active" data-screen="today">▦<span>Сегодня</span></button>
-      <button class="nav-item" data-screen="stats">📈<span>Статистика</span></button>
-      <button class="fab" id="btn-add">+</button>
-      <button class="nav-item" disabled>🔔<span>Напоминания</span></button>
-      <button class="nav-item" disabled>👤<span>Профиль</span></button>
+    <nav class="bottom-nav" aria-label="Основная навигация">
+      <button class="nav-item active" data-screen="today">
+        <svg class="ic"><use href="#i-home"/></svg><span>Сегодня</span>
+      </button>
+      <button class="nav-item" data-screen="calendar">
+        <svg class="ic"><use href="#i-calendar"/></svg><span>Календарь</span>
+      </button>
+      <button class="fab" id="btn-add" aria-label="Новая привычка">
+        <svg class="ic"><use href="#i-plus"/></svg>
+      </button>
+      <button class="nav-item" data-screen="stats">
+        <svg class="ic"><use href="#i-chart"/></svg><span>Статистика</span>
+      </button>
+      <button class="nav-item" data-screen="profile">
+        <svg class="ic"><use href="#i-user"/></svg><span>Профиль</span>
+      </button>
     </nav>
   </div>
 
   <!-- ===== ШТОРКА: ДОБАВИТЬ / РЕДАКТИРОВАТЬ ПРИВЫЧКУ ===== -->
   <div class="sheet-overlay" id="add-overlay" hidden>
-    <div class="sheet" id="add-sheet">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="add-title">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="add-title">Новая привычка</h2>
 
-      <label class="field-label">Название</label>
-      <input class="field-input" id="f-name" type="text" placeholder="Например: Читать 20 страниц" maxlength="40" />
+      <label class="field-label" for="f-name">Название</label>
+      <input class="field-input" id="f-name" type="text" placeholder="Например: Читать 20 страниц" maxlength="40" autocomplete="off" />
 
-      <label class="field-label">Иконка</label>
+      <span class="field-label">Иконка</span>
       <div class="picker" id="icon-picker"></div>
 
-      <label class="field-label">Цвет</label>
+      <span class="field-label">Цвет</span>
       <div class="picker" id="color-picker"></div>
 
-      <label class="field-label">Дни недели</label>
+      <span class="field-label">Дни недели</span>
       <div class="day-picker" id="day-picker"></div>
 
-      <label class="field-label">Цель</label>
+      <span class="field-label">Цель</span>
       <div class="seg" id="goal-type">
-        <button class="seg-btn active" data-goal="check">Отметить ✓</button>
+        <button class="seg-btn active" data-goal="check">Отметить</button>
         <button class="seg-btn" data-goal="count">Счётчик</button>
       </div>
       <div class="count-fields" id="count-fields" hidden>
-        <input class="field-input small" id="f-target" type="number" min="1" value="5" />
+        <input class="field-input small" id="f-target" type="number" inputmode="numeric" min="1" value="5" aria-label="Сколько раз" />
         <input class="field-input" id="f-unit" type="text" placeholder="ед. (страниц, стаканов…)" maxlength="14" />
       </div>
 
-      <!-- СТАВКА — главная фишка -->
-      <label class="field-label">Ставка при невыполнении</label>
+      <span class="field-label">Ставка при невыполнении</span>
       <div class="seg" id="stake-mode">
-        <button class="seg-btn active" data-stake="money">💸 Деньги</button>
-        <button class="seg-btn" data-stake="lock">🔒 Блокировка</button>
+        <button class="seg-btn" data-stake="money"><svg class="ic ic-s"><use href="#i-coins"/></svg>Деньги</button>
+        <button class="seg-btn" data-stake="lock"><svg class="ic ic-s"><use href="#i-lock"/></svg>Блокировка</button>
       </div>
 
       <div class="stake-money" id="stake-money">
         <div class="count-fields">
-          <input class="field-input small" id="f-amount" type="number" min="10" step="10" value="100" />
+          <input class="field-input small" id="f-amount" type="number" inputmode="numeric" min="10" step="10" value="100" aria-label="Сумма ставки" />
           <span class="suffix">₽ за пропуск</span>
         </div>
         <div class="seg" id="recipient">
-          <button class="seg-btn active" data-rec="charity">❤️ Благотворительность</button>
-          <button class="seg-btn" data-rec="creators">🛠️ Создателям</button>
+          <button class="seg-btn active" data-rec="charity"><svg class="ic ic-s"><use href="#i-heart"/></svg>Благотворительность</button>
+          <button class="seg-btn" data-rec="creators"><svg class="ic ic-s"><use href="#i-tool"/></svg>Создателям</button>
         </div>
       </div>
 
@@ -193,12 +323,40 @@
     </div>
   </div>
 
-  <!-- ===== МОДАЛКА: ИТОГ ДНЯ (СИМУЛЯЦИЯ) ===== -->
-  <div class="sheet-overlay" id="summary-overlay" hidden>
-    <div class="sheet" id="summary-sheet">
+  <!-- ===== ШТОРКА: ДЕНЬ КАЛЕНДАРЯ ===== -->
+  <div class="sheet-overlay" id="day-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="day-title">
       <div class="sheet-handle"></div>
-      <h2 class="sheet-title">Итог дня</h2>
-      <p class="sim-note">⚠️ Это симуляция. Реальные деньги не списываются, приложения не блокируются.</p>
+      <h2 class="sheet-title" id="day-title">День</h2>
+      <div id="day-body"></div>
+      <div class="sheet-actions">
+        <button class="btn-primary full" id="btn-day-close">Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ПРОФИЛЬ ===== -->
+  <div class="sheet-overlay" id="profile-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pf-sheet-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="pf-sheet-title">Профиль</h2>
+      <label class="field-label" for="pf-name-input">Имя</label>
+      <input class="field-input" id="pf-name-input" type="text" placeholder="Как тебя зовут?" maxlength="24" autocomplete="name" />
+      <span class="field-label">Цвет аватара</span>
+      <div class="picker" id="pf-color-picker"></div>
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="pf-cancel">Отмена</button>
+        <button class="btn-primary" id="pf-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ИТОГ ДНЯ (СИМУЛЯЦИЯ) ===== -->
+  <div class="sheet-overlay" id="summary-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="summary-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="summary-title">Итог дня</h2>
+      <p class="sim-note"><svg class="ic ic-s"><use href="#i-alert"/></svg> Это симуляция. Реальные деньги не списываются, приложения не блокируются.</p>
       <div id="summary-body"></div>
       <div class="sheet-actions">
         <button class="btn-primary full" id="btn-summary-close">Понятно</button>
@@ -206,12 +364,12 @@
     </div>
   </div>
 
-  <!-- ===== МОДАЛКА: АВТОИТОГ «ПОКА ТЕБЯ НЕ БЫЛО» ===== -->
+  <!-- ===== ШТОРКА: АВТОИТОГ «ПОКА ТЕБЯ НЕ БЫЛО» ===== -->
   <div class="sheet-overlay" id="settle-overlay" hidden>
-    <div class="sheet" id="settle-sheet">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settle-title">
       <div class="sheet-handle"></div>
-      <h2 class="sheet-title">Пока тебя не было…</h2>
-      <p class="sim-note">⚠️ Симуляция: итоги прошедших дней зафиксированы автоматически.</p>
+      <h2 class="sheet-title" id="settle-title">Пока тебя не было…</h2>
+      <p class="sim-note"><svg class="ic ic-s"><use href="#i-alert"/></svg> Симуляция: итоги прошедших дней зафиксированы автоматически.</p>
       <div id="settle-body"></div>
       <div class="sheet-actions">
         <button class="btn-primary full" id="btn-settle-close">Понятно</button>
