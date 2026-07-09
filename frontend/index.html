@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>disbit — привычки со ставкой</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -11,54 +14,128 @@
 
     <!-- ШАПКА -->
     <header class="header">
-      <div class="logo">dis<span>bit</span></div>
+      <div>
+        <div class="logo">dis<span>bit</span></div>
+        <div class="header-date" id="header-date"></div>
+      </div>
       <button class="icon-btn" id="btn-summary" title="Подвести итог дня">📊</button>
     </header>
 
-    <!-- ПОЛОСКА ДНЕЙ НЕДЕЛИ (рендерится из JS) -->
-    <div class="week-strip" id="week-strip"></div>
+    <!-- ================= ЭКРАН: СЕГОДНЯ ================= -->
+    <main class="screen active" id="screen-today">
 
-    <!-- КАРТОЧКА ПРОГРЕССА ЗА ДЕНЬ -->
-    <section class="progress-card">
-      <div class="progress-info">
-        <h2 class="progress-title">Сегодня</h2>
-        <p class="progress-sub"><span id="done-count">0</span> из <span id="total-count">0</span> выполнено</p>
-        <!-- сумма «под риском»: сколько спишется если не выполнить -->
-        <p class="at-risk" id="at-risk"></p>
+      <!-- полоска дней недели (рендерится из JS) -->
+      <div class="week-strip" id="week-strip"></div>
+
+      <!-- карточка прогресса за день -->
+      <section class="progress-card">
+        <div class="progress-info">
+          <h2 class="progress-title">Сегодня</h2>
+          <p class="progress-sub"><span id="done-count">0</span> из <span id="total-count">0</span> выполнено</p>
+          <!-- сумма «под риском»: сколько спишется, если не выполнить -->
+          <p class="at-risk" id="at-risk"></p>
+        </div>
+        <!-- кольцо прогресса (SVG, заполнение из JS) -->
+        <div class="ring">
+          <svg viewBox="0 0 120 120">
+            <defs>
+              <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#3B82F6" />
+                <stop offset="100%" stop-color="#22D3EE" />
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="ring-label" id="ring-label">0%</div>
+        </div>
+      </section>
+
+      <!-- список привычек на сегодня -->
+      <h3 class="section-title">Мои привычки</h3>
+      <div class="habit-list" id="habit-list"></div>
+
+      <!-- привычки, не запланированные на сегодня -->
+      <div id="offday-block" hidden>
+        <h3 class="section-title dim">Не сегодня</h3>
+        <div class="habit-list" id="offday-list"></div>
       </div>
-      <!-- кольцо прогресса (SVG, заполнение из JS) -->
-      <div class="ring">
-        <svg viewBox="0 0 120 120">
-          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
-          <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="52"></circle>
-        </svg>
-        <div class="ring-label" id="ring-label">0%</div>
+
+      <!-- пустое состояние -->
+      <div class="empty" id="empty-state" hidden>
+        <div class="empty-emoji">🌱</div>
+        <p>Пока нет ни одной привычки.<br/>Добавь первую и поставь на неё ставку.</p>
       </div>
-    </section>
 
-    <!-- СПИСОК ПРИВЫЧЕК -->
-    <h3 class="section-title">Мои привычки</h3>
-    <div class="habit-list" id="habit-list"></div>
+      <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
+    </main>
 
-    <!-- пустое состояние (показывается когда привычек нет) -->
-    <div class="empty" id="empty-state" hidden>
-      <div class="empty-emoji">🌱</div>
-      <p>Пока нет ни одной привычки.<br/>Добавь первую и поставь на неё ставку.</p>
-    </div>
+    <!-- ================= ЭКРАН: СТАТИСТИКА ================= -->
+    <main class="screen" id="screen-stats">
 
-    <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
+      <!-- сводные карточки -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value flame" id="st-current-streak">0</div>
+          <div class="stat-label">текущая серия 🔥</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="st-best-streak">0</div>
+          <div class="stat-label">лучший стрик 🏆</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value good" id="st-total-done">0</div>
+          <div class="stat-label">всего выполнено ✓</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value money" id="st-lost">0₽</div>
+          <div class="stat-label">потеряно на ставках</div>
+        </div>
+      </div>
+
+      <!-- heatmap -->
+      <section class="card">
+        <h3 class="card-title">История · <span id="hm-weeks-label"></span></h3>
+        <div class="chips" id="hm-chips"></div>
+        <div class="heatmap-wrap">
+          <div class="hm-daynames"><span>Пн</span><span>Ср</span><span>Пт</span></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+        <div class="hm-legend">
+          <span>провал</span>
+          <i class="hm-cell fail"></i>
+          <i class="hm-cell l1"></i>
+          <i class="hm-cell l2"></i>
+          <i class="hm-cell l3"></i>
+          <span>всё</span>
+        </div>
+      </section>
+
+      <!-- стрики по привычкам -->
+      <section class="card">
+        <h3 class="card-title">Стрики</h3>
+        <div id="streak-list"></div>
+      </section>
+
+      <!-- история списаний -->
+      <section class="card">
+        <h3 class="card-title">История списаний</h3>
+        <p class="sim-note">⚠️ Симуляция: реальные деньги не списываются.</p>
+        <div id="ledger-list"></div>
+      </section>
+    </main>
 
     <!-- НИЖНЕЕ МЕНЮ -->
     <nav class="bottom-nav">
-      <button class="nav-item active">▦<span>Сегодня</span></button>
-      <button class="nav-item" disabled>📈<span>Статистика</span></button>
+      <button class="nav-item active" data-screen="today">▦<span>Сегодня</span></button>
+      <button class="nav-item" data-screen="stats">📈<span>Статистика</span></button>
       <button class="fab" id="btn-add">+</button>
-      <button class="nav-item" disabled>🔥<span>Стрики</span></button>
+      <button class="nav-item" disabled>🔔<span>Напоминания</span></button>
       <button class="nav-item" disabled>👤<span>Профиль</span></button>
     </nav>
   </div>
 
-  <!-- ===== ШТОРКА: ДОБАВИТЬ ПРИВЫЧКУ ===== -->
+  <!-- ===== ШТОРКА: ДОБАВИТЬ / РЕДАКТИРОВАТЬ ПРИВЫЧКУ ===== -->
   <div class="sheet-overlay" id="add-overlay" hidden>
     <div class="sheet" id="add-sheet">
       <div class="sheet-handle"></div>
@@ -72,6 +149,9 @@
 
       <label class="field-label">Цвет</label>
       <div class="picker" id="color-picker"></div>
+
+      <label class="field-label">Дни недели</label>
+      <div class="day-picker" id="day-picker"></div>
 
       <label class="field-label">Цель</label>
       <div class="seg" id="goal-type">
@@ -122,6 +202,19 @@
       <div id="summary-body"></div>
       <div class="sheet-actions">
         <button class="btn-primary full" id="btn-summary-close">Понятно</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== МОДАЛКА: АВТОИТОГ «ПОКА ТЕБЯ НЕ БЫЛО» ===== -->
+  <div class="sheet-overlay" id="settle-overlay" hidden>
+    <div class="sheet" id="settle-sheet">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">Пока тебя не было…</h2>
+      <p class="sim-note">⚠️ Симуляция: итоги прошедших дней зафиксированы автоматически.</p>
+      <div id="settle-body"></div>
+      <div class="sheet-actions">
+        <button class="btn-primary full" id="btn-settle-close">Понятно</button>
       </div>
     </div>
   </div>

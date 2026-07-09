@@ -1,8 +1,9 @@
 {
   "name": "disbit-backend",
-  "version": "0.1.0",
-  "description": "Бэкенд для disbit — пока каркас под будущую базу данных",
+  "version": "0.2.0",
+  "description": "Бэкенд для disbit — Express + SQLite (встроенный node:sqlite)",
   "type": "module",
+  "engines": { "node": ">=22.13" },
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
