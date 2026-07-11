@@ -1,0 +1,26 @@
+{
+  "name": "disbit3",
+  "version": "1.0.0",
+  "description": "Приложение для привычек со **штрафом за пропуск**: не выполнил привычку — сам заранее выбираешь, что теряешь. Либо **списание денег** (сумму и получателя выбираешь сам: благотворительность или создателям), либо **блокировка телефона / выбранных приложений**. Главная идея — не ставки, а **штрафы**: наказание назначаешь себе сам, заранее.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jsuahanaizghsjaka/disbit3.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jsuahanaizghsjaka/disbit3/issues"
+  },
+  "homepage": "https://github.com/jsuahanaizghsjaka/disbit3#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1"
+  }
+}

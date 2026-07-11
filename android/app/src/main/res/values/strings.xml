@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">disbit</string>
+    <string name="title_activity_main">disbit</string>
+    <string name="package_name">io.disbit.app</string>
+    <string name="custom_url_scheme">io.disbit.app</string>
+</resources>

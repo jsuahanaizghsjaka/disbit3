@@ -39,7 +39,22 @@ function setAuth(token, user) {
   }
 }
 
-const ICONS  = ['📚','💧','🏃','🧘','🦷','💪','🥗','😴','✍️','🎯','🧹','🎸'];
+// иконки привычек — монохромные SVG из спрайта (старые эмодзи-привычки поддерживаются)
+const HABIT_ICONS = ['svg:i-h-book','svg:i-h-water','svg:i-h-run','svg:i-h-sleep','svg:i-h-food','svg:i-h-gym','svg:i-h-music','svg:i-h-lang','svg:i-h-mind','svg:i-h-clean','svg:i-h-code','svg:i-h-health'];
+// рендер иконки привычки/записи: svg-ссылка или старое эмодзи
+function iconOf(v) {
+  return String(v || '').startsWith('svg:') ? icon(v.slice(4)) : escapeHtml(v || '');
+}
+
+// медали достижений
+const MEDALS = [
+  ...[100,200,300,400,500,600,700,800,900,1000].map(n =>
+    ({ id: 's' + n, kind: 'streak', at: n, name: `${n} дней`, cls: 'gold', ic: 'i-flame' })),
+  ...[1000,2500,5000,10000].map(n =>
+    ({ id: 'f' + n, kind: 'fines', at: n, name: `${n}₽ штрафов`, cls: 'red', ic: 'i-coins' })),
+  ...[5,10,20].map(n =>
+    ({ id: 'l' + n, kind: 'locks', at: n, name: `${n} блокировок`, cls: 'violet', ic: 'i-lock' }))
+];
 const COLORS = ['#5B8DFF','#4ADE80','#38BDF8','#F472B6','#A78BFA','#F87171','#FBBF24','#E8722A'];
 const AVA_EMOJIS = ['😀','😎','🦊','🐻','🐼','🦁','🐯','🐸','🦉','🐨','🦄','🐢','🚀','🔥','⚡','🌟','🍀','🌊','🎧','🎮','🏔️','🌙','🍕','☕'];
 const DAY_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -399,7 +414,7 @@ function showSettleModal(entries) {
   }
   html += entries.slice(-8).reverse().map(e => `
     <div class="ledger-row">
-      <span class="ledger-icon">${e.icon}</span>
+      <span class="ledger-icon">${iconOf(e.icon)}</span>
       <div class="ledger-main">
         <div class="ledger-name">${escapeHtml(e.name)}</div>
         <div class="ledger-day">${formatDay(e.day)}</div>
@@ -419,6 +434,8 @@ function render() {
   renderHabits();
   renderProgress();
   renderCalendar();
+  renderGoals();
+  renderBacklog();
   renderStats();
   renderProfile();
 }
@@ -464,7 +481,7 @@ function renderGoalStrip() {
   const pct = g.progress || 0;
   box.innerHTML = `
     <div class="goal-strip" role="button" tabindex="0" aria-label="Большая цель: ${escapeHtml(g.name)}">
-      <span class="gs-icon">${g.icon}</span>
+      <span class="gs-icon">${iconOf(g.icon)}</span>
       <div class="gs-main">
         <div class="gs-name">${escapeHtml(g.name)}</div>
         <div class="gs-bar"><div class="gs-fill" style="width:${pct}%"></div></div>
@@ -544,7 +561,7 @@ function habitCard(h, off) {
   const card = document.createElement('div');
   card.className = 'habit' + (done ? ' done' : '') + (off ? ' off' : '');
   card.innerHTML = `
-    <div class="habit-icon">${h.icon}</div>
+    <div class="habit-icon">${iconOf(h.icon)}</div>
     <div class="habit-main" data-edit="${h.id}" role="button" tabindex="0" aria-label="Редактировать: ${escapeHtml(h.name)}">
       <div class="habit-name">${escapeHtml(h.name)}</div>
       <div class="habit-meta">
@@ -754,7 +771,7 @@ function renderDaySheet() {
       const minBadge = min ? `<span class="min-badge">минимум</span>` : '';
       return `
         <div class="day-habit-row ${done ? 'done' : ''}">
-          <div class="habit-icon" style="width:42px;height:42px;font-size:19px">${h.icon}</div>
+          <div class="habit-icon" style="width:42px;height:42px;font-size:19px">${iconOf(h.icon)}</div>
           <div class="ledger-main">
             <div class="ledger-name">${escapeHtml(h.name)}</div>
             <div class="ledger-day">${done ? (min ? 'минимум — серия жива' : 'выполнено') : 'не выполнено'}</div>
@@ -769,7 +786,7 @@ function renderDaySheet() {
     html += `<p class="field-label">Штрафы за этот день</p>`;
     html += charges.map(e => `
       <div class="ledger-row">
-        <span class="ledger-icon">${e.icon || ''}</span>
+        <span class="ledger-icon">${iconOf(e.icon)}</span>
         <div class="ledger-main"><div class="ledger-name">${escapeHtml(e.name || '')}</div></div>
         <span class="ledger-amount">${e.mode === 'money'
           ? `−${e.amount}₽` : `${icon('i-lock')} ${(e.apps || []).length}`}</span>
@@ -919,7 +936,7 @@ function renderHmChips() {
     box.appendChild(b);
   };
   mk('all', 'Все');
-  habits.forEach(h => mk(h.id, `${h.icon} ${h.name.length > 12 ? h.name.slice(0, 12) + '…' : h.name}`));
+  habits.forEach(h => mk(h.id, h.name.length > 14 ? h.name.slice(0, 14) + '…' : h.name));
   if (hmFilter !== 'all' && !habits.find(h => h.id === hmFilter)) hmFilter = 'all';
 }
 
@@ -974,7 +991,7 @@ function renderStreakList() {
 
   box.innerHTML = rows.map(({ h, cur, best }) => `
     <div class="ledger-row">
-      <span class="ledger-icon">${h.icon}</span>
+      <span class="ledger-icon">${iconOf(h.icon)}</span>
       <div class="ledger-main">
         <div class="ledger-name">${escapeHtml(h.name)}</div>
         <div class="ledger-day">лучший: ${best}</div>
@@ -991,7 +1008,7 @@ function renderLedger() {
   }
   box.innerHTML = ledger.slice(-30).reverse().map(e => `
     <div class="ledger-row">
-      <span class="ledger-icon">${e.icon || ''}</span>
+      <span class="ledger-icon">${iconOf(e.icon)}</span>
       <div class="ledger-main">
         <div class="ledger-name">${escapeHtml(e.name || '')}</div>
         <div class="ledger-day">${formatDay(e.day)}</div>
@@ -1026,15 +1043,7 @@ function renderProfile() {
   document.getElementById('profile-since').textContent =
     firstDay ? `в disbit с ${formatDay(firstDay)}` : 'добро пожаловать!';
 
-  const totalDone = habits.reduce(
-    (s, h) => s + Object.keys(h.history).filter(k => doneOn(h, k)).length, 0);
-  const best = habits.length ? Math.max(...habits.map(computeBestStreak)) : 0;
-  const lost = ledger.reduce((s, e) => s + (e.amount || 0), 0);
-
-  document.getElementById('pf-habits').textContent = habits.length;
-  document.getElementById('pf-done').textContent = totalDone;
-  document.getElementById('pf-best').textContent = best;
-  document.getElementById('pf-lost').textContent = lost + '₽';
+  renderMedals();
 
   // мотивация
   const lvl = profile.motivation?.level ?? 50;
@@ -1044,12 +1053,33 @@ function renderProfile() {
 
   document.getElementById('set-offday').checked = !!settings.showOffday;
 
-  renderGoals();
   renderRewards();
   renderFriends();
-  renderBacklog();
   renderThemeGrid();
   renderAccount();
+}
+
+/* достижения-медали */
+function renderMedals() {
+  const box = document.getElementById('medal-grid');
+  if (!box) return;
+  const metrics = {
+    streak: habits.length ? Math.max(...habits.map(computeBestStreak)) : 0,
+    fines: ledger.filter(e => e.mode === 'money').reduce((s, e) => s + (e.amount || 0), 0),
+    locks: ledger.filter(e => e.mode === 'lock').length
+  };
+  box.innerHTML = MEDALS.map(m => {
+    const cur = metrics[m.kind];
+    const earned = cur >= m.at;
+    const sub = earned ? 'получена' : `${Math.min(cur, m.at)}/${m.at}`;
+    return `
+      <div class="medal ${earned ? 'earned ' + m.cls : 'locked'}"
+        title="${m.name}${earned ? '' : ' — ещё ' + (m.at - cur)}">
+        <span class="m-ic">${icon(m.ic)}</span>
+        <span class="m-name">${m.name}</span>
+        <span class="m-sub">${sub}</span>
+      </div>`;
+  }).join('');
 }
 
 /* большие цели */
@@ -1065,7 +1095,7 @@ function renderGoals() {
     return `
       <div class="goal-row">
         <div class="goal-top">
-          <span class="g-icon">${g.icon}</span>
+          <span class="g-icon">${iconOf(g.icon)}</span>
           <span class="g-name">${escapeHtml(g.name)}</span>
           <span class="g-deadline">${deadline}</span>
         </div>
@@ -1111,14 +1141,14 @@ function openGoalSheet(id = null) {
   document.getElementById('goal-sheet-title').textContent = g ? 'Изменить цель' : 'Большая цель';
   document.getElementById('g-name').value = g?.name || '';
   document.getElementById('g-deadline').value = g?.deadline || '';
-  buildIconPicker('goal-icon-picker', g?.icon || ICONS[9]);
+  buildIconPicker('goal-icon-picker', g?.icon || 'svg:i-h-run');
   openSheet('goal-overlay');
   document.getElementById('g-name').focus();
 }
 function saveGoal() {
   const name = document.getElementById('g-name').value.trim();
   if (!name) { alert('Опиши цель'); return; }
-  const iconSel = document.querySelector('#goal-icon-picker .selected')?.dataset.icon || ICONS[9];
+  const iconSel = document.querySelector('#goal-icon-picker .selected')?.dataset.icon || 'svg:i-h-run';
   const deadline = document.getElementById('g-deadline').value || null;
 
   if (editingGoalId) {
@@ -1217,7 +1247,7 @@ function renderBacklog() {
   }
   box.innerHTML = backlog.map(b => `
     <div class="ledger-row">
-      <span class="ledger-icon">${b.icon}</span>
+      <span class="ledger-icon">${iconOf(b.icon)}</span>
       <div class="ledger-main"><div class="ledger-name">${escapeHtml(b.name)}</div></div>
       <button class="mini-btn" data-bstart="${b.id}">начать</button>
       <button class="mini-btn danger" data-bdel="${b.id}">✕</button>
@@ -1242,7 +1272,7 @@ function renderBacklog() {
 function saveIdea() {
   const name = document.getElementById('idea-name').value.trim();
   if (!name) { alert('Опиши идею'); return; }
-  const iconSel = document.querySelector('#idea-icon-picker .selected')?.dataset.icon || ICONS[0];
+  const iconSel = document.querySelector('#idea-icon-picker .selected')?.dataset.icon || HABIT_ICONS[0];
   backlog.push({ id: 'b' + Date.now(), name, icon: iconSel });
   saveJson(BACKLOG_KEY, backlog);
   closeSheet('idea-overlay');
@@ -1288,11 +1318,34 @@ function renderAccount() {
   }
 }
 
+let authGateActive = false;
+const GATE_KEY = 'disbit_gate_v1';
+
 function openAuthSheet(mode) {
+  authGateActive = false;
+  document.getElementById('auth-cancel').hidden = false;
+  document.getElementById('auth-local').hidden = true;
   setAuthMode(mode);
   document.getElementById('auth-error').hidden = true;
   openSheet('auth-overlay');
   document.getElementById(mode === 'login' ? 'li-id' : 'rg-login').focus();
+}
+
+// обязательный гейт при входе в приложение
+function openAuthGate() {
+  authGateActive = true;
+  document.getElementById('auth-cancel').hidden = true;      // «Позже» нет
+  document.getElementById('auth-local').hidden = !!API;      // локальный режим — только без сервера
+  document.getElementById('auth-note').textContent = API
+    ? 'Для работы с disbit нужен аккаунт: привычки хранятся на сервере и не потеряются.'
+    : 'Сервер недоступен — можно продолжить локально, данные останутся на этом устройстве.';
+  setAuthMode('register');
+  document.getElementById('auth-error').hidden = true;
+  openSheet('auth-overlay');
+}
+function passGate() {
+  authGateActive = false;
+  localStorage.setItem(GATE_KEY, '1');
 }
 function setAuthMode(mode) {
   authMode = mode;
@@ -1328,6 +1381,7 @@ async function submitAuth() {
     if (res.error) { showAuthError(res.error); return; }
 
     setAuth(res.token, res.user);
+    passGate();
     closeSheet('auth-overlay');
     toast(authMode === 'login'
       ? `С возвращением, ${res.user.login}!`
@@ -1344,6 +1398,7 @@ async function logout() {
   setAuth(null, null);
   renderAccount();
   toast('Вышел из аккаунта. Данные остались на устройстве.');
+  if (API) openAuthGate();   // регистрация обязательна — гейт снова
 }
 
 /* ---------- ДОК: гауссова магнификация (по dock.tsx) ---------- */
@@ -1559,6 +1614,7 @@ function switchScreen(name, updateHash = true) {
 /* ---------- ШТОРКИ ---------- */
 function openSheet(id) { document.getElementById(id).hidden = false; }
 function closeSheet(id) {
+  if (id === 'auth-overlay' && authGateActive) return;   // гейт не закрывается
   document.getElementById(id).hidden = true;
   if (id === 'add-overlay') { editingId = null; pendingBacklogId = null; }
   if (id === 'day-overlay') daySheetKey = null;
@@ -1572,12 +1628,13 @@ function anyOpenSheet() {
 function buildIconPicker(containerId, selectedIcon) {
   const ip = document.getElementById(containerId);
   ip.innerHTML = '';
-  ICONS.forEach(ic => {
+  HABIT_ICONS.forEach(ic => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'pick' + (ic === selectedIcon ? ' selected' : '');
-    b.textContent = ic;
+    b.innerHTML = iconOf(ic);
     b.dataset.icon = ic;
+    b.setAttribute('aria-label', 'Иконка');
     b.addEventListener('click', () => selectIn(ip, b));
     ip.appendChild(b);
   });
@@ -1613,7 +1670,7 @@ function buildEmojiGrid(containerId, selected, onPick) {
   });
 }
 function buildPickers() {
-  buildIconPicker('icon-picker', ICONS[0]);
+  buildIconPicker('icon-picker', HABIT_ICONS[0]);
   buildColorPicker('color-picker', COLORS[0]);
 }
 function selectIn(container, btn) {
@@ -1621,6 +1678,12 @@ function selectIn(container, btn) {
   btn.classList.add('selected');
 }
 
+function updateDaysCount() {
+  const el = document.getElementById('days-count');
+  if (!el) return;
+  const n = selectedDays().length;
+  el.textContent = n === 7 ? 'каждый день' : `${n} в неделю`;
+}
 function buildDayPicker(selected = [0,1,2,3,4,5,6]) {
   const dp = document.getElementById('day-picker');
   dp.innerHTML = '';
@@ -1634,9 +1697,11 @@ function buildDayPicker(selected = [0,1,2,3,4,5,6]) {
     b.addEventListener('click', () => {
       b.classList.toggle('selected');
       b.setAttribute('aria-pressed', b.classList.contains('selected'));
+      updateDaysCount();
     });
     dp.appendChild(b);
   });
+  updateDaysCount();
 }
 function selectedDays() {
   return [...document.querySelectorAll('#day-picker .dpick.selected')]
@@ -1877,6 +1942,11 @@ function init() {
       const inp = document.getElementById(b.dataset.eye);
       inp.type = inp.type === 'password' ? 'text' : 'password';
     }));
+  document.getElementById('auth-local').addEventListener('click', () => {
+    passGate();
+    closeSheet('auth-overlay');
+    toast('Локальный режим: данные хранятся на этом устройстве');
+  });
   ['li-pass', 'rg-pass'].forEach(id =>
     document.getElementById(id).addEventListener('keydown', e => {
       if (e.key === 'Enter') submitAuth();
@@ -1948,7 +2018,7 @@ function init() {
 
   document.getElementById('btn-backlog-add').addEventListener('click', () => {
     document.getElementById('idea-name').value = '';
-    buildIconPicker('idea-icon-picker', ICONS[0]);
+    buildIconPicker('idea-icon-picker', HABIT_ICONS[0]);
     openSheet('idea-overlay');
     document.getElementById('idea-name').focus();
   });
@@ -1989,7 +2059,12 @@ function init() {
   // автоитог прошедших дней
   const fresh = settlePastDays();
   render();
-  if (fresh.length) showSettleModal(fresh);
+
+  // обязательная регистрация при входе:
+  // с сервером — всегда, пока нет токена; без сервера — один раз, с локальным режимом
+  const needGate = !authToken && (API || !localStorage.getItem(GATE_KEY));
+  if (needGate) openAuthGate();
+  else if (fresh.length) showSettleModal(fresh);
 
   apiBootstrap();
 }

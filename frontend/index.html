@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0C1422" />
   <title>disbit — привычки со штрафом</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=Unbounded:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="fonts.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -52,6 +53,19 @@
       <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 5 5l-9 9a2.1 2.1 0 0 1-3-3l9-9Z"/><path d="M15 4a5 5 0 0 1 5 5"/></symbol>
       <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
       <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+      <!-- иконки привычек (монохромные) -->
+      <symbol id="i-h-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13M8 7h7"/></symbol>
+      <symbol id="i-h-water" viewBox="0 0 24 24"><path d="M12 3c3.5 4.3 6 7.6 6 10.8A6 6 0 0 1 6 13.8C6 10.6 8.5 7.3 12 3Z"/><path d="M9.5 14a2.6 2.6 0 0 0 2.4 2.6"/></symbol>
+      <symbol id="i-h-run" viewBox="0 0 24 24"><circle cx="15" cy="5" r="2"/><path d="M4 20.5 8.5 16l2-4.5L8 13l-3.5-.5M10.5 11.5 13 9l3 2.5 4 .5M13 15l1.5 5.5"/></symbol>
+      <symbol id="i-h-sleep" viewBox="0 0 24 24"><path d="M20 15A8.5 8.5 0 1 1 9 4a7 7 0 0 0 11 11Z"/><path d="M14 5h4l-4 4h4"/></symbol>
+      <symbol id="i-h-food" viewBox="0 0 24 24"><path d="M12 7c-4 0-6.5 2.8-6.5 6.5S8 21 12 21s6.5-3.8 6.5-7.5S16 7 12 7Z"/><path d="M12 7c0-2 1-3.5 3-4M12 7c0-1.5-.8-2.5-2-3"/></symbol>
+      <symbol id="i-h-gym" viewBox="0 0 24 24"><path d="M2.5 12h3M18.5 12h3M8 12h8"/><rect x="5" y="7.5" width="3" height="9" rx="1"/><rect x="16" y="7.5" width="3" height="9" rx="1"/></symbol>
+      <symbol id="i-h-music" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+      <symbol id="i-h-lang" viewBox="0 0 24 24"><path d="M3 5h9M7.5 3v2M5 5c.7 3.6 2.8 6.6 6 8.5M10 5c-.7 3-2.5 5.7-5 7.5M12.5 20l4-9 4 9M13.8 17h5.4"/></symbol>
+      <symbol id="i-h-mind" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M12 11v3M6 21c.8-3.5 3-5.5 6-5.5s5.2 2 6 5.5M4.5 12.5 7 11M19.5 12.5 17 11"/></symbol>
+      <symbol id="i-h-clean" viewBox="0 0 24 24"><path d="m14 4 6 6M9 9l6 6-7.5 5.5a2 2 0 0 1-2.8-2.8L9 9ZM12 12 4 20"/></symbol>
+      <symbol id="i-h-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13 4l-2 16"/></symbol>
+      <symbol id="i-h-health" viewBox="0 0 24 24"><path d="M12 20.5C7 16.5 3 13.3 3 9.2 3 6.4 5.2 4.5 7.7 4.5c1.7 0 3.3.8 4.3 2.3 1-1.5 2.6-2.3 4.3-2.3 2.5 0 4.7 1.9 4.7 4.7 0 4.1-4 7.3-9 11.3Z"/><path d="M6 12h3l1.5-2.5L13 14l1.5-2H18"/></symbol>
     </defs>
   </svg>
 
@@ -140,6 +154,25 @@
       </div>
 
       <section class="card" id="cal-month-stats"></section>
+
+      <!-- большие цели (переехали из профиля) -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
+        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные привычки.</p>
+        <div id="goal-list"></div>
+        <button class="row-btn" id="btn-goal-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
+        </button>
+      </section>
+
+      <!-- привычки на будущее (переехали из профиля) -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-bookmark"/></svg> Привычки на будущее</h3>
+        <div id="backlog-list"></div>
+        <button class="row-btn" id="btn-backlog-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Записать идею</span>
+        </button>
+      </section>
     </main>
 
     <!-- ================= ЭКРАН: СТАТИСТИКА ================= -->
@@ -221,24 +254,11 @@
         </button>
       </section>
 
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value" id="pf-habits">0</div>
-          <div class="stat-label">активных привычек</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value good" id="pf-done">0</div>
-          <div class="stat-label">отметок всего</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value flame" id="pf-best">0</div>
-          <div class="stat-label">рекордный стрик</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value bad" id="pf-lost">0₽</div>
-          <div class="stat-label">штрафов набежало</div>
-        </div>
-      </div>
+      <!-- достижения -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-award"/></svg> Достижения</h3>
+        <div class="medal-grid" id="medal-grid"></div>
+      </section>
 
       <!-- мотивация -->
       <section class="card">
@@ -253,16 +273,6 @@
         <div class="sheet-actions" style="margin-top:12px">
           <button class="btn-primary" id="mot-save">Сохранить мотивацию</button>
         </div>
-      </section>
-
-      <!-- большие цели -->
-      <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
-        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные привычки.</p>
-        <div id="goal-list"></div>
-        <button class="row-btn" id="btn-goal-add">
-          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
-        </button>
       </section>
 
       <!-- награды -->
@@ -283,15 +293,6 @@
           <svg class="ic"><use href="#i-plus"/></svg><span>Добавить друга</span>
         </button>
         <p class="hint">Прототип: список локальный. Совместные стрики и вызовы появятся с аккаунтами.</p>
-      </section>
-
-      <!-- идеи на будущее -->
-      <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-bookmark"/></svg> Привычки на будущее</h3>
-        <div id="backlog-list"></div>
-        <button class="row-btn" id="btn-backlog-add">
-          <svg class="ic"><use href="#i-plus"/></svg><span>Записать идею</span>
-        </button>
       </section>
 
       <!-- тема -->
@@ -378,7 +379,7 @@
       <span class="field-label">Цвет</span>
       <div class="picker" id="color-picker"></div>
 
-      <span class="field-label">Дни недели</span>
+      <span class="field-label">Дни недели <span class="days-count" id="days-count">7 в неделю</span></span>
       <div class="day-picker" id="day-picker"></div>
 
       <span class="field-label">Цель</span>
@@ -596,9 +597,11 @@
         <button class="btn-ghost" id="auth-cancel">Позже</button>
         <button class="btn-primary" id="auth-submit">Войти</button>
       </div>
-      <p class="hint" style="text-align:center;margin-top:10px">
-        Без аккаунта всё работает локально на этом устройстве.
-        Аккаунт нужен для синхронизации — работает при запуске с сервером disbit.
+      <button class="row-btn" id="auth-local" hidden style="justify-content:center;margin-top:6px">
+        <span>Продолжить локально, без аккаунта</span>
+      </button>
+      <p class="hint" style="text-align:center;margin-top:10px" id="auth-note">
+        Аккаунт хранит привычки на сервере и синхронизирует устройства.
       </p>
     </div>
   </div>
