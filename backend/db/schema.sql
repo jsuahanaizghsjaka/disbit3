@@ -4,10 +4,20 @@
 -- Диалект: SQLite (легко перенести на PostgreSQL позже).
 -- ============================================================
 
--- Пользователи (пока не используется — все данные под user_id = 1)
+-- Пользователи (вход по логину или почте + пароль)
 CREATE TABLE IF NOT EXISTS users (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  login      TEXT UNIQUE NOT NULL,
   email      TEXT UNIQUE NOT NULL,
+  pass_hash  TEXT NOT NULL,               -- scrypt-хэш пароля
+  pass_salt  TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Сессии (Bearer-токены)
+CREATE TABLE IF NOT EXISTS sessions (
+  token      TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -15,7 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- id — TEXT, потому что фронтенд генерирует свои id ('h' + timestamp)
 CREATE TABLE IF NOT EXISTS habits (
   id              TEXT PRIMARY KEY,
-  user_id         INTEGER NOT NULL DEFAULT 1,
+  user_id         INTEGER NOT NULL DEFAULT 0,
   name            TEXT NOT NULL,
   icon            TEXT,
   color           TEXT,
@@ -45,6 +55,7 @@ CREATE TABLE IF NOT EXISTS completions (
 -- Списания/блокировки (пока статус 'simulated' — без реальных платежей)
 CREATE TABLE IF NOT EXISTS charges (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL DEFAULT 0,
   habit_id   TEXT NOT NULL,
   day        TEXT NOT NULL,
   name       TEXT,                                 -- имя привычки на момент списания

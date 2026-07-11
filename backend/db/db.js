@@ -17,6 +17,26 @@ export const db = new DatabaseSync(path.join(__dirname, 'disbit.db'));
 db.exec('PRAGMA foreign_keys = ON;');
 db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 
+// мягкие миграции для баз, созданных до появления авторизации
+for (const sql of [
+  "ALTER TABLE charges ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE users ADD COLUMN login TEXT",
+  "ALTER TABLE users ADD COLUMN pass_hash TEXT",
+  "ALTER TABLE users ADD COLUMN pass_salt TEXT"
+]) {
+  try { db.exec(sql); } catch { /* колонка уже есть */ }
+}
+
+// до авторизации гостевые данные писались под user_id=1; теперь гость = 0.
+// Переносим их, пока id=1 не занят реальным пользователем.
+try {
+  const taken = db.prepare('SELECT id FROM users WHERE id = 1').get();
+  if (!taken) {
+    db.exec('UPDATE habits SET user_id = 0 WHERE user_id = 1');
+    db.exec('UPDATE charges SET user_id = 0 WHERE user_id = 1');
+  }
+} catch { /* таблиц может ещё не быть */ }
+
 /* ---------- преобразование строк БД ↔ объект фронтенда ---------- */
 
 // строка habits + отметки → объект, который ждёт фронтенд

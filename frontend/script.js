@@ -16,8 +16,28 @@ const FRIENDS_KEY  = 'disbit_friends_v1';
 const GOALS_KEY    = 'disbit_goals_v1';
 const REWARDS_KEY  = 'disbit_rewards_v1';
 const BACKLOG_KEY  = 'disbit_backlog_v1';
+const TOKEN_KEY    = 'disbit_token_v1';
+const AUTH_USER_KEY = 'disbit_auth_user_v1';
 
 const API = location.protocol.startsWith('http') ? '/api' : null;
+
+/* ---------- АККАУНТ (Bearer-токен) ---------- */
+let authToken = localStorage.getItem(TOKEN_KEY) || null;
+let authUser = null;
+try { authUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { authUser = null; }
+let authMode = 'login';   // 'login' | 'register'
+
+function setAuth(token, user) {
+  authToken = token;
+  authUser = user;
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+  }
+}
 
 const ICONS  = ['📚','💧','🏃','🧘','🦷','💪','🥗','😴','✍️','🎯','🧹','🎸'];
 const COLORS = ['#5B8DFF','#4ADE80','#38BDF8','#F472B6','#A78BFA','#F87171','#FBBF24','#E8722A'];
@@ -109,15 +129,45 @@ function saveLedger() { localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger))
 /* ---------- API (best-effort) ---------- */
 function apiCall(method, path, body) {
   if (!API) return Promise.resolve(null);
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers.Authorization = 'Bearer ' + authToken;
   return fetch(API + path, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: body ? JSON.stringify(body) : undefined
   }).then(r => (r.ok ? r.json().catch(() => null) : null))
     .catch(() => null);
 }
+// как apiCall, но возвращает и ошибки сервера — для форм входа/регистрации
+async function apiCallStrict(method, path, body) {
+  if (!API) return { error: 'Аккаунты работают при запуске с сервером disbit' };
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers.Authorization = 'Bearer ' + authToken;
+    const r = await fetch(API + path, {
+      method, headers,
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: data.error || ('Ошибка ' + r.status) };
+    return data;
+  } catch {
+    return { error: 'Сервер недоступен' };
+  }
+}
 async function apiBootstrap() {
   if (!API) return;
+  // проверяем токен: протух — выходим в гостевой режим
+  if (authToken) {
+    const me = await apiCall('GET', '/auth/me');
+    if (me?.user) {
+      authUser = me.user;
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(me.user));
+    } else {
+      setAuth(null, null);
+    }
+    renderAccount();
+  }
   const remote = await apiCall('GET', '/habits');
   if (Array.isArray(remote) && remote.length) {
     habits = remote;
@@ -999,6 +1049,7 @@ function renderProfile() {
   renderFriends();
   renderBacklog();
   renderThemeGrid();
+  renderAccount();
 }
 
 /* большие цели */
@@ -1199,6 +1250,135 @@ function saveIdea() {
 }
 
 /* темы */
+/* ---------- АККАУНТ: UI ---------- */
+function renderAccount() {
+  const box = document.getElementById('acc-box');
+  if (!box) return;
+  if (!API) {
+    box.innerHTML = `<p class="hint" style="margin:0">Аккаунты и синхронизация работают
+      при запуске через сервер disbit (см. backend/README). Открой
+      <b>localhost:3000</b> — здесь появятся вход и регистрация.
+      Пока всё хранится локально на этом устройстве.</p>`;
+    return;
+  }
+  if (authUser) {
+    box.innerHTML = `
+      <div class="ledger-row">
+        <span class="ledger-icon">${icon('i-check', 'ic')}</span>
+        <div class="ledger-main">
+          <div class="ledger-name">@${escapeHtml(authUser.login)}</div>
+          <div class="ledger-day" style="text-transform:none">${escapeHtml(authUser.email)}</div>
+        </div>
+        <span class="acc-badge">синхронизация</span>
+      </div>
+      <button class="row-btn danger" id="btn-logout">
+        ${icon('i-x')}<span>Выйти из аккаунта</span>
+      </button>`;
+    box.querySelector('#btn-logout').addEventListener('click', logout);
+  } else {
+    box.innerHTML = `
+      <p class="hint" style="margin:0 0 10px">Войди, чтобы привычки и штрафы
+        синхронизировались с сервером и не потерялись.</p>
+      <div class="sheet-actions" style="margin-top:0">
+        <button class="btn-ghost" id="btn-open-register">Регистрация</button>
+        <button class="btn-primary" id="btn-open-login">Войти</button>
+      </div>`;
+    box.querySelector('#btn-open-login').addEventListener('click', () => openAuthSheet('login'));
+    box.querySelector('#btn-open-register').addEventListener('click', () => openAuthSheet('register'));
+  }
+}
+
+function openAuthSheet(mode) {
+  setAuthMode(mode);
+  document.getElementById('auth-error').hidden = true;
+  openSheet('auth-overlay');
+  document.getElementById(mode === 'login' ? 'li-id' : 'rg-login').focus();
+}
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('auth-title').textContent = mode === 'login' ? 'Вход' : 'Регистрация';
+  document.getElementById('auth-submit').textContent = mode === 'login' ? 'Войти' : 'Создать аккаунт';
+  document.getElementById('auth-login-form').hidden = mode !== 'login';
+  document.getElementById('auth-register-form').hidden = mode !== 'register';
+  setSegActive('auth-tabs', 'auth', mode);
+}
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.hidden = false;
+}
+async function submitAuth() {
+  const btn = document.getElementById('auth-submit');
+  btn.disabled = true;
+  btn.textContent = 'Секунду…';
+  try {
+    let res;
+    if (authMode === 'login') {
+      res = await apiCallStrict('POST', '/auth/login', {
+        id: document.getElementById('li-id').value.trim(),
+        password: document.getElementById('li-pass').value
+      });
+    } else {
+      res = await apiCallStrict('POST', '/auth/register', {
+        login: document.getElementById('rg-login').value.trim(),
+        email: document.getElementById('rg-email').value.trim(),
+        password: document.getElementById('rg-pass').value
+      });
+    }
+    if (res.error) { showAuthError(res.error); return; }
+
+    setAuth(res.token, res.user);
+    closeSheet('auth-overlay');
+    toast(authMode === 'login'
+      ? `С возвращением, ${res.user.login}!`
+      : `Аккаунт создан. Привет, ${res.user.login}!`);
+    renderAccount();
+    apiBootstrap();   // подтянуть/залить данные аккаунта
+  } finally {
+    btn.disabled = false;
+    setAuthMode(authMode);
+  }
+}
+async function logout() {
+  await apiCall('POST', '/auth/logout');
+  setAuth(null, null);
+  renderAccount();
+  toast('Вышел из аккаунта. Данные остались на устройстве.');
+}
+
+/* ---------- ДОК: гауссова магнификация (по dock.tsx) ---------- */
+function initDock() {
+  const dock = document.getElementById('dock');
+  if (!dock) return;
+  const fine = window.matchMedia?.('(pointer: fine)')?.matches;
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  if (!fine || reduced) return;   // на тачах и при reduced-motion — без магнификации
+
+  const icons = [...dock.querySelectorAll('.di-icon')];
+  const MAG = 1.35, SIGMA = 90;
+  let raf = null, pointerX = Infinity;
+
+  const apply = () => {
+    raf = null;
+    for (const el of icons) {
+      const r = el.getBoundingClientRect();
+      const d = pointerX === Infinity ? Infinity : Math.abs(pointerX - (r.left + r.width / 2));
+      const scale = d === Infinity
+        ? 1
+        : 1 + (MAG - 1) * Math.exp(-(d * d) / (2 * SIGMA * SIGMA));
+      el.style.transform = scale === 1 ? '' : `scale(${scale.toFixed(3)})`;
+    }
+  };
+  dock.addEventListener('pointermove', e => {
+    pointerX = e.clientX;
+    if (!raf) raf = requestAnimationFrame(apply);
+  });
+  dock.addEventListener('pointerleave', () => {
+    pointerX = Infinity;
+    if (!raf) raf = requestAnimationFrame(apply);
+  });
+}
+
 function applyTheme() {
   const t = THEMES.find(x => x.id === settings.theme) ? settings.theme : 'blue';
   if (t === 'blue') delete document.documentElement.dataset.theme;
@@ -1686,6 +1866,21 @@ function init() {
     b.addEventListener('click', () => switchScreen(b.dataset.screen)));
   window.addEventListener('hashchange', () =>
     switchScreen(location.hash.slice(1), false));
+  initDock();
+
+  // аккаунт: вход/регистрация
+  wireSeg('auth-tabs', btn => setAuthMode(btn.dataset.auth));
+  document.getElementById('auth-submit').addEventListener('click', submitAuth);
+  document.getElementById('auth-cancel').addEventListener('click', () => closeSheet('auth-overlay'));
+  document.querySelectorAll('.ff-eye').forEach(b =>
+    b.addEventListener('click', () => {
+      const inp = document.getElementById(b.dataset.eye);
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    }));
+  ['li-pass', 'rg-pass'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitAuth();
+    }));
 
   // календарь
   document.getElementById('cal-prev').addEventListener('click', () => shiftMonth(-1));

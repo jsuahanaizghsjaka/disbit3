@@ -7,10 +7,17 @@
   <title>disbit — привычки со штрафом</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=Unbounded:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- АУРА: размытые пятна света за контентом -->
+  <div class="aura" aria-hidden="true">
+    <i class="blob b1"></i>
+    <i class="blob b2"></i>
+    <i class="blob b3"></i>
+  </div>
 
   <!-- ===== СПРАЙТ SVG-ИКОНОК (Lucide-style, stroke 2) ===== -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -293,6 +300,12 @@
         <div class="theme-grid" id="theme-grid"></div>
       </section>
 
+      <!-- аккаунт -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-lock"/></svg> Аккаунт</h3>
+        <div id="acc-box"></div>
+      </section>
+
       <!-- настройки -->
       <section class="card">
         <h3 class="card-title">Настройки</h3>
@@ -325,22 +338,27 @@
       <p class="about-note">disbit v0.4 · прототип · штрафы симулируются<br/>Реальные списания и блокировки — в нативной версии.</p>
     </main>
 
-    <!-- НИЖНЕЕ МЕНЮ -->
-    <nav class="bottom-nav" aria-label="Основная навигация">
-      <button class="nav-item active" data-screen="today">
-        <svg class="ic"><use href="#i-home"/></svg><span>Сегодня</span>
+    <!-- ПЛАВАЮЩИЙ GLASS-ДОК (по мотивам dock.tsx: гауссова магнификация) -->
+    <nav class="dock" id="dock" aria-label="Основная навигация">
+      <button class="dock-item nav-item active" data-screen="today">
+        <span class="di-icon"><svg class="ic"><use href="#i-home"/></svg></span>
+        <span class="di-label">Сегодня</span>
       </button>
-      <button class="nav-item" data-screen="calendar">
-        <svg class="ic"><use href="#i-calendar"/></svg><span>Календарь</span>
+      <button class="dock-item nav-item" data-screen="calendar">
+        <span class="di-icon"><svg class="ic"><use href="#i-calendar"/></svg></span>
+        <span class="di-label">Календарь</span>
       </button>
-      <button class="fab" id="btn-add" aria-label="Новая привычка">
-        <svg class="ic"><use href="#i-plus"/></svg>
+      <button class="dock-item fab" id="btn-add" aria-label="Новая привычка">
+        <span class="di-icon"><svg class="ic"><use href="#i-plus"/></svg></span>
+        <span class="di-label">Новая</span>
       </button>
-      <button class="nav-item" data-screen="stats">
-        <svg class="ic"><use href="#i-chart"/></svg><span>Статистика</span>
+      <button class="dock-item nav-item" data-screen="stats">
+        <span class="di-icon"><svg class="ic"><use href="#i-chart"/></svg></span>
+        <span class="di-label">Статистика</span>
       </button>
-      <button class="nav-item" data-screen="profile">
-        <svg class="ic"><use href="#i-user"/></svg><span>Профиль</span>
+      <button class="dock-item nav-item" data-screen="profile">
+        <span class="di-icon"><svg class="ic"><use href="#i-user"/></svg></span>
+        <span class="di-label">Профиль</span>
       </button>
     </nav>
   </div>
@@ -529,6 +547,59 @@
         <button class="btn-ghost" id="idea-cancel">Отмена</button>
         <button class="btn-primary" id="idea-save">Записать</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ВХОД / РЕГИСТРАЦИЯ ===== -->
+  <div class="sheet-overlay" id="auth-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="auth-title">Вход</h2>
+
+      <div class="seg" id="auth-tabs">
+        <button class="seg-btn active" data-auth="login">Вход</button>
+        <button class="seg-btn" data-auth="register">Регистрация</button>
+      </div>
+
+      <div id="auth-login-form">
+        <div class="ff">
+          <input class="ff-input" id="li-id" type="text" placeholder=" " autocomplete="username" />
+          <label class="ff-label" for="li-id">Логин или почта</label>
+        </div>
+        <div class="ff">
+          <input class="ff-input" id="li-pass" type="password" placeholder=" " autocomplete="current-password" />
+          <label class="ff-label" for="li-pass">Пароль</label>
+          <button type="button" class="ff-eye" data-eye="li-pass" aria-label="Показать пароль">👁</button>
+        </div>
+      </div>
+
+      <div id="auth-register-form" hidden>
+        <div class="ff">
+          <input class="ff-input" id="rg-login" type="text" placeholder=" " maxlength="24" autocomplete="username" />
+          <label class="ff-label" for="rg-login">Логин (латиница)</label>
+        </div>
+        <div class="ff">
+          <input class="ff-input" id="rg-email" type="email" placeholder=" " autocomplete="email" />
+          <label class="ff-label" for="rg-email">Почта</label>
+        </div>
+        <div class="ff">
+          <input class="ff-input" id="rg-pass" type="password" placeholder=" " autocomplete="new-password" />
+          <label class="ff-label" for="rg-pass">Пароль (мин. 6 символов)</label>
+          <button type="button" class="ff-eye" data-eye="rg-pass" aria-label="Показать пароль">👁</button>
+        </div>
+        <p class="hint">При регистрации привычки с этого устройства привяжутся к аккаунту.</p>
+      </div>
+
+      <p class="auth-error" id="auth-error" hidden></p>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="auth-cancel">Позже</button>
+        <button class="btn-primary" id="auth-submit">Войти</button>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:10px">
+        Без аккаунта всё работает локально на этом устройстве.
+        Аккаунт нужен для синхронизации — работает при запуске с сервером disbit.
+      </p>
     </div>
   </div>
 

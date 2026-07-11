@@ -24,25 +24,29 @@ function rowToEntry(r) {
   };
 }
 
-// GET /api/charges — весь журнал (старые сначала, как на фронтенде)
+const uid = req => req.userId || 0;   // гость = 0 (id никогда не достаётся юзерам)
+
+// GET /api/charges — журнал пользователя (старые сначала, как на фронтенде)
 router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM charges ORDER BY day, id').all();
+  const rows = db.prepare(
+    'SELECT * FROM charges WHERE user_id = ? ORDER BY day, id'
+  ).all(uid(req));
   res.json(rows.map(rowToEntry));
 });
 
-// POST /api/charges — записать пачку списаний (автоитог за прошедшие дни)
+// POST /api/charges — записать пачку штрафов (автоитог за прошедшие дни)
 // Дубликаты (та же привычка + день) тихо пропускаются.
 router.post('/', (req, res) => {
   const entries = Array.isArray(req.body) ? req.body : [req.body];
   const ins = db.prepare(`
-    INSERT OR IGNORE INTO charges (habit_id, day, name, icon, mode, amount, recipient, apps)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO charges (user_id, habit_id, day, name, icon, mode, amount, recipient, apps)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   let added = 0;
   for (const e of entries) {
     if (!e?.habitId || !e?.day) continue;
     const r = ins.run(
-      String(e.habitId), String(e.day), e.name || '', e.icon || '',
+      uid(req), String(e.habitId), String(e.day), e.name || '', e.icon || '',
       e.mode === 'lock' ? 'lock' : 'money',
       Number(e.amount) || 0, e.recipient || null,
       JSON.stringify(e.apps || [])
