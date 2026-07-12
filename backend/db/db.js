@@ -11,7 +11,8 @@ import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const db = new DatabaseSync(path.join(__dirname, 'disbit.db'));
+// DB_PATH задаёт хостинг (persistent volume), локально — файл рядом
+export const db = new DatabaseSync(process.env.DB_PATH || path.join(__dirname, 'disbit.db'));
 
 // внешние ключи + схема
 db.exec('PRAGMA foreign_keys = ON;');

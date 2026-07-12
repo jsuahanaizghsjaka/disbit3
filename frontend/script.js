@@ -19,7 +19,10 @@ const BACKLOG_KEY  = 'disbit_backlog_v1';
 const TOKEN_KEY    = 'disbit_token_v1';
 const AUTH_USER_KEY = 'disbit_auth_user_v1';
 
-const API = location.protocol.startsWith('http') ? '/api' : null;
+// адрес бэкенда для статичных хостингов (Vercel): 'https://твой-сервер.up.railway.app'
+// пусто = тот же origin (когда фронт раздаёт сам бэкенд)
+const API_HOST = '';
+const API = location.protocol.startsWith('http') ? API_HOST + '/api' : null;
 
 /* ---------- АККАУНТ (Bearer-токен) ---------- */
 let authToken = localStorage.getItem(TOKEN_KEY) || null;
