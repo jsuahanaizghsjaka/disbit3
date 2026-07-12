@@ -19,9 +19,10 @@ const BACKLOG_KEY  = 'disbit_backlog_v1';
 const TOKEN_KEY    = 'disbit_token_v1';
 const AUTH_USER_KEY = 'disbit_auth_user_v1';
 
-// адрес бэкенда для статичных хостингов (Vercel): 'https://твой-сервер.up.railway.app'
-// пусто = тот же origin (когда фронт раздаёт сам бэкенд)
-const API_HOST = '';
+// с Vercel-статики ходим на Railway-бэкенд; на самом Railway и localhost — тот же origin
+const API_HOST = location.hostname.endsWith('vercel.app')
+  ? 'https://disbit3-production.up.railway.app'
+  : '';
 const API = location.protocol.startsWith('http') ? API_HOST + '/api' : null;
 
 /* ---------- АККАУНТ (Bearer-токен) ---------- */
