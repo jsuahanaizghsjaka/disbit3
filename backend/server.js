@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import habitsRouter from './routes/habits.js';
 import chargesRouter from './routes/charges.js';
 import authRouter, { authMiddleware } from './routes/auth.js';
+import stateRouter from './routes/state.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -31,6 +32,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/habits', habitsRouter);
 app.use('/api/charges', chargesRouter);
+app.use('/api/state', stateRouter);
 
 // раздаём фронтенд статикой (http://localhost:3000 → приложение)
 app.use(express.static(path.join(__dirname, '..', 'frontend')));

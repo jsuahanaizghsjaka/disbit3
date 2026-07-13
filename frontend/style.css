@@ -17,17 +17,31 @@
   --text-2: #9DB4E6;
   --text-3: #5F7396;
 
-  /* стекло */
+  /* стекло (интерактивные/выбранные поверхности — тонированы акцентом) */
   --surface:   rgba(var(--tint), 0.07);
   --surface-2: rgba(var(--tint), 0.12);
   --elev:      rgba(var(--tint), 0.18);
   --line:      rgba(var(--tint), 0.16);
+
+  /* нейтральные поверхности (пассивный каркас: разделители, невыбранные
+     состояния) — без акцентного оттенка, чтобы tint не терялся в фоне */
+  --neutral:      rgba(255, 255, 255, 0.045);
+  --neutral-2:    rgba(255, 255, 255, 0.08);
+  --neutral-line: rgba(255, 255, 255, 0.09);
 
   /* смысловые (общие для тем) */
   --good: #4ADE80;
   --bad:  #F87171;
   --lock: #A78BFA;
   --gold: #FBBF24;
+
+  /* сетка отступов, кратная 8 (4 — половинный шаг для мелких деталей) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 16px;
+  --sp-4: 24px;
+  --sp-5: 32px;
+  --sp-6: 40px;
 
   --r-lg: 20px;
   --r-md: 14px;
@@ -71,6 +85,9 @@
   --surface-2: rgba(var(--tint), 0.10);
   --elev: rgba(var(--tint), 0.14);
   --line: rgba(var(--tint), 0.14);
+  --neutral:      rgba(27, 36, 55, 0.05);
+  --neutral-2:    rgba(27, 36, 55, 0.09);
+  --neutral-line: rgba(27, 36, 55, 0.10);
   --sheet-bg: #F5F7FA;
   color-scheme: light;
 }
@@ -105,7 +122,7 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-html { scrollbar-color: var(--surface-2) transparent; }
+html { scrollbar-color: var(--neutral-2) transparent; }
 
 body {
   background-color: var(--bg);
@@ -188,7 +205,7 @@ button:disabled { cursor: default; }
 
 .app {
   margin: 0 auto;
-  padding: 20px 18px calc(122px + env(safe-area-inset-bottom));
+  padding: var(--sp-4) var(--sp-3) calc(122px + env(safe-area-inset-bottom));
   max-width: 460px;
 }
 
@@ -200,21 +217,52 @@ button:disabled { cursor: default; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ---------- СТЕКЛЯННАЯ КАРТОЧКА (базовый класс) ---------- */
-.card, .progress-card, .habit, .stat-card, .profile-hero {
+/* ---------- ЗАГОЛОВОК ЭКРАНА (Large Title) ---------- */
+.screen-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  margin-bottom: var(--sp-4);
+}
+
+/* ---------- ВТОРОСТЕПЕННАЯ КАРТОЧКА (базовый класс) ----------
+   Спокойная поверхность: тон + граница + мягкая тень, без лишних
+   слоёв — полный «глянец» (диагональный блик, glow) зарезервирован
+   за героем экрана (.progress-card), чтобы декор не спорил с контентом. */
+.card, .habit, .stat-card, .profile-hero {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--t-med) var(--ease), box-shadow var(--t-med);
+}
+.habit:hover, .card:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-2);
+}
+
+/* ---------- ГЕРОЙ ЭКРАНА: карточка прогресса ----------
+   Единственное место с полным набором эффектов «deep glass» —
+   намеренный фокус внимания, а не фон по умолчанию. */
+.progress-card {
   background:
     linear-gradient(160deg, rgba(var(--tint), 0.05), transparent 55%),
     var(--surface);
   border: 1px solid var(--line);
   backdrop-filter: blur(14px) saturate(135%);
   -webkit-backdrop-filter: blur(14px) saturate(135%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-1), var(--shadow-glow);
   transition: transform var(--t-med) var(--ease), box-shadow var(--t-med);
-}
-.progress-card { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-1), var(--shadow-glow); }
-.habit:hover, .card:hover {
-  transform: translateY(-2px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-2);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
 }
 
 /* поочерёдное появление карточек в списках */
@@ -229,7 +277,7 @@ button:disabled { cursor: default; }
 .habit-list .habit:nth-child(n+6) { animation-delay: 200ms; }
 
 /* ---------- ШАПКА ---------- */
-.header { display: flex; align-items: center; margin-bottom: 20px; }
+.header { display: flex; align-items: center; margin-bottom: var(--sp-4); }
 .logo {
   font-family: 'Unbounded', 'Manrope', sans-serif;
   font-size: 22px;
@@ -292,12 +340,12 @@ button:disabled { cursor: default; }
 .reward-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   background: linear-gradient(120deg, rgba(var(--tint), 0.16), rgba(var(--tint), 0.06));
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: 14px;
-  margin-bottom: 16px;
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
 .reward-banner .ic { color: var(--gold); width: 26px; height: 26px; }
 .reward-banner .rb-main { flex: 1; min-width: 0; }
@@ -319,12 +367,12 @@ button:disabled { cursor: default; }
 .goal-strip {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-2);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  padding: 10px 12px;
-  margin-bottom: 16px;
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
   cursor: pointer;
 }
 .goal-strip .gs-icon { font-size: 18px; }
@@ -336,7 +384,7 @@ button:disabled { cursor: default; }
 .goal-strip .gs-bar {
   height: 5px;
   border-radius: var(--r-full);
-  background: var(--surface-2);
+  background: var(--neutral-2);
   margin-top: 5px;
   overflow: hidden;
 }
@@ -352,7 +400,7 @@ button:disabled { cursor: default; }
 }
 
 /* ---------- ПОЛОСКА НЕДЕЛИ ---------- */
-.week-strip { display: flex; gap: 6px; margin-bottom: 20px; }
+.week-strip { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
 .day {
   flex: 1;
   min-height: 62px;
@@ -381,16 +429,7 @@ button:disabled { cursor: default; }
 .ddot.half { background: var(--gold); }
 .ddot.miss { background: var(--bad); opacity: 0.8; }
 
-/* ---------- КАРТОЧКА ПРОГРЕССА ---------- */
-.progress-card {
-  border-radius: var(--r-lg);
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
+/* ---------- КАРТОЧКА ПРОГРЕССА (layout — см. свойства декора выше) ---------- */
 .progress-title {
   font-family: 'Unbounded', 'Manrope', sans-serif;
   font-size: 18px;
@@ -416,7 +455,7 @@ button:disabled { cursor: default; }
 .ring { position: relative; width: 88px; height: 88px; flex-shrink: 0; }
 .ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
 .ring circle { fill: none; stroke-width: 9; }
-.ring-bg { stroke: var(--surface-2); }
+.ring-bg { stroke: var(--neutral-2); }
 .ring-fg {
   stroke: var(--primary);
   stroke-linecap: round;
@@ -440,17 +479,17 @@ button:disabled { cursor: default; }
   color: var(--text-2);
   font-weight: 700;
   letter-spacing: 0.2px;
-  margin-bottom: 12px;
+  margin-bottom: var(--sp-3);
 }
-.section-title.dim { margin-top: 24px; color: var(--text-3); }
-.habit-list { display: flex; flex-direction: column; gap: 12px; }
+.section-title.dim { margin-top: var(--sp-4); color: var(--text-3); }
+.habit-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 
 .habit {
   border-radius: var(--r-lg);
-  padding: 14px;
+  padding: var(--sp-3);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   transition: border-color var(--t-med), background var(--t-med);
 }
 .habit.done { border-color: rgba(var(--tint), 0.5); background: var(--surface-2); }
@@ -459,7 +498,7 @@ button:disabled { cursor: default; }
 .habit-icon {
   width: 48px; height: 48px;
   border-radius: var(--r-md);
-  background: var(--surface-2);
+  background: var(--neutral-2);
   display: flex; align-items: center; justify-content: center;
   font-size: 22px;
   flex-shrink: 0;
@@ -499,8 +538,8 @@ button:disabled { cursor: default; }
   background: transparent;
   color: var(--text-2);
   font-size: 11px; font-weight: 700;
-  padding: 3px 9px;
-  min-height: 24px;
+  padding: 6px 12px;
+  min-height: 36px;
   border-radius: var(--r-full);
   transition: color var(--t-fast), border-color var(--t-fast);
 }
@@ -542,7 +581,7 @@ button:disabled { cursor: default; }
 }
 
 .habit-del {
-  width: 36px; height: 36px;
+  width: 44px; height: 44px;
   border: none; background: transparent;
   color: var(--text-3);
   display: flex; align-items: center; justify-content: center;
@@ -553,7 +592,7 @@ button:disabled { cursor: default; }
 .habit-del:hover { color: var(--bad); background: rgba(248, 113, 113, 0.08); }
 
 /* ---------- ПУСТОЕ СОСТОЯНИЕ ---------- */
-.empty { text-align: center; color: var(--text-2); padding: 36px 20px; }
+.empty { text-align: center; color: var(--text-2); padding: var(--sp-5) var(--sp-3); }
 .empty-art {
   width: 84px; height: 84px;
   margin: 0 auto 16px;
@@ -566,8 +605,8 @@ button:disabled { cursor: default; }
 
 .day-summary-btn {
   width: 100%;
-  margin-top: 20px;
-  padding: 15px;
+  margin-top: var(--sp-4);
+  padding: var(--sp-3);
   border-radius: var(--r-lg);
   border: 1px dashed var(--line);
   background: transparent;
@@ -580,7 +619,7 @@ button:disabled { cursor: default; }
 /* ============================================================
    КАЛЕНДАРЬ
    ============================================================ */
-.cal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.cal-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .cal-head .icon-btn { margin-left: 0; }
 .cal-title-box {
   flex: 1;
@@ -602,7 +641,8 @@ button:disabled { cursor: default; }
   background: var(--surface-2);
   color: var(--primary);
   font-size: 11px; font-weight: 800;
-  padding: 3px 10px;
+  padding: 6px 12px;
+  min-height: 36px;
   border-radius: var(--r-full);
   transition: background var(--t-fast);
 }
@@ -611,8 +651,8 @@ button:disabled { cursor: default; }
 .cal-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
 }
 .cal-weekdays span {
   text-align: center;
@@ -621,13 +661,13 @@ button:disabled { cursor: default; }
   color: var(--text-3);
 }
 
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-2); }
 .cal-cell {
   aspect-ratio: 1;
   min-height: 44px;
   border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--surface);
+  background: var(--neutral);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -658,8 +698,8 @@ button:disabled { cursor: default; }
 .cal-legend {
   display: flex;
   justify-content: center;
-  gap: 14px;
-  margin: 14px 0 16px;
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0 var(--sp-3);
   font-size: 11px;
   color: var(--text-3);
   flex-wrap: wrap;
@@ -686,14 +726,14 @@ button:disabled { cursor: default; }
 .day-habit-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--neutral-line);
 }
 .day-habit-row:last-child { border-bottom: none; }
 .stepper { display: flex; align-items: center; gap: 6px; }
 .stepper button {
-  width: 38px; height: 38px;
+  width: 44px; height: 44px;
   border-radius: var(--r-sm);
   border: 1px solid var(--line);
   background: var(--surface-2);
@@ -717,7 +757,7 @@ button:disabled { cursor: default; }
    СТАТИСТИКА
    ============================================================ */
 /* недельная диаграмма (как в референсе) */
-.week-chart-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.week-chart-head { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
 .wc-pct {
   font-family: 'Unbounded', 'Manrope', sans-serif;
   font-size: 32px;
@@ -729,7 +769,7 @@ button:disabled { cursor: default; }
 .wc-delta.downish { color: var(--text-3); }
 .wc-label { width: 100%; font-size: 12px; color: var(--text-2); margin-top: -4px; }
 .week-chart { width: 100%; height: auto; margin-top: 12px; display: block; }
-.week-chart .bar-bg { fill: var(--surface-2); }
+.week-chart .bar-bg { fill: var(--neutral-2); }
 .week-chart .bar-fill { fill: var(--primary); }
 .week-chart .bar-fill.muted { fill: rgba(var(--tint), 0.45); }
 .week-chart .bar-lbl {
@@ -744,10 +784,10 @@ button:disabled { cursor: default; }
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
-.stat-card { border-radius: var(--r-lg); padding: 16px 12px; text-align: center; }
+.stat-card { border-radius: var(--r-lg); padding: var(--sp-3); text-align: center; }
 .stat-ic { width: 22px; height: 22px; margin-bottom: 8px; }
 .stat-ic.flame { color: var(--gold); }
 .stat-ic.gold  { color: var(--gold); }
@@ -764,18 +804,18 @@ button:disabled { cursor: default; }
 .stat-value.bad   { color: var(--bad); }
 .stat-label { font-size: 12px; color: var(--text-2); margin-top: 4px; }
 
-.card { border-radius: var(--r-lg); padding: 16px; margin-bottom: 16px; }
-.card-title { font-size: 15px; font-weight: 800; margin-bottom: 12px; }
+.card { border-radius: var(--r-lg); padding: var(--sp-3); margin-bottom: var(--sp-3); }
+.card-title { font-size: 15px; font-weight: 800; margin-bottom: var(--sp-3); }
 .card-title span { color: var(--text-3); font-weight: 600; font-size: 12px; }
 
-.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.chips { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
 .chip {
-  border: 1px solid var(--line);
-  background: var(--surface);
+  border: 1px solid var(--neutral-line);
+  background: var(--neutral);
   color: var(--text-2);
   border-radius: var(--r-full);
-  padding: 7px 12px;
-  min-height: 32px;
+  padding: 8px 12px;
+  min-height: 36px;
   font-size: 12px; font-weight: 700;
   transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
 }
@@ -798,12 +838,12 @@ button:disabled { cursor: default; }
   width: 100%; aspect-ratio: 1;
   min-width: 12px;
   border-radius: 4px;
-  background: var(--surface-2);
+  background: var(--neutral-2);
   display: inline-block;
 }
 .hm-cell.off    { background: rgba(var(--tint), 0.04); }
 .hm-cell.future { background: transparent; }
-.hm-cell.l0     { background: var(--surface-2); }
+.hm-cell.l0     { background: var(--neutral-2); }
 .hm-cell.fail   { background: rgba(248, 113, 113, 0.4); }
 .hm-cell.l1     { background: rgba(var(--tint), 0.3); }
 .hm-cell.l2     { background: rgba(var(--tint), 0.6); }
@@ -812,21 +852,21 @@ button:disabled { cursor: default; }
 .hm-legend {
   display: flex; align-items: center; gap: 4px;
   justify-content: flex-end;
-  margin-top: 10px;
+  margin-top: var(--sp-2);
   font-size: 10px; color: var(--text-3);
 }
 .hm-legend .hm-cell { width: 12px; min-width: 12px; }
 
 .ledger-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--neutral-line);
 }
 .ledger-row:last-child { border-bottom: none; }
 .ledger-icon {
   width: 40px; height: 40px;
   border-radius: var(--r-sm);
-  background: var(--surface-2);
+  background: var(--neutral-2);
   display: flex; align-items: center; justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
@@ -856,11 +896,11 @@ button:disabled { cursor: default; }
    ============================================================ */
 .profile-hero {
   border-radius: var(--r-lg);
-  padding: 18px;
+  padding: var(--sp-3);
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
 .avatar {
   width: 64px; height: 64px;
@@ -886,8 +926,8 @@ button:disabled { cursor: default; }
 .motivation-level {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
 }
 .motivation-level output {
   font-family: 'Unbounded', 'Manrope', sans-serif;
@@ -903,7 +943,7 @@ input[type="range"].slider {
   -webkit-appearance: none;
   height: 8px;
   border-radius: var(--r-full);
-  background: var(--surface-2);
+  background: var(--neutral-2);
   outline-offset: 4px;
   cursor: pointer;
 }
@@ -925,8 +965,8 @@ input[type="range"].slider::-moz-range-thumb {
 .field-textarea {
   width: 100%;
   min-height: 76px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
   border-radius: var(--r-md);
   padding: 12px 14px;
   color: var(--text);
@@ -940,17 +980,17 @@ input[type="range"].slider::-moz-range-thumb {
 .field-textarea:focus { border-color: var(--primary); }
 
 /* большие цели */
-.goal-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.goal-row { padding: var(--sp-3) 0; border-bottom: 1px solid var(--neutral-line); }
 .goal-row:last-of-type { border-bottom: none; }
-.goal-top { display: flex; align-items: center; gap: 10px; }
+.goal-top { display: flex; align-items: center; gap: var(--sp-2); }
 .goal-top .g-icon { font-size: 20px; }
 .goal-top .g-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; }
 .goal-top .g-deadline { font-size: 11px; color: var(--text-3); white-space: nowrap; }
 .goal-bar {
   height: 8px;
   border-radius: var(--r-full);
-  background: var(--surface-2);
-  margin-top: 10px;
+  background: var(--neutral-2);
+  margin-top: var(--sp-2);
   overflow: hidden;
 }
 .goal-fill {
@@ -976,8 +1016,8 @@ input[type="range"].slider::-moz-range-thumb {
   background: var(--surface);
   color: var(--text-2);
   font-size: 12px; font-weight: 700;
-  padding: 7px 12px;
-  min-height: 34px;
+  padding: 8px 12px;
+  min-height: 36px;
   border-radius: var(--r-full);
   transition: background var(--t-fast), color var(--t-fast);
 }
@@ -985,7 +1025,7 @@ input[type="range"].slider::-moz-range-thumb {
 .mini-btn.danger:hover { color: var(--bad); }
 
 /* друзья */
-.friend-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.friend-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--neutral-line); }
 .friend-row:last-of-type { border-bottom: none; }
 .friend-ava {
   width: 40px; height: 40px;
@@ -998,11 +1038,11 @@ input[type="range"].slider::-moz-range-thumb {
 .friend-name { flex: 1; font-size: 14px; font-weight: 700; }
 
 /* темы */
-.theme-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.theme-grid { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .theme-swatch {
   width: 44px; height: 44px;
   border-radius: var(--r-full);
-  border: 2px solid var(--line);
+  border: 2px solid var(--neutral-line);
   position: relative;
   transition: transform var(--t-fast), border-color var(--t-fast);
 }
@@ -1027,10 +1067,10 @@ input[type="range"].slider::-moz-range-thumb {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
   min-height: 48px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--neutral-line);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1042,8 +1082,8 @@ input[type="range"].slider::-moz-range-thumb {
   -webkit-appearance: none;
   width: 48px; height: 28px;
   border-radius: var(--r-full);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  background: var(--neutral-2);
+  border: 1px solid var(--neutral-line);
   position: relative;
   cursor: pointer;
   transition: background var(--t-med);
@@ -1101,7 +1141,7 @@ input[type="range"].slider::-moz-range-thumb {
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  padding: 8px 10px;
+  padding: var(--sp-2);
   border-radius: 26px;
   border: 1px solid rgba(var(--tint), 0.22);
   background:
@@ -1182,8 +1222,8 @@ input[type="range"].slider::-moz-range-thumb {
   background: var(--sheet-bg);
   width: 100%; max-width: 460px;
   border-radius: 26px 26px 0 0;
-  border-top: 1px solid var(--line);
-  padding: 12px 18px calc(24px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--neutral-line);
+  padding: var(--sp-3) var(--sp-3) calc(var(--sp-4) + env(safe-area-inset-bottom));
   max-height: 90dvh;
   overflow-y: auto;
   animation: slideUp var(--t-med) var(--ease);
@@ -1193,7 +1233,7 @@ input[type="range"].slider::-moz-range-thumb {
 .sheet-handle {
   width: 40px; height: 4px;
   border-radius: var(--r-full);
-  background: var(--surface-2);
+  background: var(--neutral-2);
   margin: 6px auto 16px;
 }
 .sheet-title { font-size: 19px; font-weight: 800; margin-bottom: 16px; }
@@ -1208,8 +1248,8 @@ input[type="range"].slider::-moz-range-thumb {
 .field-input {
   width: 100%;
   min-height: 48px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
   border-radius: var(--r-md);
   padding: 12px 14px;
   color: var(--text);
@@ -1222,7 +1262,7 @@ input[type="range"].slider::-moz-range-thumb {
 .field-input:focus { border-color: var(--primary); }
 .field-input.small { width: 92px; }
 
-.count-fields { display: flex; gap: 10px; align-items: center; }
+.count-fields { display: flex; gap: var(--sp-2); align-items: center; }
 .suffix { color: var(--text-2); font-size: 14px; }
 .hint { font-size: 12px; color: var(--text-3); margin-top: 8px; line-height: 1.5; }
 
@@ -1233,7 +1273,7 @@ input[type="range"].slider::-moz-range-thumb {
   border: 2px solid transparent;
   background:
     linear-gradient(160deg, rgba(var(--tint), 0.08), transparent 60%),
-    var(--surface);
+    var(--neutral);
   font-size: 20px;
   color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
@@ -1262,17 +1302,17 @@ input[type="range"].slider::-moz-range-thumb {
 .medal-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: var(--sp-2);
 }
 .medal {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 10px 4px;
+  padding: var(--sp-2) 4px;
   border-radius: var(--r-md);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
   text-align: center;
 }
 .medal .m-ic {
@@ -1302,13 +1342,13 @@ input[type="range"].slider::-moz-range-thumb {
   box-shadow: 0 0 14px rgba(167, 139, 250, 0.4);
 }
 
-.day-picker { display: flex; gap: 6px; }
+.day-picker { display: flex; gap: var(--sp-2); }
 .dpick {
   flex: 1;
   min-height: 44px;
   border-radius: var(--r-md);
-  border: 1px solid var(--line);
-  background: var(--surface);
+  border: 1px solid var(--neutral-line);
+  background: var(--neutral);
   color: var(--text-2);
   font-size: 12px; font-weight: 800;
   transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
@@ -1321,15 +1361,15 @@ input[type="range"].slider::-moz-range-thumb {
 
 .seg {
   display: flex; gap: 6px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
   border-radius: var(--r-md);
   padding: 4px;
   flex-wrap: wrap;
 }
 .seg-btn {
   flex: 1;
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1346,9 +1386,9 @@ input[type="range"].slider::-moz-range-thumb {
 .seg-btn .ic { width: 15px; height: 15px; }
 .seg-btn.active { background: var(--elev); color: var(--text); }
 
-.stake-money, .stake-lock { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.stake-money, .stake-lock { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
 
-.sheet-actions { display: flex; gap: 10px; margin-top: 24px; }
+.sheet-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-4); }
 .btn-ghost, .btn-primary {
   flex: 1;
   min-height: 50px;
@@ -1359,7 +1399,7 @@ input[type="range"].slider::-moz-range-thumb {
   transition: transform var(--t-fast), filter var(--t-fast);
 }
 .btn-ghost:active, .btn-primary:active { transform: scale(0.97); }
-.btn-ghost { background: var(--surface); border: 1px solid var(--line); color: var(--text); }
+.btn-ghost { background: var(--neutral); border: 1px solid var(--neutral-line); color: var(--text); }
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--primary-hi));
   color: var(--on-primary);
@@ -1378,11 +1418,11 @@ input[type="range"].slider::-moz-range-thumb {
 }
 .sim-note .ic { margin-top: 1px; }
 .summary-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3);
   border-radius: var(--r-md);
   background: var(--surface);
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-2);
 }
 .summary-row .big { font-size: 20px; display: flex; }
 .summary-row .big .ic { width: 22px; height: 22px; }
@@ -1408,12 +1448,12 @@ input[type="range"].slider::-moz-range-thumb {
 .summary-ok { text-align: center; padding: 24px; color: var(--good); font-size: 16px; font-weight: 700; }
 
 /* ---------- ПЛАВАЮЩИЕ ЛЕЙБЛЫ (по мотивам AnimatedInput) ---------- */
-.ff { position: relative; margin-top: 22px; }
+.ff { position: relative; margin-top: var(--sp-4); }
 .ff-input {
   width: 100%;
   min-height: 52px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
   border-radius: var(--r-md);
   padding: 14px 44px 14px 14px;
   color: var(--text);

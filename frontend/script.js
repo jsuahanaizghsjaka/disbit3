@@ -121,7 +121,64 @@ function loadArr(key) {
     return [];
   }
 }
-function saveJson(key, v) { localStorage.setItem(key, JSON.stringify(v)); }
+/* ---------- СИНК СОСТОЯНИЯ (profile/goals/rewards/friends/backlog/settings) ---------- */
+const STATE_TS_KEY = 'disbit_state_ts_v1';
+const SYNC_KEYS = new Set([PROFILE_KEY, SETTINGS_KEY, GOALS_KEY, REWARDS_KEY, FRIENDS_KEY, BACKLOG_KEY]);
+let applyingRemote = false;   // применяем серверный стейт — не эхо-пушим
+let statePushTimer = null;
+
+function stateBlob() {
+  return {
+    profile, settings, goals, rewards, friends, backlog,
+    settled: localStorage.getItem(SETTLED_KEY)
+  };
+}
+function touchStateTs() {
+  localStorage.setItem(STATE_TS_KEY, String(Date.now()));
+}
+function scheduleStatePush() {
+  if (!API || applyingRemote) return;
+  clearTimeout(statePushTimer);
+  statePushTimer = setTimeout(() => {
+    apiCall('PUT', '/state', {
+      data: stateBlob(),
+      ts: Number(localStorage.getItem(STATE_TS_KEY)) || Date.now()
+    });
+  }, 800);
+}
+// применяем серверный блоб поверх локального
+function applyRemoteState(data, ts) {
+  applyingRemote = true;
+  try {
+    if (data.profile && typeof data.profile === 'object') profile = { ...profile, ...data.profile };
+    if (data.settings && typeof data.settings === 'object') settings = { ...settings, ...data.settings };
+    goals   = Array.isArray(data.goals)   ? data.goals   : goals;
+    rewards = Array.isArray(data.rewards) ? data.rewards : rewards;
+    friends = Array.isArray(data.friends) ? data.friends : friends;
+    backlog = Array.isArray(data.backlog) ? data.backlog : backlog;
+    if (data.settled && data.settled > (localStorage.getItem(SETTLED_KEY) || '')) {
+      localStorage.setItem(SETTLED_KEY, data.settled);
+    }
+    saveJson(PROFILE_KEY, profile);
+    saveJson(SETTINGS_KEY, settings);
+    saveJson(GOALS_KEY, goals);
+    saveJson(REWARDS_KEY, rewards);
+    saveJson(FRIENDS_KEY, friends);
+    saveJson(BACKLOG_KEY, backlog);
+    localStorage.setItem(STATE_TS_KEY, String(ts || Date.now()));
+    applyTheme();
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+function saveJson(key, v) {
+  localStorage.setItem(key, JSON.stringify(v));
+  if (SYNC_KEYS.has(key) && !applyingRemote) {
+    touchStateTs();
+    scheduleStatePush();
+  }
+}
 function load() {
   try {
     const arr = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -199,6 +256,16 @@ async function apiBootstrap() {
   if (Array.isArray(remoteLedger) && remoteLedger.length) {
     ledger = remoteLedger;
     saveLedger();
+  }
+  // стейт профиля: применяем серверный, только если он новее локального
+  if (authToken) {
+    const st = await apiCall('GET', '/state');
+    const localTs = Number(localStorage.getItem(STATE_TS_KEY)) || 0;
+    if (st?.data && Number(st.updatedAt) > localTs) {
+      applyRemoteState(st.data, st.updatedAt);
+    } else {
+      scheduleStatePush();   // на сервере пусто/старее — заливаем своё
+    }
   }
   render();
 }
@@ -364,6 +431,8 @@ function settlePastDays() {
 
   if (!last) {
     localStorage.setItem(SETTLED_KEY, yesterday);
+  touchStateTs();
+  scheduleStatePush();
     return [];
   }
   if (last >= yesterday) return [];
@@ -392,6 +461,8 @@ function settlePastDays() {
   }
 
   localStorage.setItem(SETTLED_KEY, yesterday);
+  touchStateTs();
+  scheduleStatePush();
   if (fresh.length) {
     ledger.push(...fresh);
     saveLedger();

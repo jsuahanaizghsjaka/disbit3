@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS completions (
   UNIQUE(habit_id, day)
 );
 
+-- Состояние профиля одним JSON-блобом (profile/goals/rewards/friends/backlog/settings)
+CREATE TABLE IF NOT EXISTS user_state (
+  user_id    INTEGER PRIMARY KEY,
+  data       TEXT NOT NULL,
+  updated_at TEXT NOT NULL              -- клиентская метка (мс с эпохи, строкой)
+);
+
 -- Списания/блокировки (пока статус 'simulated' — без реальных платежей)
 CREATE TABLE IF NOT EXISTS charges (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
