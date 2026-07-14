@@ -1131,6 +1131,181 @@ input[type="range"].slider::-moz-range-thumb {
 }
 
 /* ---------- НИЖНЕЕ МЕНЮ ---------- */
+/* ============================================================
+   ПУТНИК — сцена прогресса большой цели
+   1 выполненная привычка = 1 шаг. Ходьба играет только в момент
+   шага, дальше фигурка «дышит» стоя. Всё на CSS-трансформах —
+   дёшево для WebView на слабом Android.
+   ============================================================ */
+.walker-card {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+  margin-bottom: var(--sp-3);
+}
+.w-scene { display: block; width: 100%; height: 132px; }
+.w-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 10px var(--sp-3);
+}
+.w-goal {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  min-width: 0;
+}
+.w-goal .ic { width: 16px; height: 16px; flex: none; }
+.w-steps {
+  font-size: 13px; font-weight: 800; color: var(--text-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.walker-card.finished .w-steps { color: var(--primary); }
+
+/* сцена: солнце дышит, фигурка шагает */
+.w-sun { opacity: 0.85; transform-box: fill-box; transform-origin: 50% 50%;
+  animation: wSun 14s ease-in-out infinite alternate; }
+@keyframes wSun { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+
+.w-walker { transition: transform 1100ms cubic-bezier(0.34, 0.05, 0.28, 1); }
+.w-man path, .w-man circle {
+  fill: none;
+  stroke: #F3EDE4;                 /* тёплый белый — читается на любой сцене */
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.w-man .w-pack { fill: rgba(243, 237, 228, 0.22); }
+
+/* оси вращения — точно в плечо и бедро (левый/правый верх bbox) */
+.w-leg, .w-arm { transform-box: fill-box; }
+.w-leg-f, .w-arm-f { transform-origin: 0% 0%; }
+.w-leg-b, .w-arm-b { transform-origin: 100% 0%; }
+.w-body { transform-box: fill-box; transform-origin: 50% 100%;
+  animation: wBreathe 3.6s ease-in-out infinite; }
+@keyframes wBreathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.6px); } }
+
+/* ходьба — только пока путник переставляет ноги к новой позиции */
+.walking .w-leg-f, .walking .w-arm-b { animation: wSwingA 0.5s ease-in-out infinite alternate; }
+.walking .w-leg-b, .walking .w-arm-f { animation: wSwingB 0.5s ease-in-out infinite alternate; }
+.walking .w-body { animation: wBob 0.25s ease-in-out infinite alternate; }
+@keyframes wSwingA { from { transform: rotate(-15deg); } to { transform: rotate(15deg); } }
+@keyframes wSwingB { from { transform: rotate(15deg); } to { transform: rotate(-15deg); } }
+@keyframes wBob { from { transform: translateY(0); } to { transform: translateY(-1px); } }
+
+/* финиш сцены */
+.w-post, .w-flagline { stroke: rgba(255, 255, 255, 0.7); stroke-width: 1.6; fill: none; stroke-linecap: round; }
+.w-ribbon { stroke: #F0666A; stroke-width: 1.8; fill: none; stroke-linecap: round;
+  transition: opacity var(--t-med); }
+.w-flag { fill: #F0666A; stroke: none; }
+.w-podium { fill: rgba(255, 255, 255, 0.75); }
+
+/* дошёл: лента порвана, руки вверх, отдышивается и радуется */
+.finished .w-ribbon { opacity: 0.25; }
+.finished .w-arm-f { transform: rotate(-125deg); }
+.finished .w-arm-b { transform: rotate(125deg); }
+.finished .w-body { animation: wBreathe 1.1s ease-in-out infinite; }  /* дышит часто — устал */
+
+.w-confetti circle { fill: var(--primary); opacity: 0; transform-box: fill-box; }
+.finished .w-confetti circle { animation: wConfetti 2.6s ease-out infinite; }
+.finished .w-confetti circle:nth-child(2) { animation-delay: 0.4s; fill: #FBBF24; }
+.finished .w-confetti circle:nth-child(3) { animation-delay: 0.8s; fill: #4ADE80; }
+.finished .w-confetti circle:nth-child(4) { animation-delay: 1.2s; fill: #F472B6; }
+@keyframes wConfetti {
+  0%   { opacity: 0; transform: translateY(0); }
+  18%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(30px); }
+}
+
+/* пикер сцен в шторке цели */
+.scene-picker { display: flex; flex-wrap: wrap; gap: 10px; }
+.scene-pick {
+  width: 92px; padding: 0; background: none;
+  border: 2px solid transparent; border-radius: var(--r-md);
+  transition: border-color var(--t-fast), transform var(--t-fast);
+}
+.scene-pick:active { transform: scale(0.95); }
+.sp-art {
+  display: block; height: 46px; border-radius: 10px;
+  position: relative; overflow: hidden;
+}
+.sp-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 13px; }
+.sp-name { display: block; margin-top: 5px; font-size: 11px; font-weight: 700; color: var(--text-2); }
+.scene-pick.selected { border-color: var(--primary); }
+.scene-pick.selected .sp-name { color: var(--primary); }
+
+/* огонёк серии на карточке марафона */
+.w-right { display: flex; align-items: center; gap: 10px; }
+.w-flame {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--r-full);
+  background: rgba(232, 114, 42, 0.16);
+  color: #E8722A;
+  font-size: 12px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.w-flame .ic { width: 14px; height: 14px; }
+.w-flame.cold { background: var(--neutral); color: var(--text-3); }
+
+/* промо марафона — то, что новичок видит сразу после регистрации */
+.promo-card {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(var(--tint), 0.22);
+  background:
+    linear-gradient(160deg, rgba(var(--tint), 0.16), rgba(var(--tint), 0.04) 60%, transparent),
+    var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.promo-art {
+  flex: none;
+  width: 54px; height: 54px;
+  display: grid; place-items: center;
+  border-radius: var(--r-md);
+  background: rgba(var(--tint), 0.14);
+  color: var(--primary);
+}
+.promo-art .ic { width: 30px; height: 30px; }
+.promo-title { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+.promo-text { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 10px; }
+.promo-cta { padding: 9px 16px; font-size: 13px; }
+
+/* выбор привычек марафона в шторке цели */
+.mh-row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 44px;                       /* тач-таргет */
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.mh-row.taken { opacity: 0.55; }
+.mh-check { width: 20px; height: 20px; accent-color: var(--primary); flex: none; }
+.mh-icon { display: inline-flex; color: var(--text-2); }
+.mh-icon .ic { width: 18px; height: 18px; }
+.mh-name { flex: 1; font-weight: 600; }
+.mh-taken { font-size: 11px; color: var(--text-3); }
+
+/* медали марафонов */
+.medal.earned.blue {
+  color: var(--primary);
+  background: rgba(var(--tint), 0.14);
+  border-color: rgba(var(--tint), 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-walker { transition: none; }
+  .w-sun, .w-body, .w-leg, .w-arm, .w-confetti circle { animation: none !important; }
+}
+
 /* ---------- ПЛАВАЮЩИЙ GLASS-ДОК (по мотивам dock.tsx) ---------- */
 .dock {
   position: fixed;
@@ -1144,6 +1319,8 @@ input[type="range"].slider::-moz-range-thumb {
   padding: var(--sp-2);
   border-radius: 26px;
   border: 1px solid rgba(var(--tint), 0.22);
+  /* фолбэк для WebView без color-mix/backdrop-filter: непрозрачная подложка */
+  background: var(--sheet-bg);
   background:
     linear-gradient(160deg, rgba(var(--tint), 0.10), rgba(var(--tint), 0.03)),
     color-mix(in srgb, var(--bg) 68%, transparent);
@@ -1521,6 +1698,111 @@ input[type="range"].slider::-moz-range-thumb {
   color: var(--good);
   font-size: 12px;
   font-weight: 700;
+}
+
+/* ============================================================
+   МОБИЛЬНАЯ АДАПТАЦИЯ — телефон здесь главный экран
+   ============================================================ */
+
+/* 1. Тач-устройства: hover-эффекты «залипают» после тапа — отключаем.
+   Нажатия и так дают отклик через :active. */
+@media (hover: none) {
+  .habit:hover, .card:hover {
+    transform: none;
+    box-shadow: var(--shadow-1);
+  }
+  .progress-card:hover {
+    transform: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-1), var(--shadow-glow);
+  }
+  .day:hover, .row-btn:hover, .day-summary-btn:hover,
+  .dock-item:hover .di-icon { background: transparent; }
+  .day-summary-btn:hover { color: var(--text-2); }
+  .icon-btn:hover { background: var(--surface); color: var(--text-2); }
+  .mini-btn:hover { background: var(--surface); color: var(--text-2); }
+  .chip:hover { border-color: var(--neutral-line); }
+  .cal-cell:not(:disabled):hover { background: var(--neutral); }
+  .stepper button:hover { background: var(--surface-2); }
+  .dock-item:hover { color: var(--text-3); }
+  .dock-item.active:hover { color: var(--primary); }
+  .dock-item.active:hover .di-icon { background: rgba(var(--tint), 0.14); }
+  .pick:hover { color: var(--text-2); }
+  .pick.selected:hover { color: var(--primary); }
+  .ff-eye:hover, .min-btn:hover { color: var(--text-3); }
+  .min-btn:hover { border-color: var(--line); }
+  .btn-primary:hover, .dock-item.fab:hover .di-icon { filter: none; }
+}
+
+/* 2. Телефоны: blur — дорогой (лагает на слабых Android), поэтому НЕ размываем.
+   Но простое снятие blur делало карточки плоскими (фон был лишь на 7% ярче
+   основного) — на мобиле они почти сливались с фоном. Возвращаем ГЛУБИНУ
+   без blur: «фейк-стекло» — плотный слоистый фон + верхний световой блик
+   (inset) + заметнее граница и тень. Ноль стоимости рендера, работает во
+   всех 8 темах (в т.ч. светлой: белый блик там незаметен, но тон и тень
+   отделяют карточку). Мобилка должна быть не беднее десктопа — это главный
+   экран нашей аудитории. */
+@media (max-width: 520px) {
+  .card, .habit, .stat-card, .profile-hero {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.008) 42%, transparent),
+      rgba(var(--tint), 0.10);
+    border-color: rgba(var(--tint), 0.15);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 1px 4px rgba(0, 0, 0, 0.16),
+      0 8px 20px rgba(0, 0, 0, 0.14);
+  }
+  /* герой экрана — акцентнее фоновых карточек, но без резкого свечения */
+  .progress-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background:
+      linear-gradient(160deg, rgba(var(--tint), 0.13), rgba(var(--tint), 0.04) 58%, transparent),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 46%),
+      rgba(var(--tint), 0.09);
+    border-color: rgba(var(--tint), 0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 1px 6px rgba(0, 0, 0, 0.16),
+      0 10px 24px rgba(0, 0, 0, 0.14);
+  }
+  .pick { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+  /* аура мягче и тусклее — не отвлекает и не «режет» на светлом контенте */
+  .aura .blob { filter: blur(64px); opacity: 0.30; animation: none; }
+  .dock {
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+  }
+
+  /* узкие экраны: док не должен переполняться (iPhone SE 320px) */
+  .dock-item { width: min(62px, 17vw); }
+  .dock { gap: 2px; padding: 6px 8px; }
+  /* лейблы дока крупнее — 9px не читались на телефоне */
+  .dock-item .di-label { font-size: 10px; }
+
+  /* тач-таргеты ≥44px: были 36px — мелко для пальца.
+     «минимум» (Сегодня), чипы-фильтры (Статистика), mini-btn (цели/бэклог) */
+  .min-btn { min-height: 44px; padding: 8px 14px; font-size: 12px; }
+  .chip { min-height: 44px; padding: 11px 15px; font-size: 13px; }
+  .mini-btn { min-height: 44px; padding: 11px 15px; font-size: 13px; }
+
+  /* медали: авто-сетка вместо жёстких 4 колонок */
+  .medal-grid { grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); }
+
+  /* мелкие подписи (9–11px) на телефоне не читались — поднимаем */
+  .cal-legend { font-size: 12px; }
+  .hm-legend { font-size: 11px; }
+  .hm-daynames { font-size: 10px; }
+  .week-chart .bar-lbl { font-size: 10px; }
+
+  /* заголовок компактнее, но ключевые числа (герои экранов) — КРУПНЕЕ десктопа */
+  .screen-title { font-size: 24px; }
+  .wc-pct { font-size: 34px; }
+  .stat-value { font-size: 24px; }
+  .cal-stat b { font-size: 20px; }
 }
 
 /* ---------- ДОСТУПНОСТЬ ---------- */

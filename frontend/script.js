@@ -57,7 +57,17 @@ const MEDALS = [
   ...[1000,2500,5000,10000].map(n =>
     ({ id: 'f' + n, kind: 'fines', at: n, name: `${n}₽ штрафов`, cls: 'red', ic: 'i-coins' })),
   ...[5,10,20].map(n =>
-    ({ id: 'l' + n, kind: 'locks', at: n, name: `${n} блокировок`, cls: 'violet', ic: 'i-lock' }))
+    ({ id: 'l' + n, kind: 'locks', at: n, name: `${n} блокировок`, cls: 'violet', ic: 'i-lock' })),
+  // марафоны: доведённые до финиша
+  ...[
+    { at: 1,  name: 'Первый финиш' },
+    { at: 3,  name: '3 марафона'   },
+    { at: 5,  name: '5 марафонов'  },
+    { at: 10, name: '10 марафонов' }
+  ].map(m => ({ id: 'm' + m.at, kind: 'marathons', at: m.at, name: m.name, cls: 'blue', ic: 'i-target' })),
+  // шаги, пройденные путником во всех марафонах
+  ...[100,500,1000].map(n =>
+    ({ id: 'ms' + n, kind: 'steps', at: n, name: `${n} шагов`, cls: 'blue', ic: 'i-h-run' }))
 ];
 const COLORS = ['#5B8DFF','#4ADE80','#38BDF8','#F472B6','#A78BFA','#F87171','#FBBF24','#E8722A'];
 const AVA_EMOJIS = ['😀','😎','🦊','🐻','🐼','🦁','🐯','🐸','🦉','🐨','🦄','🐢','🚀','🔥','⚡','🌟','🍀','🌊','🎧','🎮','🏔️','🌙','🍕','☕'];
@@ -403,6 +413,15 @@ function deleteHabit(id) {
   if (!confirm('Удалить привычку?')) return;
   habits = habits.filter(x => x.id !== id);
   save();
+  // привычка могла быть в марафоне — отвязываем, иначе марафон считал бы мёртвый id
+  let touched = false;
+  goals.forEach(g => {
+    if ((g.habitIds || []).includes(id)) {
+      g.habitIds = g.habitIds.filter(x => x !== id);
+      touched = true;
+    }
+  });
+  if (touched) saveJson(GOALS_KEY, goals);
   apiCall('DELETE', `/habits/${id}`);
   render();
 }
@@ -504,7 +523,8 @@ function showSettleModal(entries) {
 /* ---------- ОБЩИЙ РЕНДЕР ---------- */
 function render() {
   renderRewardBanner();
-  renderGoalStrip();
+  renderMarathonPromo();
+  renderWalker();
   renderWeek();
   renderHabits();
   renderProgress();
@@ -547,27 +567,230 @@ function renderRewardBanner() {
   });
 }
 
-/* ---------- ПОЛОСКА БОЛЬШОЙ ЦЕЛИ ---------- */
-function renderGoalStrip() {
-  const box = document.getElementById('goal-strip');
-  const g = goals.find(x => (x.progress || 0) < 100);
-  if (!g) { box.hidden = true; box.innerHTML = ''; return; }
+/* ---------- ПРОМО МАРАФОНА ----------
+   Новичок должен увидеть фичу сразу после регистрации, не раскапывая настройки.
+   Как только первый марафон запущен — промо исчезает навсегда. */
+function renderMarathonPromo() {
+  const box = document.getElementById('marathon-promo');
+  if (!box) return;
+  if (goals.some(isMarathon)) { box.hidden = true; box.innerHTML = ''; return; }
+
   box.hidden = false;
-  const pct = g.progress || 0;
   box.innerHTML = `
-    <div class="goal-strip" role="button" tabindex="0" aria-label="Большая цель: ${escapeHtml(g.name)}">
-      <span class="gs-icon">${iconOf(g.icon)}</span>
-      <div class="gs-main">
-        <div class="gs-name">${escapeHtml(g.name)}</div>
-        <div class="gs-bar"><div class="gs-fill" style="width:${pct}%"></div></div>
+    <section class="promo-card">
+      <div class="promo-art">${icon('i-h-run', 'ic ic-xl')}</div>
+      <div class="promo-main">
+        <h3 class="promo-title">Запусти марафон</h3>
+        <p class="promo-text">Выбери большую цель и сколько до неё шагов.
+          Каждая выполненная привычка — шаг путника вперёд. Дойдёшь — финиш и медаль.</p>
+        <button class="btn-primary promo-cta" id="promo-start">Создать марафон</button>
       </div>
-      <span class="gs-pct">${pct}%</span>
-    </div>`;
-  const el = box.firstElementChild;
-  el.addEventListener('click', () => switchScreen('profile'));
-  el.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchScreen('profile'); }
-  });
+    </section>`;
+  box.querySelector('#promo-start').addEventListener('click', () => openGoalSheet());
+}
+
+/* ---------- ПУТНИК: сцена прогресса большой цели ---------- */
+/* 1 выполненная привычка = 1 шаг. Позицию считаем из истории отметок, а не
+   инкрементом по нажатию: снял отметку — путник честно отступает назад,
+   рассинхрон невозможен. Финал зависит от сцены: лента или пьедестал. */
+const SCENES = [
+  {
+    id: 'desert',
+    name: 'Пустыня',
+    finish: 'ribbon',                              // 'ribbon' | 'podium'
+    sky: ['#16203A', '#43354F', '#8E6A55'],        // приглушённые сумерки — не режет глаза
+    sun: '#D99A57',
+    far: '#33304A',
+    mid: '#4B4057',
+    ground: '#6A5443',
+    gear: 'hat'                                    // экипировка под сцену
+  }
+];
+function sceneOf(g) { return SCENES.find(s => s.id === g?.scene) || SCENES[0]; }
+
+/* Марафон считает ТОЛЬКО свои привычки (g.habitIds), а не все подряд.
+   Правило: одна привычка живёт максимум в одном марафоне, в марафоне — до 5 привычек. */
+const MARATHON_MAX_HABITS = 5;
+
+function isMarathon(g) { return g?.steps > 0; }
+function marathonHabits(g) {
+  const ids = new Set(g?.habitIds || []);
+  return habits.filter(h => ids.has(h.id));
+}
+// привычка занята другим марафоном? (кроме текущего — его привычки свободны для него же)
+function habitTakenBy(habitId, exceptGoalId = null) {
+  return goals.find(g => isMarathon(g) && g.id !== exceptGoalId && (g.habitIds || []).includes(habitId));
+}
+// огонёк марафона: лучшая текущая серия среди его привычек
+function marathonStreak(g) {
+  const hs = marathonHabits(g);
+  return hs.length ? Math.max(...hs.map(computeStreak)) : 0;
+}
+
+// пройдено шагов = выполненные отметки привычек ЭТОГО марафона с момента старта
+function stepsDone(g) {
+  const from = g.startedAt || '0000-00-00';
+  let n = 0;
+  for (const h of marathonHabits(g)) {
+    const days = new Set([...Object.keys(h.history || {}), ...Object.keys(h.counts || {})]);
+    for (const key of days) {
+      if (key >= from && doneOn(h, key)) n++;
+    }
+  }
+  return n;
+}
+// сколько шагов пройдено во всех марафонах вместе — для медалей
+function totalSteps() {
+  return goals.filter(isMarathon).reduce((s, g) => s + stepsDone(g), 0);
+}
+// прогресс цели: с путником — авто (из шагов), без него — ручной, как раньше
+function goalPct(g) {
+  if (g.steps > 0) {
+    return Math.max(0, Math.min(100, Math.round((stepsDone(g) / g.steps) * 100)));
+  }
+  return Math.max(0, Math.min(100, g.progress || 0));
+}
+
+// фигурка путника: экипировка зависит от сцены
+function walkerFigure(sc) {
+  const hat = sc.gear === 'hat'
+    ? `<path class="w-hat" d="M-7,-27 L7,-27 M-4.5,-27 Q0,-33 4.5,-27" />`
+    : '';
+  return `
+    <g class="w-man">
+      <g class="w-body">
+        <circle class="w-head" cx="0" cy="-25" r="4.6" />
+        ${hat}
+        <path class="w-pack" d="M-2,-20 L-6,-20 L-6,-13 L-2,-13 Z" />
+        <path class="w-torso" d="M0,-20 L0,-10" />
+        <path class="w-arm w-arm-b" d="M0,-18 L-5,-12" />
+        <path class="w-arm w-arm-f" d="M0,-18 L5,-12" />
+        <path class="w-leg w-leg-b" d="M0,-10 L-4,0" />
+        <path class="w-leg w-leg-f" d="M0,-10 L4,0" />
+      </g>
+    </g>`;
+}
+
+// финиш сцены: лента с флажками или пьедестал
+function walkerFinish(sc) {
+  if (sc.finish === 'podium') {
+    return `
+      <g class="w-finish">
+        <rect x="286" y="92" width="22" height="12" rx="2" class="w-podium" />
+        <path class="w-flagline" d="M297,92 L297,82" />
+      </g>`;
+  }
+  return `
+    <g class="w-finish">
+      <path class="w-post" d="M292,104 L292,78" />
+      <path class="w-ribbon" d="M292,84 L308,84" />
+      <path class="w-flag" d="M292,78 L302,81 L292,84 Z" />
+    </g>`;
+}
+
+// сцену строим ОДИН раз и дальше только двигаем путника: если пересоздавать
+// разметку на каждый render(), CSS-transition не с чего анимировать — фигурка
+// будет телепортироваться вместо шага
+function walkerSceneHtml(g, sc) {
+  return `
+    <section class="walker-card" data-goal="${g.id}" data-scene="${sc.id}">
+      <header class="w-head">
+        <h3 class="w-goal"></h3>
+        <span class="w-flame" title="Серия — не рви её"></span>
+      </header>
+
+      <svg class="w-scene" viewBox="0 0 320 132" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="w-sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="${sc.sky[0]}"/>
+            <stop offset="0.55" stop-color="${sc.sky[1]}"/>
+            <stop offset="1" stop-color="${sc.sky[2]}"/>
+          </linearGradient>
+        </defs>
+
+        <rect width="320" height="132" fill="url(#w-sky)"/>
+        <circle class="w-sun" cx="246" cy="72" r="13" fill="${sc.sun}"/>
+
+        <!-- дальние барханы -->
+        <path fill="${sc.far}" d="M0,92 Q46,74 92,90 Q140,104 190,86 Q244,68 320,88 L320,132 L0,132 Z"/>
+        <!-- ближние барханы -->
+        <path fill="${sc.mid}" d="M0,106 Q60,92 118,104 Q182,116 240,100 Q286,88 320,102 L320,132 L0,132 Z"/>
+        <!-- земля, по которой идёт путник -->
+        <rect y="104" width="320" height="28" fill="${sc.ground}"/>
+
+        ${walkerFinish(sc)}
+        <g class="w-walker">${walkerFigure(sc)}</g>
+
+        <g class="w-confetti">
+          <circle cx="276" cy="60" r="2"/><circle cx="292" cy="52" r="2"/>
+          <circle cx="308" cy="62" r="2"/><circle cx="284" cy="46" r="1.6"/>
+        </g>
+      </svg>
+
+      <header class="w-head">
+        <h3 class="w-goal"></h3>
+        <span class="w-flame" title="Серия — не рви её"></span>
+      </header>
+
+      <div class="w-foot">
+        <div class="w-bar"><div class="w-fill"></div></div>
+        <div class="w-sub">
+          <span class="w-steps"></span>
+          <span class="w-left"></span>
+        </div>
+      </div>
+    </section>`;
+}
+
+let walkerWalkTimer = null;
+function renderWalker() {
+  const box = document.getElementById('walker');
+  // ведём первую недошедшую цель с шагами; если все дошли — показываем последнюю
+  const g = goals.find(x => x.steps > 0 && goalPct(x) < 100)
+         || goals.find(x => x.steps > 0);
+  if (!g) { box.hidden = true; box.innerHTML = ''; return; }
+
+  const sc = sceneOf(g);
+  const total = g.steps;
+  const done = Math.min(stepsDone(g), total);
+  const finished = goalPct(g) >= 100;
+
+  // сцена пересобирается, только если сменилась цель или фон
+  let card = box.querySelector('.walker-card');
+  const stale = !card || card.dataset.goal !== g.id || card.dataset.scene !== sc.id;
+  if (stale) {
+    box.innerHTML = walkerSceneHtml(g, sc);
+    card = box.querySelector('.walker-card');
+  }
+  box.hidden = false;
+
+  // путь: от левого края до финишного столба
+  const x = 26 + 258 * (done / total);
+  const man = card.querySelector('.w-walker');
+  const prev = Number(card.dataset.x);
+  const moved = !stale && Number.isFinite(prev) && Math.abs(x - prev) > 0.5;
+
+  card.dataset.x = String(x);
+  man.style.transform = `translate(${x}px, 104px)`;
+  card.classList.toggle('finished', finished);
+  card.setAttribute('aria-label',
+    `Путь к цели: ${g.name}, ${done} из ${total} шагов${finished ? ', дошёл' : ''}`);
+
+  card.querySelector('.w-goal').innerHTML = `${iconOf(g.icon)} ${escapeHtml(g.name)}`;
+  card.querySelector('.w-steps').textContent = finished ? 'Дошёл!' : `${done} / ${total} шагов`;
+
+  // огонёк: серия горит — рвать жалко
+  const streak = marathonStreak(g);
+  const flame = card.querySelector('.w-flame');
+  flame.classList.toggle('cold', streak === 0);
+  flame.innerHTML = `${icon('i-flame', 'ic ic-s')}<b>${streak}</b>`;
+
+  // ноги переставляются только пока идёт перемещение, дальше — дышит стоя
+  if (moved) {
+    card.classList.add('walking');
+    clearTimeout(walkerWalkTimer);
+    walkerWalkTimer = setTimeout(() => card.classList.remove('walking'), 1150);
+  }
 }
 
 /* ---------- ЭКРАН «СЕГОДНЯ» ---------- */
@@ -1141,7 +1364,9 @@ function renderMedals() {
   const metrics = {
     streak: habits.length ? Math.max(...habits.map(computeBestStreak)) : 0,
     fines: ledger.filter(e => e.mode === 'money').reduce((s, e) => s + (e.amount || 0), 0),
-    locks: ledger.filter(e => e.mode === 'lock').length
+    locks: ledger.filter(e => e.mode === 'lock').length,
+    marathons: goals.filter(g => isMarathon(g) && goalPct(g) >= 100).length,
+    steps: totalSteps()
   };
   box.innerHTML = MEDALS.map(m => {
     const cur = metrics[m.kind];
@@ -1165,8 +1390,14 @@ function renderGoals() {
     return;
   }
   box.innerHTML = goals.map(g => {
-    const pct = Math.max(0, Math.min(100, g.progress || 0));
+    const pct = goalPct(g);
     const deadline = g.deadline ? `до ${formatDay(g.deadline)}` : '';
+    // с путником прогресс считается сам из выполненных привычек — крутилки ±5 не нужны
+    const walking = g.steps > 0;
+    const manual = `
+      <button class="mini-btn" data-gminus="${g.id}" aria-label="Минус 5%">−5</button>
+      <button class="mini-btn" data-gplus="${g.id}" aria-label="Плюс 5%">+5</button>`;
+    const steps = `<span class="goal-text">${Math.min(stepsDone(g), g.steps)} / ${g.steps} шагов</span>`;
     return `
       <div class="goal-row">
         <div class="goal-top">
@@ -1177,8 +1408,7 @@ function renderGoals() {
         <div class="goal-bar"><div class="goal-fill" style="width:${pct}%"></div></div>
         <div class="goal-controls">
           <span class="g-pct">${pct}%</span>
-          <button class="mini-btn" data-gminus="${g.id}" aria-label="Минус 5%">−5</button>
-          <button class="mini-btn" data-gplus="${g.id}" aria-label="Плюс 5%">+5</button>
+          ${walking ? steps : manual}
           <button class="mini-btn" data-gedit="${g.id}">изменить</button>
           <button class="mini-btn danger" data-gdel="${g.id}">удалить</button>
         </div>
@@ -1216,25 +1446,120 @@ function openGoalSheet(id = null) {
   document.getElementById('goal-sheet-title').textContent = g ? 'Изменить цель' : 'Большая цель';
   document.getElementById('g-name').value = g?.name || '';
   document.getElementById('g-deadline').value = g?.deadline || '';
+  document.getElementById('g-steps').value = g?.steps ?? 30;
   buildIconPicker('goal-icon-picker', g?.icon || 'svg:i-h-run');
+  buildScenePicker('goal-scene-picker', g?.scene || SCENES[0].id);
+  buildMarathonHabits(g);
   openSheet('goal-overlay');
   document.getElementById('g-name').focus();
 }
+
+/* Привычки марафона: свои — отмечены, занятые другим марафоном — заблокированы
+   (правило «1 привычка = 1 марафон»). Лимит — MARATHON_MAX_HABITS. */
+function buildMarathonHabits(g) {
+  const box = document.getElementById('goal-habit-list');
+  const mine = new Set(g?.habitIds || []);
+
+  if (!habits.length) {
+    box.innerHTML = `<p class="hint" style="margin:0">Привычек пока нет — та, что нужна цели, создастся сама.</p>`;
+    updateMarathonCount();
+    return;
+  }
+
+  box.innerHTML = habits.map(h => {
+    const taken = habitTakenBy(h.id, g?.id || null);
+    const checked = mine.has(h.id);
+    return `
+      <label class="mh-row ${taken ? 'taken' : ''}">
+        <input type="checkbox" class="mh-check" value="${h.id}"
+               ${checked ? 'checked' : ''} ${taken ? 'disabled' : ''} />
+        <span class="mh-icon">${iconOf(h.icon)}</span>
+        <span class="mh-name">${escapeHtml(h.name)}</span>
+        ${taken ? `<span class="mh-taken">в марафоне «${escapeHtml(taken.name)}»</span>` : ''}
+      </label>`;
+  }).join('');
+
+  box.querySelectorAll('.mh-check').forEach(c =>
+    c.addEventListener('change', () => {
+      if (checkedMarathonHabits().length > MARATHON_MAX_HABITS) {
+        c.checked = false;
+        toast(`В марафоне не больше ${MARATHON_MAX_HABITS} привычек`);
+      }
+      updateMarathonCount();
+    }));
+  updateMarathonCount();
+}
+function checkedMarathonHabits() {
+  return [...document.querySelectorAll('#goal-habit-list .mh-check:checked')].map(c => c.value);
+}
+function updateMarathonCount() {
+  const el = document.getElementById('g-habits-count');
+  if (el) el.textContent = `${checkedMarathonHabits().length} / ${MARATHON_MAX_HABITS}`;
+}
+
+// привычка «под цель» — создаётся вместе с марафоном, чтобы было что выполнять
+function createGoalHabit(name, iconSel) {
+  const h = {
+    id: 'h' + Date.now(),
+    name,
+    icon: iconSel,
+    color: COLORS[0],
+    schedule: [0,1,2,3,4,5,6],
+    min: '',
+    goal: { type: 'check', target: 1, unit: '' },
+    stake: { mode: 'money', amount: 100, recipient: 'charity' },
+    createdAt: TODAY,
+    counts: {},
+    history: {}
+  };
+  habits.push(h);
+  save();
+  apiCall('POST', '/habits', h);
+  return h;
+}
+
 function saveGoal() {
   const name = document.getElementById('g-name').value.trim();
   if (!name) { alert('Опиши цель'); return; }
   const iconSel = document.querySelector('#goal-icon-picker .selected')?.dataset.icon || 'svg:i-h-run';
+  const sceneSel = document.querySelector('#goal-scene-picker .selected')?.dataset.scene || SCENES[0].id;
   const deadline = document.getElementById('g-deadline').value || null;
+  const steps = Math.max(0, Math.min(999, Number(document.getElementById('g-steps').value) || 0));
+  const picked = checkedMarathonHabits();
 
   if (editingGoalId) {
     const g = goals.find(x => x.id === editingGoalId);
-    if (g) Object.assign(g, { name, icon: iconSel, deadline });
+    if (!g) return;
+    let ids = picked.slice(0, MARATHON_MAX_HABITS);
+    // марафон включили у старой цели — заводим ей привычку, если своих ещё нет
+    if (steps > 0 && !ids.length) {
+      ids = [createGoalHabit(name, iconSel).id];
+    }
+    // startedAt ставим один раз: прошлые отметки марафон не «дарит»
+    Object.assign(g, {
+      name, icon: iconSel, deadline, steps, scene: sceneSel,
+      habitIds: steps > 0 ? ids : [],
+      startedAt: g.startedAt || (steps > 0 ? TODAY : null)
+    });
   } else {
-    goals.push({ id: 'g' + Date.now(), name, icon: iconSel, deadline, progress: 0 });
+    const g = {
+      id: 'g' + Date.now(), name, icon: iconSel, deadline, progress: 0,
+      steps, scene: sceneSel, habitIds: [], startedAt: steps > 0 ? TODAY : null
+    };
+    if (steps > 0) {
+      // привычка под саму цель + вручную добавленные, но не больше лимита
+      const own = createGoalHabit(name, iconSel);
+      g.habitIds = [own.id, ...picked].slice(0, MARATHON_MAX_HABITS);
+    }
+    goals.push(g);
   }
+
   saveJson(GOALS_KEY, goals);
   closeSheet('goal-overlay');
   render();
+  if (steps > 0 && !editingGoalId) {
+    toast(`Марафон запущен: ${name}. Привычка создана — вперёд! 🏃`);
+  }
 }
 
 /* награды */
@@ -1714,6 +2039,25 @@ function buildIconPicker(containerId, selectedIcon) {
     ip.appendChild(b);
   });
 }
+// пикер сцен путника: превью неба/земли + название
+function buildScenePicker(containerId, selectedScene) {
+  const sp = document.getElementById(containerId);
+  sp.innerHTML = '';
+  SCENES.forEach(sc => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'scene-pick' + (sc.id === selectedScene ? ' selected' : '');
+    b.dataset.scene = sc.id;
+    b.setAttribute('aria-label', 'Сцена: ' + sc.name);
+    b.innerHTML = `
+      <span class="sp-art" style="background:linear-gradient(180deg, ${sc.sky[0]}, ${sc.sky[1]} 55%, ${sc.sky[2]})">
+        <span class="sp-ground" style="background:${sc.ground}"></span>
+      </span>
+      <span class="sp-name">${escapeHtml(sc.name)}</span>`;
+    b.addEventListener('click', () => selectIn(sp, b));
+    sp.appendChild(b);
+  });
+}
 function buildColorPicker(containerId, selectedColor) {
   const cp = document.getElementById(containerId);
   cp.innerHTML = '';
@@ -1926,15 +2270,48 @@ function submitHabit() {
 }
 
 /* ---------- ИТОГ ДНЯ (СИМУЛЯЦИЯ, вручную) ---------- */
+/* итог дня по марафонам: сколько шагов сделано сегодня и что стоит на кону.
+   Пропуск бьёт не только рублём — путник сегодня не сдвинется с места. */
+function marathonSummaryHtml() {
+  const running = goals.filter(g => isMarathon(g) && goalPct(g) < 100);
+  if (!running.length) return '';
+
+  const rows = running.map(g => {
+    const total = g.steps;
+    const done = Math.min(stepsDone(g), total);
+    const scheduled = marathonHabits(g).filter(isScheduledToday);
+    const madeToday = scheduled.filter(isDoneToday).length;
+    const pending = scheduled.length - madeToday;
+    const streak = marathonStreak(g);
+
+    const status = pending > 0
+      ? `<b style="color:var(--danger)">путник стоит: ${pending} ${pending === 1 ? 'привычка' : 'привычки'} не закрыта</b>`
+      : `<b style="color:var(--primary)">+${madeToday} ${madeToday === 1 ? 'шаг' : 'шага'} сегодня</b>`;
+
+    return `
+      <div class="summary-row">
+        <span class="big">${iconOf(g.icon)}</span>
+        <div>
+          <div>${escapeHtml(g.name)}</div>
+          ${status}
+          <div class="ledger-day">${done} / ${total} шагов${streak ? ` · серия ${streak} дн.` : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `<h3 class="section-title" style="margin-top:18px">Марафон</h3>${rows}`;
+}
+
 function showDaySummary() {
   const todays = habits.filter(isScheduledToday);
   const notDone = todays.filter(h => !isDoneToday(h));
   const body = document.getElementById('summary-body');
 
   if (habits.length === 0) {
-    body.innerHTML = `<div class="summary-ok">Сначала добавь привычки 🌱</div>`;
+    body.innerHTML = `<div class="summary-ok">Сначала добавь привычки 🌱</div>` + marathonSummaryHtml();
   } else if (notDone.length === 0) {
-    body.innerHTML = `<div class="summary-ok">Все привычки выполнены!<br/>Никаких штрафов. 🎉</div>`;
+    body.innerHTML = `<div class="summary-ok">Все привычки выполнены!<br/>Никаких штрафов. 🎉</div>`
+      + marathonSummaryHtml();
   } else {
     let charity = 0, creators = 0;
     const apps = new Set();
@@ -1964,7 +2341,7 @@ function showDaySummary() {
         <div><div>Заблокируются приложения</div>
         <b>${[...apps].map(escapeHtml).join(', ')}</b></div></div>`;
     }
-    body.innerHTML = html;
+    body.innerHTML = html + marathonSummaryHtml();
   }
   openSheet('summary-overlay');
 }

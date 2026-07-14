@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0C1422" />
   <title>disbit — привычки со штрафом</title>
   <link rel="manifest" href="manifest.json" />
@@ -85,13 +85,13 @@
     <!-- ================= ЭКРАН: СЕГОДНЯ ================= -->
     <main class="screen active" id="screen-today">
 
-      <h1 class="screen-title">Сегодня</h1>
+      <h1 class="screen-title">Главная</h1>
 
       <!-- баннер доступной награды -->
       <div id="reward-banner" hidden></div>
 
-      <!-- полоска первой большой цели -->
-      <div id="goal-strip" hidden></div>
+      <!-- промо марафона: новичок видит фичу сразу, не раскапывая настройки -->
+      <div id="marathon-promo" hidden></div>
 
       <div class="week-strip" id="week-strip"></div>
 
@@ -126,6 +126,20 @@
         <button class="btn-primary empty-cta" id="btn-empty-add">Создать привычку</button>
       </div>
 
+      <!-- большие цели (переехали из календаря) -->
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
+        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные привычки.</p>
+        <div id="goal-list"></div>
+        <button class="row-btn" id="btn-goal-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
+        </button>
+      </section>
+
+      <!-- марафон: путник идёт к цели, 1 выполненная привычка = 1 шаг -->
+      <div id="walker" hidden></div>
+
+      <!-- итог дня — в самом низу: это финальное действие экрана -->
       <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
     </main>
 
@@ -157,16 +171,6 @@
       </div>
 
       <section class="card" id="cal-month-stats"></section>
-
-      <!-- большие цели (переехали из профиля) -->
-      <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
-        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные привычки.</p>
-        <div id="goal-list"></div>
-        <button class="row-btn" id="btn-goal-add">
-          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
-        </button>
-      </section>
 
       <!-- привычки на будущее (переехали из профиля) -->
       <section class="card">
@@ -350,7 +354,7 @@
     <nav class="dock" id="dock" aria-label="Основная навигация">
       <button class="dock-item nav-item active" data-screen="today">
         <span class="di-icon"><svg class="ic"><use href="#i-home"/></svg></span>
-        <span class="di-label">Сегодня</span>
+        <span class="di-label">Главная</span>
       </button>
       <button class="dock-item nav-item" data-screen="calendar">
         <span class="di-icon"><svg class="ic"><use href="#i-calendar"/></svg></span>
@@ -492,6 +496,27 @@
 
       <label class="field-label" for="g-deadline">Срок (необязательно)</label>
       <input class="field-input" id="g-deadline" type="date" />
+
+      <label class="field-label" for="g-steps">
+        Шагов до финиша
+        <span class="days-count" id="g-steps-hint">1 шаг = 1 привычка</span>
+      </label>
+      <input class="field-input small" id="g-steps" type="number" min="0" max="999" step="1" placeholder="30" />
+      <p class="hint">Путник идёт к цели: каждая выполненная привычка — шаг вперёд.
+        Поставь 0, чтобы вести прогресс вручную, без путника.</p>
+
+      <span class="field-label">Сцена</span>
+      <div class="scene-picker" id="goal-scene-picker"></div>
+
+      <span class="field-label">
+        Привычки марафона
+        <span class="days-count" id="g-habits-count">0 / 5</span>
+      </span>
+      <div id="goal-habit-list"></div>
+      <p class="hint" id="g-habits-hint">
+        Привычка с названием цели создастся сама. Можно добавить ещё — до 5 всего.
+        Одна привычка участвует только в одном марафоне.
+      </p>
 
       <div class="sheet-actions">
         <button class="btn-ghost" id="g-cancel">Отмена</button>
