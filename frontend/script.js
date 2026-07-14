@@ -593,17 +593,31 @@ function renderMarathonPromo() {
 /* 1 выполненная привычка = 1 шаг. Позицию считаем из истории отметок, а не
    инкрементом по нажатию: снял отметку — путник честно отступает назад,
    рассинхрон невозможен. Финал зависит от сцены: лента или пьедестал. */
+/* КОНТРАКТ СЦЕНЫ — по нему добавляются остальные фоны (марафон, джунгли,
+   заплыв, Луна, гора, Антарктика), чтобы они были одной системой, а не
+   набором разных картинок:
+   • sky[3] — градиент неба сверху вниз, приглушённый. Сцена НЕ должна спорить
+     с акцентным цветом интерфейса: яркий цвет в приложении один — акцент
+     действий, а фон марафона живёт на приглушённых тонах.
+   • far / mid — два слоя рельефа: дальний темнее и холоднее, ближний светлее.
+     Глубина делается контрастом слоёв, а не яркостью.
+   • ground — полоса земли на y=104, по ней идёт путник. Всегда самый светлый
+     из слоёв рельефа: фигурка должна читаться на нём при любом размере.
+   • sun — одно тёплое пятно света. Не более одного яркого объекта на сцену.
+   • gear — экипировка фигурки под сцену (шляпа, трость, шлем…).
+   • finish — 'ribbon' (устал, отдышался, радуется) для дистанций-забегов
+     или 'podium' (1 место, медаль, салюты) для вершин и покорений. */
 const SCENES = [
   {
     id: 'desert',
     name: 'Пустыня',
-    finish: 'ribbon',                              // 'ribbon' | 'podium'
+    finish: 'ribbon',
     sky: ['#16203A', '#43354F', '#8E6A55'],        // приглушённые сумерки — не режет глаза
     sun: '#D99A57',
     far: '#33304A',
     mid: '#4B4057',
     ground: '#6A5443',
-    gear: 'hat'                                    // экипировка под сцену
+    gear: 'hat'
   }
 ];
 function sceneOf(g) { return SCENES.find(s => s.id === g?.scene) || SCENES[0]; }
@@ -727,11 +741,6 @@ function walkerSceneHtml(g, sc) {
         </g>
       </svg>
 
-      <header class="w-head">
-        <h3 class="w-goal"></h3>
-        <span class="w-flame" title="Серия — не рви её"></span>
-      </header>
-
       <div class="w-foot">
         <div class="w-bar"><div class="w-fill"></div></div>
         <div class="w-sub">
@@ -776,8 +785,13 @@ function renderWalker() {
   card.setAttribute('aria-label',
     `Путь к цели: ${g.name}, ${done} из ${total} шагов${finished ? ', дошёл' : ''}`);
 
-  card.querySelector('.w-goal').innerHTML = `${iconOf(g.icon)} ${escapeHtml(g.name)}`;
-  card.querySelector('.w-steps').textContent = finished ? 'Дошёл!' : `${done} / ${total} шагов`;
+  // 01 заголовок — максимальный приоритет, 03 цифры под сценой — тише
+  card.querySelector('.w-goal').textContent = g.name;
+  card.querySelector('.w-steps').textContent = `${done} / ${total} шагов`;
+  card.querySelector('.w-left').textContent = finished
+    ? 'Финиш'
+    : `осталось ${total - done}`;
+  card.querySelector('.w-fill').style.width = `${goalPct(g)}%`;
 
   // огонёк: серия горит — рвать жалко
   const streak = marathonStreak(g);
@@ -2273,10 +2287,10 @@ function submitHabit() {
 /* итог дня по марафонам: сколько шагов сделано сегодня и что стоит на кону.
    Пропуск бьёт не только рублём — путник сегодня не сдвинется с места. */
 function marathonSummaryHtml() {
-  const running = goals.filter(g => isMarathon(g) && goalPct(g) < 100);
-  if (!running.length) return '';
+  const list = goals.filter(isMarathon);
+  if (!list.length) return '';
 
-  const rows = running.map(g => {
+  const rows = list.map(g => {
     const total = g.steps;
     const done = Math.min(stepsDone(g), total);
     const scheduled = marathonHabits(g).filter(isScheduledToday);
@@ -2284,9 +2298,12 @@ function marathonSummaryHtml() {
     const pending = scheduled.length - madeToday;
     const streak = marathonStreak(g);
 
-    const status = pending > 0
-      ? `<b style="color:var(--danger)">путник стоит: ${pending} ${pending === 1 ? 'привычка' : 'привычки'} не закрыта</b>`
-      : `<b style="color:var(--primary)">+${madeToday} ${madeToday === 1 ? 'шаг' : 'шага'} сегодня</b>`;
+    // дошёл — хвалим; идёт с непройденными на сегодня — путник стоит; иначе — плюс шаги
+    const status = goalPct(g) >= 100
+      ? `<b style="color:var(--primary)">финиш пройден — путник дошёл 🎉</b>`
+      : pending > 0
+        ? `<b style="color:var(--danger)">путник стоит: ${pending} ${pending === 1 ? 'привычка' : 'привычки'} не закрыта</b>`
+        : `<b style="color:var(--primary)">+${madeToday} ${madeToday === 1 ? 'шаг' : 'шага'} сегодня</b>`;
 
     return `
       <div class="summary-row">

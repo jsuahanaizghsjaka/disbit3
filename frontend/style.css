@@ -1137,33 +1137,75 @@ input[type="range"].slider::-moz-range-thumb {
    шага, дальше фигурка «дышит» стоя. Всё на CSS-трансформах —
    дёшево для WebView на слабом Android.
    ============================================================ */
+/* Иерархия (сверху вниз): 01 заголовок цели — максимальный приоритет,
+   02 сцена — главный контент, во всю ширину и без рамок вокруг,
+   03 цифры — второстепенные, тише по контрасту.
+   Отступы кратны 8. Цвет экономно: акцент — только заливка прогресса
+   и живой огонёк, всё остальное нейтральное и не спорит со сценой. */
 .walker-card {
   border-radius: var(--r-lg);
-  border: 1px solid var(--line);
+  /* обрамление тише контента: рамка нейтральная, тень мягкая — по референсу
+     «контент важнее оформления». Карточка не должна конкурировать со сценой */
+  border: 1px solid var(--neutral-line);
   background: var(--surface);
   box-shadow: var(--shadow-1);
   overflow: hidden;
-  margin-bottom: var(--sp-3);
+  margin-bottom: 24px;              /* 24 — отступ между секциями (8-сетка) */
 }
-.w-scene { display: block; width: 100%; height: 132px; }
-.w-meta {
+
+/* 01 — заголовок: максимальный приоритет, крупный и контрастный */
+.w-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-2);
-  padding: 10px var(--sp-3);
+  gap: 8px;
+  padding: 16px 16px 12px;
 }
 .w-goal {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 14px; font-weight: 700; color: var(--text);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: var(--text);
+  margin: 0;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.w-goal .ic { width: 16px; height: 16px; flex: none; }
+
+/* 02 — главный контент: сцена во всю ширину, максимум пространства.
+   Это визуальное «фото» экрана — ему отдаётся высота, вокруг ничего лишнего */
+.w-scene { display: block; width: 100%; height: 168px; }
+
+/* 03 — цифры под сценой: прогресс (единственный акцент) и тихие подписи */
+.w-foot { padding: 16px; }
+.w-bar {
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--neutral);
+  overflow: hidden;
+}
+.w-fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width var(--t-med) var(--ease);
+}
+.w-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
 .w-steps {
-  font-size: 13px; font-weight: 800; color: var(--text-2);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
+  font-size: 13px; font-weight: 700; color: var(--text-2);
+  font-variant-numeric: tabular-nums;
 }
-.walker-card.finished .w-steps { color: var(--primary); }
+.w-left { font-size: 13px; color: var(--text-3); }
+.walker-card.finished .w-steps,
+.walker-card.finished .w-left { color: var(--primary); font-weight: 700; }
 
 /* сцена: солнце дышит, фигурка шагает */
 .w-sun { opacity: 0.85; transform-box: fill-box; transform-origin: 50% 50%;
