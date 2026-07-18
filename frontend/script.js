@@ -608,55 +608,75 @@ function renderMarathonPromo() {
      Он задаёт форму двух слоёв и землю; путник всегда идёт по нижней полосе.
    • decor — необязательный небесный слой: 'stars' (Луна), 'snowfall' (метель),
      'canopy' (кроны джунглей). Дёшево и плавно, без тяжёлого blur.
-   • gear — экипировка фигурки: 'hat' | 'goggles' | 'helmet' | 'cane' | 'beanie' | 'hood'.
+   • gear — экипировка фигурки: 'hat' | 'goggles' | 'helmet' | 'cane' | 'axe' | 'hood'.
+   • motion — КАК путник движется (задаёт и путь, и позу):
+       'walk'   — идёт по земле слева направо (пустыня, Луна, джунгли);
+       'trudge' — идёт согнувшись, тяжело, против метели (Антарктида);
+       'swim'   — плывёт по воде к берегу справа, тело горизонтально (океан);
+       'climb'  — лезет вертикально вверх по стене к вершине (Эверест).
    • finish — как встречаем финиш:
-       'ribbon' — финишная лента (устал, отдышался, радуется): забеги, доплыл, дошёл;
-       'flag'   — водружает флаг на вершине/поверхности (Луна, Эверест) + салют;
-       'podium' — пьедестал, 1 место, медаль (оставлен в контракте, про запас). */
+       'ribbon' — финишная лента/берег (устал, отдышался, радуется);
+       'flag'   — водружает флаг на вершине/поверхности (Луна, Эверест) + салют. */
 const SCENES = [
   {
     id: 'desert',
     name: 'Пустыня',
-    finish: 'ribbon', env: 'dunes', gear: 'hat',
+    finish: 'ribbon', env: 'dunes', gear: 'hat', motion: 'walk',
     sky: ['#16203A', '#43354F', '#8E6A55'],        // приглушённые сумерки — не режет глаза
     sun: '#D99A57', far: '#33304A', mid: '#4B4057', ground: '#6A5443'
   },
   {
     id: 'ocean',
     name: 'Океан',
-    finish: 'ribbon', env: 'waves', gear: 'goggles',
+    finish: 'shore', env: 'waves', gear: 'goggles', motion: 'swim',
     sky: ['#122A3A', '#1C4A55', '#2E7A74'],        // рассветное море
-    sun: '#8FD6C4', far: '#1B5560', mid: '#247079', ground: '#C9B48A'  // ground = песок берега
+    // water — вся нижняя часть сцены (по ней плывут), ground — ТОЛЬКО песок справа.
+    // Раньше низ был залит песком, и казалось, что пловец ползёт по земле.
+    sun: '#8FD6C4', far: '#12414E', mid: '#2A8794', water: '#1C6675', ground: '#D8C79B'
   },
   {
     id: 'moon',
     name: 'Луна',
-    finish: 'flag', env: 'craters', gear: 'helmet', decor: 'stars',
+    finish: 'flag', env: 'craters', gear: 'helmet', decor: 'stars', motion: 'walk',
     sky: ['#05070F', '#0B1024', '#161B36'],        // космос: почти чёрное небо
     sun: '#5C79C4', far: '#2A2E44', mid: '#3A3F5A', ground: '#8A8FA6'  // серый реголит
   },
   {
     id: 'everest',
     name: 'Эверест',
-    finish: 'flag', env: 'peaks', gear: 'beanie', ink: '#2B3550',  // тёмная фигурка на светлом снегу
+    finish: 'summit', env: 'cliff', gear: 'axe', motion: 'climb', ink: '#2B3550',
     sky: ['#1A2C4A', '#39557E', '#8FB4D6'],        // высокогорное небо
     sun: '#EAD8B0', far: '#4A5F82', mid: '#7089A8', ground: '#E4ECF5'  // снежный гребень
   },
   {
     id: 'jungle',
     name: 'Джунгли',
-    finish: 'ribbon', env: 'jungle', gear: 'cane', decor: 'canopy',
+    finish: 'ribbon', env: 'jungle', gear: 'cane', decor: 'canopy', motion: 'walk',
+    noSun: true,                                   // в чаще солнца не видно
     sky: ['#16281C', '#274A30', '#4C7A45'],        // влажная зелень
     sun: '#C7E39A', far: '#22452A', mid: '#31603A', ground: '#5A6B3A'
   },
   {
     id: 'antarctica',
     name: 'Антарктида',
-    finish: 'ribbon', env: 'snow', gear: 'hood', decor: 'snowfall', ink: '#2B3550',  // тёмная на снегу
+    finish: 'ribbon', env: 'snow', gear: 'hood', decor: 'blizzard', motion: 'trudge', ink: '#2B3550',
     sky: ['#243447', '#3E5A6E', '#7C99A8'],        // блёклая метель
     sun: '#D6E4EC', far: '#5A7385', mid: '#8AA3B0', ground: '#DCE7EC'
   }
 ];
+// путь путника по прогрессу t∈[0,1] → {x,y}: у каждой механики свой маршрут
+function walkerPath(sc, t) {
+  switch (sc.motion) {
+    case 'swim': {
+      // плывёт по воде; у самого берега (t>0.82) выходит из воды вверх на песок
+      if (t < 0.82) return { x: 22 + 258 * t, y: 112 };
+      const k = (t - 0.82) / 0.18;
+      return { x: 234 + 42 * k, y: 112 - 15 * k };
+    }
+    case 'climb': return { x: 232, y: 104 - 58 * t };   // лезет вертикально вверх к вершине
+    default:      return { x: 26 + 246 * t, y: 104 };   // идёт по земле (walk/trudge)
+  }
+}
 function sceneOf(g) { return SCENES.find(s => s.id === g?.scene) || SCENES[0]; }
 
 /* Марафон считает ТОЛЬКО свои привычки (g.habitIds), а не все подряд.
@@ -702,33 +722,36 @@ function goalPct(g) {
   return Math.max(0, Math.min(100, g.progress || 0));
 }
 
-// фигурка путника: экипировка зависит от сцены.
-// голова/тело — те же кости, меняется только головной убор и аксессуар,
-// чтобы ходьба, дыхание и финишные позы работали для всех сцен одинаково.
+// фигурка путника: у каждой механики движения СВОЯ поза, а не просто разный
+// головной убор. Кости внутри .w-body переиспользуют классы w-arm/w-leg, чтобы
+// одна и та же анимация «шага» (класс .walking) знала, как двигать конечности
+// для конкретной позы (см. CSS: .pose-walk/.pose-swim/.pose-climb/.pose-trudge).
 function walkerFigure(sc) {
+  switch (sc.motion) {
+    case 'swim':   return swimFigure(sc);
+    case 'climb':  return climbFigure(sc);
+    case 'trudge': return trudgeFigure(sc);
+    default:       return walkFigure(sc);
+  }
+}
+
+// идёт прямо: пустыня (шляпа), Луна (шлем), джунгли (трость)
+function walkFigure(sc) {
   const g = sc.gear;
-  const helmet = g === 'helmet';                        // космонавт: шар-шлем вместо головы
+  const helmet = g === 'helmet';
   const head = helmet
     ? `<circle class="w-helmet" cx="0" cy="-25" r="6" />
        <path class="w-visor" d="M-3.5,-26.5 L3.5,-26.5" />`
     : `<circle class="w-head" cx="0" cy="-25" r="4.6" />`;
-
   const gearTop =
-    g === 'hat'    ? `<path class="w-gear" d="M-7,-27 L7,-27 M-4.5,-27 Q0,-33 4.5,-27" />` :
-    g === 'beanie' ? `<path class="w-gear-fill" d="M-5.2,-27 Q0,-34 5.2,-27 Z" /><path class="w-gear" d="M-5.6,-27 L5.6,-27" />` :
-    g === 'hood'   ? `<path class="w-gear-fill" d="M-6,-23 Q-6.5,-34 0,-34 Q6.5,-34 6,-23 Q3,-26 0,-26 Q-3,-26 -6,-23 Z" />` :
-    g === 'goggles'? `<path class="w-gear" d="M-4.4,-25.6 L4.4,-25.6" />` : '';
-
+    g === 'hat'     ? `<path class="w-gear" d="M-7,-27 L7,-27 M-4.5,-27 Q0,-33 4.5,-27" />` :
+    g === 'goggles' ? `<path class="w-gear" d="M-4.4,-25.8 L4.4,-25.8" />` : '';
   const cane = g === 'cane' ? `<path class="w-cane" d="M6,-13 L9,0" />` : '';
-  // в воде рюкзак не берут — для океана убираем
-  const pack = sc.env === 'waves' ? '' : `<path class="w-pack" d="M-2,-20 L-6,-20 L-6,-13 L-2,-13 Z" />`;
-
   return `
-    <g class="w-man">
+    <g class="w-man pose-walk">
       <g class="w-body">
-        ${head}
-        ${gearTop}
-        ${pack}
+        ${head}${gearTop}
+        <path class="w-pack" d="M-2,-20 L-6,-20 L-6,-13 L-2,-13 Z" />
         <path class="w-torso" d="M0,-20 L0,-10" />
         <path class="w-arm w-arm-b" d="M0,-18 L-5,-12" />
         <path class="w-arm w-arm-f" d="M0,-18 L5,-12" />
@@ -739,28 +762,92 @@ function walkerFigure(sc) {
     </g>`;
 }
 
+// плывёт: тело горизонтально у поверхности воды, гребёт руками, бьёт ногами
+function swimFigure(sc) {
+  return `
+    <g class="w-man pose-swim">
+      <g class="w-body">
+        <path class="w-torso" d="M-9,0 L5,-1" />
+        <circle class="w-head" cx="8" cy="-2" r="3.6" />
+        <path class="w-gear" d="M6,-3.4 L10.5,-3.6" />
+        <path class="w-arm w-arm-f" d="M2,-1 L10,-6" />
+        <path class="w-arm w-arm-b" d="M-3,-1 L-9,-5" />
+        <path class="w-leg w-leg-f" d="M-9,0 L-16,-2" />
+        <path class="w-leg w-leg-b" d="M-9,0 L-16,3" />
+      </g>
+    </g>`;
+}
+
+// лезет вертикально вверх по стене: тянется руками, упирается ногами, ледоруб
+function climbFigure(sc) {
+  return `
+    <g class="w-man pose-climb">
+      <g class="w-body">
+        <path class="w-pack" d="M-4,-19 L-8,-18 L-7,-11 L-3,-12 Z" />
+        <circle class="w-head" cx="0" cy="-22" r="4" />
+        <path class="w-gear-fill" d="M-4,-23 Q0,-29 4,-23 Z" />
+        <path class="w-torso" d="M0,-19 L0,-6" />
+        <path class="w-arm w-arm-b" d="M0,-17 L-6,-24" />
+        <path class="w-arm w-arm-f" d="M0,-17 L7,-25" />
+        <path class="w-axe" d="M7,-25 L9,-31 M6.5,-30.5 L11,-31.5" />
+        <path class="w-leg w-leg-b" d="M0,-6 L-5,0" />
+        <path class="w-leg w-leg-f" d="M0,-6 L6,-1" />
+      </g>
+    </g>`;
+}
+
+// бредёт согнувшись под тяжестью и ветром: голова и торс уведены вперёд,
+// рюкзак-груз на спине, шаг тяжёлый (лень баке в геометрию — надёжнее CSS-поворота)
+function trudgeFigure(sc) {
+  return `
+    <g class="w-man pose-trudge">
+      <g class="w-body">
+        <path class="w-pack" d="M-3,-19 L-8,-17 L-7,-10 L-2,-12 Z" />
+        <circle class="w-head" cx="4" cy="-22" r="4.4" />
+        <path class="w-gear-fill" d="M-0.5,-22 Q-1,-31 5,-30 Q10,-29 8,-22 Q5,-24 3,-23 Q1,-23 -0.5,-22 Z" />
+        <path class="w-torso" d="M3,-21 L-2,-9" />
+        <path class="w-arm w-arm-b" d="M1,-17 L-4,-12" />
+        <path class="w-arm w-arm-f" d="M1,-17 L5,-11" />
+        <path class="w-leg w-leg-b" d="M-2,-9 L-6,0" />
+        <path class="w-leg w-leg-f" d="M-2,-9 L3,0" />
+      </g>
+    </g>`;
+}
+
 // финиш сцены: лента (доплыл/дошёл), флаг (Луна, Эверест) или пьедестал.
 // Флаг «водружается» на финише — полотнище разворачивается по классу .finished.
 function walkerFinish(sc) {
+  // ВСЕ координаты финиша держим в пределах x≤299, y≥16: SVG рисуется с
+  // preserveAspectRatio="slice", и на узких мобильных карточках видимая зона
+  // по X сужается примерно до [20,300] — всё, что правее, обрезается.
+  if (sc.finish === 'summit') {
+    // флаг на вершине, куда лезет альпинист (путь climb приходит к x≈232,y≈46)
+    return `
+      <g class="w-finish w-finish-flag">
+        <path class="w-pole" d="M240,48 L240,24" />
+        <path class="w-cloth" d="M240,24 L253,28 L240,32 Z" />
+      </g>`;
+  }
   if (sc.finish === 'flag') {
     return `
       <g class="w-finish w-finish-flag">
-        <path class="w-pole" d="M298,104 L298,80" />
-        <path class="w-cloth" d="M298,80 L311,84 L298,88 Z" />
+        <path class="w-pole" d="M286,104 L286,80" />
+        <path class="w-cloth" d="M286,80 L299,84 L286,88 Z" />
       </g>`;
   }
-  if (sc.finish === 'podium') {
+  if (sc.finish === 'shore') {
+    // берег — это и есть финиш: флажок на песке правее точки выхода из воды (276,97)
     return `
       <g class="w-finish">
-        <rect x="286" y="92" width="22" height="12" rx="2" class="w-podium" />
-        <path class="w-flagline" d="M297,92 L297,82" />
+        <path class="w-post" d="M292,104 L292,86" />
+        <path class="w-flag" d="M292,86 L299,88.5 L292,91 Z" />
       </g>`;
   }
   return `
     <g class="w-finish">
-      <path class="w-post" d="M292,104 L292,78" />
-      <path class="w-ribbon" d="M292,84 L308,84" />
-      <path class="w-flag" d="M292,78 L302,81 L292,84 Z" />
+      <path class="w-post" d="M282,104 L282,78" />
+      <path class="w-ribbon" d="M282,84 L298,84" />
+      <path class="w-flag" d="M282,78 L292,81 L282,84 Z" />
     </g>`;
 }
 
@@ -770,16 +857,20 @@ function walkerTerrain(sc) {
   const { far, mid, ground, env } = sc;
   const groundRect = `<rect y="104" width="320" height="28" fill="${ground}" />`;
   switch (env) {
-    case 'waves':      // океан: волновые полосы + песчаный берег справа
+    case 'waves': {   // океан: вся сцена — ВОДА, песок только справа = берег-финиш
+      const water = sc.water || mid;
       return `
-        <path fill="${far}" d="M0,96 Q40,90 80,95 T160,95 T240,95 T320,95 L320,132 L0,132 Z"/>
-        <path fill="${mid}" d="M0,104 Q40,98 80,103 T160,103 T240,103 T320,103 L320,132 L0,132 Z"/>
-        ${groundRect}
-        <path fill="${ground}" d="M244,104 Q286,94 320,99 L320,104 Z"/>
+        <path fill="${far}" d="M0,92 Q40,86 80,91 T160,91 T240,91 T320,91 L320,132 L0,132 Z"/>
+        <rect y="99" width="320" height="33" fill="${water}"/>
+        <path fill="${mid}" opacity="0.55" d="M0,107 Q40,101 80,106 T160,106 T240,106 T320,106 L320,132 L0,132 Z"/>
+        <!-- берег: только правая часть, к нему и плывёт -->
+        <path fill="${ground}" d="M236,132 L236,107 Q274,96 320,101 L320,132 Z"/>
         <g class="w-waves">
-          <path d="M22,113 q6,-3 12,0 t12,0"/><path d="M116,119 q6,-3 12,0 t12,0"/>
-          <path d="M60,125 q6,-3 12,0 t12,0"/><path d="M170,115 q6,-3 12,0 t12,0"/>
+          <path d="M22,113 q6,-3 12,0 t12,0"/><path d="M112,119 q6,-3 12,0 t12,0"/>
+          <path d="M56,125 q6,-3 12,0 t12,0"/><path d="M166,115 q6,-3 12,0 t12,0"/>
+          <path d="M86,105 q6,-3 12,0 t12,0"/><path d="M188,127 q6,-3 12,0 t12,0"/>
         </g>`;
+    }
     case 'craters':    // Луна: серый реголит + кратеры-эллипсы
       return `
         <path fill="${far}" d="M0,98 Q80,90 160,97 Q240,104 320,96 L320,132 L0,132 Z"/>
@@ -789,19 +880,48 @@ function walkerTerrain(sc) {
           <ellipse cx="64" cy="118" rx="13" ry="3.6"/><ellipse cx="150" cy="124" rx="9" ry="2.6"/>
           <ellipse cx="214" cy="115" rx="15" ry="4"/><ellipse cx="108" cy="112" rx="6" ry="2"/>
         </g>`;
-    case 'peaks':      // Эверест: острые пики
+    case 'cliff':      // Эверест: ОГРОМНЫЙ массив во всю карточку, лезут по его стене
       return `
-        <path fill="${far}" d="M0,100 L40,68 L82,96 L132,58 L182,98 L242,64 L300,96 L320,86 L320,132 L0,132 Z"/>
-        <path fill="${mid}" d="M0,110 L60,82 L112,108 L172,78 L232,108 L292,86 L320,104 L320,132 L0,132 Z"/>
-        ${groundRect}`;
-    case 'jungle':     // джунгли: густые холмы + пара папоротников у земли
-      return `
-        <path fill="${far}" d="M0,94 Q50,80 100,92 Q160,104 220,90 Q280,80 320,92 L320,132 L0,132 Z"/>
-        <path fill="${mid}" d="M0,106 Q60,96 120,104 Q190,112 250,100 Q290,94 320,102 L320,132 L0,132 Z"/>
         ${groundRect}
+        <!-- дальний хребет: крупные пики на всю ширину -->
+        <path fill="${far}" d="M0,132 L0,84 L38,34 L76,80 L118,26 L166,84 L206,44 L258,86 L300,30 L320,64 L320,132 Z"/>
+        <!-- главная гора: вершина (232,44), склоны уходят за края карточки -->
+        <path fill="${mid}" d="M40,132 L104,92 L162,58 L200,34 L232,20 L268,48 L300,84 L320,104 L320,132 Z"/>
+        <!-- ледяная вертикаль — маршрут восхождения (x≈232), светлее массива -->
+        <path fill="rgba(255,255,255,0.16)" d="M212,132 L212,50 L232,26 L252,52 L252,132 Z"/>
+        <g stroke="rgba(255,255,255,0.28)" stroke-width="1" fill="none">
+          <path d="M222,126 L225,96 L221,64"/><path d="M243,128 L240,98 L245,66"/>
+        </g>`;
+    case 'jungle':     // джунгли: густая чаща — стволы, кроны, листья, лианы, без пустот
+      return `
+        <path fill="${far}" d="M0,86 Q50,68 100,84 Q160,100 220,82 Q280,66 320,84 L320,132 L0,132 Z"/>
+        <path fill="${mid}" d="M0,104 Q60,92 120,102 Q190,112 250,98 Q290,90 320,100 L320,132 L0,132 Z"/>
+        ${groundRect}
+        <!-- дальний ярус крон: закрывает верх, чтобы не было пустого неба -->
+        <g fill="${far}" opacity="0.95">
+          <ellipse cx="20" cy="26" rx="42" ry="22"/><ellipse cx="96" cy="14" rx="46" ry="20"/>
+          <ellipse cx="176" cy="22" rx="44" ry="21"/><ellipse cx="252" cy="12" rx="42" ry="19"/>
+          <ellipse cx="312" cy="26" rx="40" ry="22"/>
+        </g>
+        <!-- стволы деревьев: слева, справа и в глубине -->
+        <g stroke="${mid}" stroke-width="5" stroke-linecap="round" fill="none">
+          <path d="M24,104 L22,46"/><path d="M304,104 L306,44"/><path d="M62,104 L60,66"/>
+          <path d="M268,104 L270,62"/><path d="M124,102 L123,74"/><path d="M196,102 L197,72"/>
+        </g>
+        <!-- кроны на стволах и крупные листья у земли -->
         <g fill="${mid}">
-          <path d="M18,104 q-7,-15 4,-24 q6,11 -4,24 Z"/>
-          <path d="M286,104 q9,-17 -3,-26 q-8,11 3,26 Z"/>
+          <ellipse cx="22" cy="46" rx="24" ry="14"/><ellipse cx="306" cy="44" rx="26" ry="15"/>
+          <ellipse cx="60" cy="64" rx="17" ry="10"/><ellipse cx="270" cy="60" rx="18" ry="10"/>
+          <ellipse cx="123" cy="72" rx="14" ry="8"/><ellipse cx="197" cy="70" rx="15" ry="8"/>
+          <path d="M12,104 q-9,-17 4,-28 q8,13 -4,28 Z"/>
+          <path d="M294,104 q11,-19 -3,-30 q-10,13 3,30 Z"/>
+          <path d="M84,104 q-8,-14 3,-23 q7,11 -3,23 Z"/>
+          <path d="M232,104 q9,-15 -3,-24 q-8,11 3,24 Z"/>
+        </g>
+        <!-- свисающие лианы по всей ширине -->
+        <g stroke="${sc.sun}" stroke-width="1.4" fill="none" opacity="0.55" class="w-lianas">
+          <path d="M44,0 q5,22 -2,42"/><path d="M96,0 q4,24 -2,46"/><path d="M148,0 q-4,26 3,50"/>
+          <path d="M210,0 q4,20 -3,40"/><path d="M258,0 q-3,24 4,44"/><path d="M292,0 q4,18 -2,36"/>
         </g>`;
     case 'snow':       // Антарктида: пологие снежные наносы
       return `
@@ -818,7 +938,8 @@ function walkerTerrain(sc) {
 
 // небо сцены: диск света + необязательный декор (звёзды/метель/кроны)
 function walkerSky(sc) {
-  const disc = `<circle class="w-sun" cx="246" cy="60" r="13" fill="${sc.sun}"/>`;
+  // в густой чаще солнца не видно — сцена может его отключить
+  const disc = sc.noSun ? '' : `<circle class="w-sun" cx="246" cy="60" r="13" fill="${sc.sun}"/>`;
   let decor = '';
   if (sc.decor === 'stars') {
     decor = `<g class="w-stars" fill="#DCE6FF">
@@ -834,8 +955,35 @@ function walkerSky(sc) {
     decor = `<path class="w-canopy" fill="${sc.far}"
       d="M0,0 h320 v10 q-16,11 -32,0 q-16,-11 -32,0 q-16,11 -32,0 q-16,-11 -32,0
          q-16,11 -32,0 q-16,-11 -32,0 q-16,11 -32,0 q-16,-11 -32,0 q-16,11 -32,0 q-16,-11 -32,0 Z"/>`;
+  } else if (sc.decor === 'blizzard') {
+    // метель: много косого снега + штрихи ветра, снег летит через всю сцену
+    decor = `
+      <g class="w-blizz-wind" stroke="rgba(255,255,255,0.28)" stroke-width="1.4" fill="none" stroke-linecap="round">
+        <path d="M40,40 h34"/><path d="M120,64 h44"/><path d="M210,34 h38"/><path d="M170,86 h40"/><path d="M70,100 h30"/>
+      </g>
+      <g class="w-blizz" fill="rgba(255,255,255,0.85)">
+        <circle cx="30" cy="16" r="1.5"/><circle cx="90" cy="8" r="1.3"/><circle cx="150" cy="20" r="1.6"/>
+        <circle cx="210" cy="12" r="1.4"/><circle cx="266" cy="18" r="1.5"/><circle cx="60" cy="40" r="1.3"/>
+        <circle cx="120" cy="34" r="1.5"/><circle cx="190" cy="46" r="1.4"/><circle cx="250" cy="50" r="1.5"/>
+        <circle cx="24" cy="70" r="1.4"/><circle cx="160" cy="72" r="1.3"/><circle cx="288" cy="78" r="1.5"/>
+      </g>`;
   }
   return disc + decor;
+}
+
+// передний план — рисуется ПОВЕРХ путника. Для Антарктиды это пелена метели
+// и ближний снег: человека должно быть еле видно сквозь пургу.
+function walkerForeground(sc) {
+  if (sc.decor !== 'blizzard') return '';
+  return `
+    <rect class="w-haze" width="320" height="132" fill="rgba(222,236,244,0.34)"/>
+    <g class="w-blizz w-blizz-front" fill="rgba(255,255,255,0.95)">
+      <circle cx="18" cy="30" r="2"/><circle cx="74" cy="14" r="1.8"/><circle cx="132" cy="36" r="2.1"/>
+      <circle cx="188" cy="18" r="1.9"/><circle cx="244" cy="34" r="2"/><circle cx="298" cy="20" r="1.8"/>
+      <circle cx="46" cy="62" r="2.1"/><circle cx="104" cy="78" r="1.9"/><circle cx="162" cy="60" r="2"/>
+      <circle cx="220" cy="82" r="2.1"/><circle cx="276" cy="66" r="1.9"/><circle cx="10" cy="96" r="2"/>
+      <circle cx="140" cy="104" r="2.1"/><circle cx="256" cy="100" r="1.9"/>
+    </g>`;
 }
 
 // сцену строим ОДИН раз и дальше только двигаем путника: если пересоздавать
@@ -863,11 +1011,15 @@ function walkerSceneHtml(g, sc) {
         ${walkerTerrain(sc)}
 
         ${walkerFinish(sc)}
-        <g class="w-walker">${walkerFigure(sc)}</g>
+        <g class="w-walker${sc.motion === 'swim' ? ' w-swimmer' : ''}">${walkerFigure(sc)}</g>
+        ${sc.motion === 'swim'
+          ? `<g transform="translate(276,97)"><g class="w-arrived">${walkFigure(sc)}</g></g>`
+          : ''}
+        ${walkerForeground(sc)}
 
         <g class="w-confetti">
-          <circle cx="276" cy="60" r="2"/><circle cx="292" cy="52" r="2"/>
-          <circle cx="308" cy="62" r="2"/><circle cx="284" cy="46" r="1.6"/>
+          <circle cx="262" cy="60" r="2"/><circle cx="278" cy="52" r="2"/>
+          <circle cx="294" cy="62" r="2"/><circle cx="270" cy="46" r="1.6"/>
         </g>
       </svg>
 
@@ -903,14 +1055,17 @@ function renderWalker() {
   }
   box.hidden = false;
 
-  // путь: от левого края до финишного столба
-  const x = 26 + 258 * (done / total);
+  // путь зависит от механики сцены: идёт по земле, плывёт по воде или лезет вверх.
+  // Все траектории держим в видимой зоне [20,300] по X (slice-кроп на мобиле).
+  const pos = walkerPath(sc, done / total);
   const man = card.querySelector('.w-walker');
-  const prev = Number(card.dataset.x);
-  const moved = !stale && Number.isFinite(prev) && Math.abs(x - prev) > 0.5;
+  const prevX = Number(card.dataset.x), prevY = Number(card.dataset.y);
+  const moved = !stale && Number.isFinite(prevX) &&
+    (Math.abs(pos.x - prevX) > 0.5 || Math.abs(pos.y - prevY) > 0.5);
 
-  card.dataset.x = String(x);
-  man.style.transform = `translate(${x}px, 104px)`;
+  card.dataset.x = String(pos.x);
+  card.dataset.y = String(pos.y);
+  man.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
   card.classList.toggle('finished', finished);
   card.setAttribute('aria-label',
     `Путь к цели: ${g.name}, ${done} из ${total} шагов${finished ? ', дошёл' : ''}`);
@@ -1590,7 +1745,10 @@ function openGoalSheet(id = null) {
   document.getElementById('goal-sheet-title').textContent = g ? 'Изменить цель' : 'Большая цель';
   document.getElementById('g-name').value = g?.name || '';
   document.getElementById('g-deadline').value = g?.deadline || '';
-  document.getElementById('g-steps').value = g?.steps ?? 30;
+  // новая цель — предлагаем 30 (подтолкнуть к марафону); существующая —
+  // показываем её шаги как есть (0/undefined → 0, чтобы правка не превратила
+  // старую ручную цель в марафон незаметно)
+  document.getElementById('g-steps').value = g ? (g.steps || 0) : 30;
   buildIconPicker('goal-icon-picker', g?.icon || 'svg:i-h-run');
   buildScenePicker('goal-scene-picker', g?.scene || SCENES[0].id);
   buildMarathonHabits(g);
@@ -2236,8 +2394,11 @@ function buildPickers() {
   buildIconPicker('icon-picker', HABIT_ICONS[0]);
   buildColorPicker('color-picker', COLORS[0]);
 }
+// одиночный выбор в пикере: снимаем выделение с ЛЮБОГО выбранного элемента
+// контейнера (не только .pick — иначе сцены с классом .scene-pick не сбрасывались
+// и выбиралось несколько сразу, а сохранялась всегда первая = пустыня)
 function selectIn(container, btn) {
-  container.querySelectorAll('.pick').forEach(p => p.classList.remove('selected'));
+  container.querySelectorAll('.selected').forEach(p => p.classList.remove('selected'));
   btn.classList.add('selected');
 }
 

@@ -363,42 +363,6 @@ button:disabled { cursor: default; }
 }
 .reward-banner button:active { transform: scale(0.95); }
 
-/* ---------- ПОЛОСКА БОЛЬШОЙ ЦЕЛИ НА «СЕГОДНЯ» ---------- */
-.goal-strip {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: var(--sp-2) var(--sp-3);
-  margin-bottom: var(--sp-3);
-  cursor: pointer;
-}
-.goal-strip .gs-icon { font-size: 18px; }
-.goal-strip .gs-main { flex: 1; min-width: 0; }
-.goal-strip .gs-name {
-  font-size: 12px; font-weight: 700;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.goal-strip .gs-bar {
-  height: 5px;
-  border-radius: var(--r-full);
-  background: var(--neutral-2);
-  margin-top: 5px;
-  overflow: hidden;
-}
-.goal-strip .gs-fill {
-  height: 100%;
-  border-radius: var(--r-full);
-  background: linear-gradient(90deg, var(--primary), var(--primary-hi));
-}
-.goal-strip .gs-pct {
-  font-size: 12px; font-weight: 800;
-  color: var(--primary);
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------- ПОЛОСКА НЕДЕЛИ ---------- */
 .week-strip { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
 .day {
@@ -1230,13 +1194,52 @@ input[type="range"].slider::-moz-range-thumb {
   animation: wBreathe 3.6s ease-in-out infinite; }
 @keyframes wBreathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.6px); } }
 
-/* ходьба — только пока путник переставляет ноги к новой позиции */
-.walking .w-leg-f, .walking .w-arm-b { animation: wSwingA 0.5s ease-in-out infinite alternate; }
-.walking .w-leg-b, .walking .w-arm-f { animation: wSwingB 0.5s ease-in-out infinite alternate; }
-.walking .w-body { animation: wBob 0.25s ease-in-out infinite alternate; }
+/* --- у каждой позы своя механика; активная фаза играет, пока висит .walking --- */
+/* ИДЁТ (пустыня/Луна/джунгли) */
+.pose-walk.walking .w-leg-f, .pose-walk.walking .w-arm-b { animation: wSwingA 0.5s ease-in-out infinite alternate; }
+.pose-walk.walking .w-leg-b, .pose-walk.walking .w-arm-f { animation: wSwingB 0.5s ease-in-out infinite alternate; }
+.pose-walk.walking .w-body { animation: wBob 0.25s ease-in-out infinite alternate; }
 @keyframes wSwingA { from { transform: rotate(-15deg); } to { transform: rotate(15deg); } }
 @keyframes wSwingB { from { transform: rotate(15deg); } to { transform: rotate(-15deg); } }
 @keyframes wBob { from { transform: translateY(0); } to { transform: translateY(-1px); } }
+
+/* БРЕДЁТ (Антарктида): тот же шаг, но медленнее и тяжелее; тело всё время
+   качает встречным ветром (наклон вперёд уже вшит в геометрию trudgeFigure) */
+.pose-trudge .w-body { animation: wTrudgeSway 2.4s ease-in-out infinite; }
+.pose-trudge.walking .w-leg-f, .pose-trudge.walking .w-arm-b { animation: wSwingA 0.85s ease-in-out infinite alternate; }
+.pose-trudge.walking .w-leg-b, .pose-trudge.walking .w-arm-f { animation: wSwingB 0.85s ease-in-out infinite alternate; }
+@keyframes wTrudgeSway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(2.5deg); } }
+
+/* ПЛЫВЁТ (океан): в воде гребёт и бьёт ногами ПОСТОЯННО — иначе выглядит,
+   будто он просто лежит на воде; тело качается на волне */
+.pose-swim .w-body { animation: wFloat 2.6s ease-in-out infinite; }
+.pose-swim .w-arm-f { animation: wStrokeF 0.9s ease-in-out infinite; }
+.pose-swim .w-arm-b { animation: wStrokeB 0.9s ease-in-out infinite; }
+.pose-swim .w-leg-f { animation: wKick 0.42s ease-in-out infinite alternate; }
+.pose-swim .w-leg-b { animation: wKick 0.42s ease-in-out infinite alternate-reverse; }
+/* гребёт быстрее в момент шага */
+.pose-swim.walking .w-arm-f, .pose-swim.walking .w-arm-b { animation-duration: 0.55s; }
+.pose-swim.walking .w-leg-f, .pose-swim.walking .w-leg-b { animation-duration: 0.26s; }
+
+/* дошёл до берега — пловец выходит из воды: сам пловец гаснет,
+   на песке поднимается стоящая фигурка */
+.w-arrived { opacity: 0; transform: translateY(8px);
+  transition: opacity var(--t-med) var(--ease), transform var(--t-med) var(--ease); }
+.finished .w-arrived { opacity: 1; transform: translateY(0); }
+.w-swimmer { transition: opacity var(--t-med) var(--ease); }
+.finished .w-swimmer { opacity: 0; }
+@keyframes wFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+@keyframes wStrokeF { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-38deg); } }
+@keyframes wStrokeB { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(38deg); } }
+@keyframes wKick { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+
+/* ЛЕЗЕТ (Эверест): цепляется за стену всегда, попеременно тянется в движении */
+.pose-climb .w-body { animation: wCling 1.9s ease-in-out infinite; }
+.pose-climb.walking .w-arm-f, .pose-climb.walking .w-leg-b { animation: wReachA 0.7s ease-in-out infinite alternate; }
+.pose-climb.walking .w-arm-b, .pose-climb.walking .w-leg-f { animation: wReachB 0.7s ease-in-out infinite alternate; }
+@keyframes wCling { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(0.6px); } }
+@keyframes wReachA { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes wReachB { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
 
 /* финиш сцены — нейтральные метки берут цвет «чернил» сцены, акцент — красная лента */
 .w-post, .w-flagline { stroke: var(--w-ink, rgba(255,255,255,0.7)); stroke-width: 1.6; fill: none; stroke-linecap: round; }
@@ -1252,6 +1255,7 @@ input[type="range"].slider::-moz-range-thumb {
 .w-man .w-helmet { fill: var(--w-ink, #F3EDE4); fill-opacity: 0.16; stroke: var(--w-ink, #F3EDE4); stroke-width: 1.4; }
 .w-man .w-visor { stroke: #9CC2FF; stroke-width: 1.6; fill: none; }
 .w-man .w-cane { stroke: var(--w-ink, #F3EDE4); }
+.w-man .w-axe { stroke: var(--w-ink, #F3EDE4); stroke-width: 1.5; fill: none; stroke-linecap: round; }
 
 /* флаг-финиш: полотнище свёрнуто, разворачивается при .finished (водружение) */
 .w-pole { stroke: var(--w-ink, rgba(255,255,255,0.8)); stroke-width: 1.6; fill: none; stroke-linecap: round; }
@@ -1274,14 +1278,42 @@ input[type="range"].slider::-moz-range-thumb {
 @keyframes wSnow { 0% { transform: translate(0, -4px); opacity: 0; } 15% { opacity: 0.8; }
   100% { transform: translate(-8px, 120px); opacity: 0; } }
 
-/* дошёл: лента порвана, руки вверх, отдышивается и радуется */
+/* метель Антарктиды: снег летит быстро и сильно вбок + штрихи ветра */
+.w-blizz circle { transform-box: fill-box; animation: wBlizz 1.7s linear infinite; }
+.w-blizz circle:nth-child(2n) { animation-duration: 2.2s; }
+.w-blizz circle:nth-child(3n) { animation-duration: 1.3s; }
+@keyframes wBlizz { 0% { transform: translate(6px, -6px); opacity: 0; } 12% { opacity: 0.9; }
+  100% { transform: translate(-46px, 118px); opacity: 0; } }
+/* пелена пурги поверх фигуры: человека еле видно, плюс ближний снег крупнее */
+.w-haze { animation: wHaze 5s ease-in-out infinite; }
+@keyframes wHaze { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+.w-blizz-front circle { animation-duration: 1.1s; }
+.w-blizz-front circle:nth-child(2n) { animation-duration: 1.5s; }
+.w-blizz-front circle:nth-child(3n) { animation-duration: 0.9s; }
+
+.w-blizz-wind path { opacity: 0; animation: wWindStreak 1.5s linear infinite; }
+.w-blizz-wind path:nth-child(2n) { animation-duration: 2s; animation-delay: 0.4s; }
+.w-blizz-wind path:nth-child(3n) { animation-delay: 0.8s; }
+@keyframes wWindStreak { 0% { opacity: 0; transform: translateX(24px); } 30% { opacity: 0.5; }
+  100% { opacity: 0; transform: translateX(-64px); } }
+
+/* лианы джунглей чуть качаются */
+.w-lianas path { transform-box: fill-box; transform-origin: 50% 0%; animation: wSway 4.5s ease-in-out infinite; }
+.w-lianas path:nth-child(2n) { animation-duration: 5.5s; }
+@keyframes wSway { 0%, 100% { transform: rotate(-1.6deg); } 50% { transform: rotate(1.6deg); } }
+
+/* дошёл: лента порвана, отдышивается и радуется. Руки вверх — только у ходячих
+   поз (у пловца/альпиниста своя геометрия рук, чтобы не выворачивало) */
 .finished .w-ribbon { opacity: 0.25; }
-.finished .w-arm-f { transform: rotate(-125deg); }
-.finished .w-arm-b { transform: rotate(125deg); }
+.pose-walk.finished .w-arm-f, .pose-trudge.finished .w-arm-f { transform: rotate(-125deg); }
+.pose-walk.finished .w-arm-b, .pose-trudge.finished .w-arm-b { transform: rotate(125deg); }
+.pose-swim.finished .w-arm-f, .pose-climb.finished .w-arm-f { transform: rotate(-45deg); }
 .finished .w-body { animation: wBreathe 1.1s ease-in-out infinite; }  /* дышит часто — устал */
 
 .w-confetti circle { fill: var(--primary); opacity: 0; transform-box: fill-box; }
-.finished .w-confetti circle { animation: wConfetti 2.6s ease-out infinite; }
+/* салют играет несколько раз при появлении финиша и затихает — не жжём батарею
+   бесконечной анимацией, пока дошедшая карточка висит на экране */
+.finished .w-confetti circle { animation: wConfetti 2.6s ease-out 4; }
 .finished .w-confetti circle:nth-child(2) { animation-delay: 0.4s; fill: #FBBF24; }
 .finished .w-confetti circle:nth-child(3) { animation-delay: 0.8s; fill: #4ADE80; }
 .finished .w-confetti circle:nth-child(4) { animation-delay: 1.2s; fill: #F472B6; }
@@ -1305,8 +1337,27 @@ input[type="range"].slider::-moz-range-thumb {
 }
 .sp-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 13px; }
 .sp-name { display: block; margin-top: 5px; font-size: 11px; font-weight: 700; color: var(--text-2); }
+/* выбор сцены — одиночный: невыбранные приглушены, выбранная с галочкой и
+   рамкой, чтобы было однозначно видно, что выбран ровно один фон */
+.scene-pick .sp-art { opacity: 0.6; transition: opacity var(--t-fast); }
+.scene-pick.selected .sp-art { opacity: 1; }
 .scene-pick.selected { border-color: var(--primary); }
 .scene-pick.selected .sp-name { color: var(--primary); }
+.scene-pick.selected .sp-art::after {
+  content: "";
+  position: absolute; top: 4px; right: 4px;
+  width: 16px; height: 16px; border-radius: var(--r-full);
+  background: var(--primary);
+  /* галочка через маску-неглиф: рисуем ✓ градиентом-символом */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.scene-pick.selected .sp-art::before {
+  content: "✓";
+  position: absolute; top: 4px; right: 4px;
+  width: 16px; height: 16px; z-index: 1;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; color: #fff;
+}
 
 /* огонёк серии на карточке марафона */
 .w-right { display: flex; align-items: center; gap: 10px; }
