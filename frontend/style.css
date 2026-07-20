@@ -4,6 +4,13 @@
    [data-theme]. Семантические токены, glassmorphism, 4/8px ритм.
    ============================================================ */
 
+/* Атрибут hidden обязан побеждать display из классов. Без этого правила
+   любой блок, у которого в CSS задан display (например .stake-money или
+   .count-fields — там flex), НЕ скрывается через el.hidden = true:
+   селектор класса перебивает браузерное [hidden] { display: none }.
+   Из-за этого при выборе «Блокировки» продолжало висеть поле «₽ за пропуск». */
+[hidden] { display: none !important; }
+
 :root {
   /* ТЕМА ПО УМОЛЧАНИЮ: BLUE (референс, вариант 2) */
   --tint: 91, 141, 255;            /* rgb основного цвета для стекла */
@@ -544,16 +551,27 @@ button:disabled { cursor: default; }
   100% { transform: scale(1); }
 }
 
-.habit-del {
-  width: 44px; height: 44px;
-  border: none; background: transparent;
+/* ---------- ЗАКРЕПЛЕНИЕ (порт PinnedList) ----------
+   Кнопка-булавка вместо прежнего крестика: удаление уехало в меню внутри
+   карточки, а наверх вынесено то, чем пользуются часто. */
+.habit-pin {
+  width: 44px; height: 44px; flex: none;      /* тач-таргет */
+  border: none;
+  border-radius: var(--r-full);
+  background: rgba(var(--tint), 0.10);
   color: var(--text-3);
   display: flex; align-items: center; justify-content: center;
-  border-radius: var(--r-sm);
-  transition: color var(--t-fast), background var(--t-fast);
+  transition: color var(--t-fast), background var(--t-fast), transform var(--t-fast);
 }
-.habit-del .ic { width: 17px; height: 17px; }
-.habit-del:hover { color: var(--bad); background: rgba(248, 113, 113, 0.08); }
+.habit-pin .ic { width: 17px; height: 17px; transition: transform 200ms var(--ease); }
+.habit-pin:hover { color: var(--text-2); background: rgba(var(--tint), 0.18); }
+.habit-pin:active { transform: scale(0.9); }
+/* закреплена: кнопка залита акцентом, булавка наклонена — как в оригинале */
+.habit-pin.on { background: var(--primary); color: var(--on-primary); }
+.habit-pin.on .ic { transform: rotate(-45deg); }
+
+/* сама карточка в закреплённом состоянии — чуть подсвечена */
+.habit.pinned { border-color: rgba(var(--tint), 0.38); background: var(--surface-2); }
 
 /* ---------- ПУСТОЕ СОСТОЯНИЕ ---------- */
 .empty { text-align: center; color: var(--text-2); padding: var(--sp-5) var(--sp-3); }
@@ -901,30 +919,69 @@ button:disabled { cursor: default; }
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* ---------- СЛАЙДЕР (тот же язык, что у переключателя AppleSwitch) ----------
+   Стеклянный трек, белая «капля» с глубокой тенью, заполнение до значения.
+   При перетаскивании капля растягивается — как у переключателя.
+   Заполнение рисуем фоном по переменной --val, её задаёт JS. */
 input[type="range"].slider {
   flex: 1;
   appearance: none;
   -webkit-appearance: none;
-  height: 8px;
-  border-radius: var(--r-full);
-  background: var(--neutral-2);
+  height: 30px;
+  background: transparent;          /* фон живёт на треке */
   outline-offset: 4px;
   cursor: pointer;
+  touch-action: pan-y;
+  --val: 50%;
+}
+input[type="range"].slider::-webkit-slider-runnable-track {
+  box-sizing: border-box;
+  height: 30px;
+  border-radius: var(--r-full);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(var(--primary), var(--primary)) 0 / var(--val) 100% no-repeat,
+    var(--neutral-2);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18), inset 0 -1px 2px rgba(0, 0, 0, 0.12);
+}
+input[type="range"].slider::-moz-range-track {
+  box-sizing: border-box;
+  height: 30px;
+  border-radius: var(--r-full);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(var(--primary), var(--primary)) 0 / var(--val) 100% no-repeat,
+    var(--neutral-2);
 }
 input[type="range"].slider::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  width: 24px; height: 24px;
+  width: 32px; height: 24px;
+  margin-top: 2px;                  /* центр в треке 30px с учётом рамки */
   border-radius: var(--r-full);
-  background: var(--primary);
-  border: 3px solid var(--bg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  background: #fff;
+  border: none;
+  box-shadow:
+    0 3px 11px rgba(0, 0, 0, 0.24),
+    0 1px 1px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  transition: width 200ms var(--ease);
 }
 input[type="range"].slider::-moz-range-thumb {
-  width: 20px; height: 20px;
+  width: 32px; height: 24px;
   border-radius: var(--r-full);
-  background: var(--primary);
-  border: 3px solid var(--bg);
+  background: #fff;
+  border: none;
+  box-shadow: 0 3px 11px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  transition: width 200ms var(--ease);
+}
+/* тянут — капля растягивается */
+input[type="range"].slider.grabbing::-webkit-slider-thumb { width: 42px; }
+input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
+
+@media (prefers-reduced-motion: reduce) {
+  input[type="range"].slider::-webkit-slider-thumb { transition-duration: 1ms; }
+  input[type="range"].slider::-moz-range-thumb { transition-duration: 1ms; }
 }
 .field-textarea {
   width: 100%;
@@ -1041,30 +1098,77 @@ input[type="range"].slider::-moz-range-thumb {
 }
 .setting-row:last-of-type { border-bottom: none; }
 
-.switch {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 48px; height: 28px;
-  border-radius: var(--r-full);
-  background: var(--neutral-2);
-  border: 1px solid var(--neutral-line);
+/* ---------- ПЕРЕКЛЮЧАТЕЛЬ (порт AppleSwitch) ----------
+   Ползунок можно не только нажать, но и ПОТЯНУТЬ пальцем: на отпускании
+   доводится в ближайшее положение. При нажатии «капля» растягивается.
+   Пружину motion/react заменяет доводчик на cubic-bezier с лёгким перелётом.
+   Метрики оригинала (размер md): трек 62×30, ползунок 32×24, отступ 4 → ход 22. */
+.aswitch {
   position: relative;
-  cursor: pointer;
-  transition: background var(--t-med);
-  flex-shrink: 0;
-}
-.switch::before {
-  content: '';
-  position: absolute;
-  top: 3px; left: 3px;
-  width: 20px; height: 20px;
+  flex: none;
+  width: 62px; height: 30px;
+  padding: 0;
   border-radius: var(--r-full);
-  background: var(--text-2);
-  transition: transform var(--t-med) var(--ease), background var(--t-med);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  touch-action: pan-y;              /* вертикальный скролл страницы не ломаем */
+  --as-x: 0px;                      /* положение ползунка, задаёт JS */
+  --as-extra: 0px;                  /* растяжение «капли» при нажатии */
 }
-.switch:checked { background: var(--primary); border-color: var(--primary); }
-.switch:checked::before { transform: translateX(20px); background: var(--on-primary); }
-.switch:disabled { opacity: 0.4; cursor: default; }
+.aswitch:disabled { opacity: 0.45; cursor: not-allowed; }
+.aswitch:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+
+.as-track { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
+.as-track::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--neutral-2);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18), inset 0 -1px 2px rgba(0, 0, 0, 0.12);
+}
+.as-fill {
+  position: absolute; inset: 0;
+  background: var(--primary);
+  opacity: 0;
+  transition: opacity var(--t-med) var(--ease);
+}
+.aswitch[aria-checked="true"] .as-fill { opacity: 1; }
+
+/* свечение под треком во включённом состоянии */
+.as-glow {
+  position: absolute; inset: -4px;
+  border-radius: inherit;
+  background: rgba(var(--tint), 0.5);
+  filter: blur(8px);
+  opacity: 0; transform: scale(0.85);
+  pointer-events: none;
+  transition: opacity var(--t-med) var(--ease), transform var(--t-med) var(--ease);
+}
+.aswitch[aria-checked="true"] .as-glow { opacity: 0.45; transform: scale(1); }
+
+.as-thumb {
+  position: absolute; top: 50%; left: 4px;
+  width: calc(32px + var(--as-extra));
+  height: calc(24px + var(--as-extra) * 0.3);
+  border-radius: var(--r-full);
+  background: #fff;
+  box-shadow:
+    0 3px 11px rgba(0, 0, 0, 0.24),
+    0 1px 1px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  /* растягивается в обе стороны от центра, поэтому сдвиг на половину прибавки */
+  transform: translate(calc(var(--as-x) - var(--as-extra) / 2), -50%);
+  transition:
+    transform 340ms cubic-bezier(0.34, 1.4, 0.5, 1),
+    width 200ms var(--ease), height 200ms var(--ease);
+}
+/* пока тянут пальцем — ползунок идёт ровно за пальцем, без доводчика */
+.aswitch.dragging .as-thumb { transition: width 200ms var(--ease), height 200ms var(--ease); }
+.aswitch.grabbing { --as-extra: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .as-thumb, .as-fill, .as-glow { transition-duration: 1ms; }
+}
 
 .row-btn {
   width: 100%;
@@ -1323,6 +1427,11 @@ input[type="range"].slider::-moz-range-thumb {
   100% { opacity: 0; transform: translateY(30px); }
 }
 
+/* воздух между списком привычек и блоком больших целей — это разные смысловые
+   секции, граница должна читаться сразу (шаг сетки 8).
+   У .habit-list нижнего margin нет (flex + gap), поэтому весь зазор задаётся здесь. */
+#goals-card { margin-top: 40px; }
+
 /* пикер сцен в шторке цели */
 .scene-picker { display: flex; flex-wrap: wrap; gap: 10px; }
 .scene-pick {
@@ -1331,11 +1440,15 @@ input[type="range"].slider::-moz-range-thumb {
   transition: border-color var(--t-fast), transform var(--t-fast);
 }
 .scene-pick:active { transform: scale(0.95); }
+/* .sp-art остаётся span-обёрткой: галочка выбора живёт на ::before/::after,
+   а у <svg> псевдоэлементов нет — поэтому сцена рисуется ВНУТРИ обёртки */
 .sp-art {
-  display: block; height: 46px; border-radius: 10px;
+  display: block; height: 54px; border-radius: 10px;
   position: relative; overflow: hidden;
 }
-.sp-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 13px; }
+.sp-svg { display: block; width: 100%; height: 100%; }
+/* превью — стоп-кадр: анимации в пикере не нужны и зря греют слабые телефоны */
+.sp-art * { animation: none !important; transition: none !important; }
 .sp-name { display: block; margin-top: 5px; font-size: 11px; font-weight: 700; color: var(--text-2); }
 /* выбор сцены — одиночный: невыбранные приглушены, выбранная с галочкой и
    рамкой, чтобы было однозначно видно, что выбран ровно один фон */
@@ -1597,6 +1710,106 @@ input[type="range"].slider::-moz-range-thumb {
   border-radius: var(--r-full);
 }
 
+/* ---------- СТАТИСТИКА ПРИВЫЧКИ (шторка) ---------- */
+.hstat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.hstat-head .sheet-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hstat-menu-wrap { position: relative; flex: none; }
+.hstat-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 5;
+  min-width: 200px; padding: 6px;
+  border-radius: var(--r-md);
+  background: var(--sheet-bg);
+  border: 1px solid var(--neutral-line);
+  box-shadow: var(--shadow-2);
+}
+.hstat-mi {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 44px; padding: 8px 10px;
+  border: none; background: none; color: var(--text);
+  font-size: 14px; font-weight: 600; text-align: left;
+  border-radius: 10px;
+}
+.hstat-mi:hover { background: var(--neutral); }
+.hstat-mi.danger { color: var(--danger); }
+
+.hstat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+.hstat-tile {
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.ht-num { font-size: 22px; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
+.ht-lbl { font-size: 12px; color: var(--text-3); }
+
+/* мини-heatmap привычки: 12 недель по 7 дней */
+.hstat-hm {
+  display: grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column;
+  gap: 3px; margin-bottom: 16px;
+}
+.hstat-hm .hm-cell { width: 100%; aspect-ratio: 1; border-radius: 3px; background: var(--neutral); }
+.hstat-hm .hm-cell.l4 { background: var(--primary); }
+.hstat-hm .hm-cell.l2 { background: rgba(var(--tint), 0.45); }
+.hstat-hm .hm-cell.miss { background: rgba(240, 102, 106, 0.35); }
+.hstat-hm .hm-cell.future { background: transparent; }
+.hstat-rows .ledger-row:last-child { border-bottom: none; }
+
+/* ---------- АНИМИРОВАННЫЙ СЧЁТЧИК ----------
+   Порт AnimateCount (motion/react): старое число уходит вверх с размытием,
+   новое приходит снизу. Параметры один в один с оригиналом. */
+.ac {
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.ac > * { grid-area: 1 / 1; }
+.ac-out { animation: acOut 450ms cubic-bezier(0.23, 0.88, 0.26, 0.92) forwards; }
+.ac-in  { animation: acIn  450ms cubic-bezier(0.23, 0.88, 0.26, 0.92) forwards; }
+@keyframes acOut {
+  from { opacity: 1; filter: blur(0);   transform: translateY(0); }
+  to   { opacity: 0; filter: blur(2px); transform: translateY(-12px); }
+}
+@keyframes acIn {
+  from { opacity: 0; filter: blur(2px); transform: translateY(8px); }
+  to   { opacity: 1; filter: blur(0);   transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ac-out, .ac-in { animation: none; }
+  .ac-out { opacity: 0; }
+}
+
+/* ---------- КАРТОЧКА «СКОЛЬКО ДНЕЙ В НЕДЕЛЮ» ---------- */
+.wt-card {
+  margin-top: 12px;
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+}
+.wt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wt-title { font-size: 14px; font-weight: 800; margin: 0 0 2px; }
+.wt-sub { font-size: 12px; color: var(--text-3); margin: 0; }
+.wt-stepper { display: flex; align-items: center; gap: 8px; flex: none; }
+.wt-step {
+  width: 44px; height: 44px; flex: none;       /* тач-таргет */
+  border-radius: var(--r-full);
+  border: 1px solid var(--neutral-line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 20px; font-weight: 700; line-height: 1;
+  display: grid; place-items: center;
+  transition: border-color var(--t-fast), transform var(--t-fast), opacity var(--t-fast);
+}
+.wt-step:active { transform: scale(0.9); }
+.wt-step:disabled { opacity: 0.35; }
+.wt-count {
+  min-width: 30px; height: 44px;
+  font-size: 22px; font-weight: 800; color: var(--primary);
+}
+.wt-card.off .wt-count { color: var(--text-3); }
+/* включён недельный режим — конкретные дни больше не важны */
+.day-picker.dimmed { opacity: 0.4; pointer-events: none; }
+
 /* ---------- МЕДАЛИ ДОСТИЖЕНИЙ ---------- */
 .medal-grid {
   display: grid;
@@ -1614,12 +1827,95 @@ input[type="range"].slider::-moz-range-thumb {
   border: 1px solid var(--neutral-line);
   text-align: center;
 }
-.medal .m-ic {
-  width: 34px; height: 34px;
+/* .m-ic — контейнер иконки достижения ВЕЗДЕ (тайл, строка, чип превью).
+   position: relative обязателен: без него абсолютная картинка .m-art
+   позиционируется относительно экрана и растягивается на всю страницу. */
+.m-ic {
+  position: relative;
+  width: 40px; height: 40px;        /* размер по умолчанию — контейнер всегда задан */
+  flex: none;
+  overflow: hidden;
   border-radius: var(--r-full);
   display: flex; align-items: center; justify-content: center;
 }
+.medal .m-ic { width: 40px; height: 40px; }
 .medal .m-ic .ic { width: 19px; height: 19px; }
+/* картинка достижения лежит поверх SVG-запаски; если файла нет — JS удаляет <img>.
+   max-width/height + margin:auto — защита: даже если контейнер вдруг без размера
+   (например, отдался старый кэш CSS), картинка не раздувается на весь экран. */
+.m-art {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  max-width: 56px; max-height: 56px;
+  margin: auto;
+  object-fit: contain;
+  border-radius: inherit;
+}
+/* пока картинка на месте — прячем SVG-запаску, иначе она просвечивает сзади.
+   Соседний селектор: .m-art идёт перед .m-fallback в разметке. Если картинка
+   не загрузилась, JS удаляет <img>, правило перестаёт действовать — SVG виден. */
+.m-art + .m-fallback { display: none; }
+.medal.locked .m-art { filter: grayscale(1); opacity: 0.55; }
+
+/* ---------- СПИСОК ДОСТИЖЕНИЙ (экран) — строки с описанием ---------- */
+.medal-list { display: flex; flex-direction: column; gap: 8px; }
+.medal-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+}
+.medal-row .m-ic { flex: none; width: 52px; height: 52px; }
+.medal-row.locked { opacity: 0.6; }
+.medal-row.locked .m-art { filter: grayscale(1); opacity: 0.6; }
+.medal-row.earned { border-color: rgba(var(--tint), 0.4); }
+.mr-main { flex: 1; min-width: 0; }
+.mr-name { font-size: 14px; font-weight: 800; }
+.mr-desc { font-size: 12px; color: var(--text-3); line-height: 1.4; margin-top: 2px; }
+.mr-badge {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 9px; border-radius: var(--r-full);
+  background: rgba(var(--tint), 0.16); color: var(--primary);
+  font-size: 12px; font-weight: 800;
+}
+.mr-progress {
+  flex: none;
+  font-size: 12px; font-weight: 700; color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- КАРТОЧКА ДОСТИЖЕНИЙ В ПРОФИЛЕ ---------- */
+.ach-card { cursor: pointer; transition: border-color var(--t-fast); }
+.ach-card:hover { border-color: rgba(var(--tint), 0.35); }
+.ach-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ach-count, .ach-progress-label {
+  font-size: 13px; font-weight: 800; color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+.ach-preview { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+.ach-chip {
+  width: 44px; height: 44px; flex: none;
+  border-radius: var(--r-full);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+  display: grid; place-items: center;
+}
+.ach-chip .m-ic { width: 32px; height: 32px; }
+.ach-chip:not(.on) { opacity: 0.45; }
+.ach-chip:not(.on) .m-art { filter: grayscale(1); }
+.ach-chip.on { border-color: rgba(var(--tint), 0.45); }
+.ach-bar {
+  height: 6px; border-radius: var(--r-full);
+  background: var(--neutral); overflow: hidden;
+}
+.ach-fill {
+  height: 100%; width: 0;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width var(--t-med) var(--ease);
+}
 .medal .m-name { font-size: 10px; font-weight: 800; line-height: 1.2; }
 .medal .m-sub { font-size: 9px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .medal.locked { opacity: 0.55; }

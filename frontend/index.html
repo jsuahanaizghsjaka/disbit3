@@ -112,7 +112,13 @@
         </div>
       </section>
 
-      <h3 class="section-title">Мои привычки</h3>
+      <!-- закреплённые: всплывают наверх, секция появляется только когда есть что закрепить -->
+      <div id="pinned-block" hidden>
+        <h3 class="section-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-bookmark"/></svg> Закреплённые</h3>
+        <div class="habit-list" id="pinned-list"></div>
+      </div>
+
+      <h3 class="section-title" id="mine-title">Мои привычки</h3>
       <div class="habit-list" id="habit-list"></div>
 
       <div id="offday-block" hidden>
@@ -127,7 +133,7 @@
       </div>
 
       <!-- большие цели (переехали из календаря) -->
-      <section class="card">
+      <section class="card" id="goals-card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
         <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные привычки.</p>
         <div id="goal-list"></div>
@@ -183,6 +189,56 @@
     </main>
 
     <!-- ================= ЭКРАН: СТАТИСТИКА ================= -->
+    <main class="screen" id="screen-friends">
+
+      <h1 class="screen-title">Друзья</h1>
+
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-users"/></svg> Мои друзья</h3>
+        <p class="hint" style="margin:0 0 8px">Вместе привычки заходят легче: видно, кто на серии, и не хочется отставать.</p>
+        <div id="friend-list"></div>
+        <button class="row-btn" id="btn-friend-add">
+          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить друга</span>
+        </button>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-flame"/></svg> Соревнование</h3>
+        <div id="friends-board"></div>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Вместе</h3>
+        <p class="hint" style="margin:0">Совместные привычки и общие марафоны — следующий шаг.
+          Нужны серверные аккаунты друзей: сейчас список локальный, только на этом устройстве.</p>
+      </section>
+    </main>
+
+    <!-- ================= ЭКРАН: ДОСТИЖЕНИЯ ================= -->
+    <main class="screen" id="screen-medals">
+
+      <h1 class="screen-title">Достижения</h1>
+
+      <section class="card">
+        <div class="ach-top">
+          <span class="ach-progress-label" id="ach-screen-count">0 / 0</span>
+          <span class="hint" style="margin:0">получено</span>
+        </div>
+        <div class="ach-bar"><div class="ach-fill" id="ach-screen-fill"></div></div>
+      </section>
+
+      <div id="ach-earned-block" hidden>
+        <h3 class="section-title">Получены</h3>
+        <div class="medal-list" id="ach-earned"></div>
+      </div>
+
+      <div id="ach-locked-block" hidden>
+        <h3 class="section-title dim">Ещё не открыты</h3>
+        <div class="medal-list" id="ach-locked"></div>
+      </div>
+    </main>
+
+    <!-- ================= ЭКРАН: СТАТИСТИКА (общая; личная — в карточке привычки) ================= -->
     <main class="screen" id="screen-stats">
 
       <h1 class="screen-title">Статистика</h1>
@@ -265,10 +321,17 @@
         </button>
       </section>
 
-      <!-- достижения -->
-      <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-award"/></svg> Достижения</h3>
-        <div class="medal-grid" id="medal-grid"></div>
+      <!-- достижения: компактная карточка, вся коллекция — на отдельном экране -->
+      <section class="card ach-card" id="ach-card" role="button" tabindex="0"
+        aria-label="Открыть достижения">
+        <div class="ach-top">
+          <h3 class="card-title" style="margin:0">
+            <svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-award"/></svg> Достижения
+          </h3>
+          <span class="ach-count" id="ach-count">0 / 0</span>
+        </div>
+        <div class="ach-preview" id="ach-preview"></div>
+        <div class="ach-bar"><div class="ach-fill" id="ach-fill"></div></div>
       </section>
 
       <!-- мотивация -->
@@ -296,14 +359,13 @@
         </button>
       </section>
 
-      <!-- друзья -->
+      <!-- общая статистика: личная по каждой привычке — в её карточке -->
       <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-users"/></svg> Друзья</h3>
-        <div id="friend-list"></div>
-        <button class="row-btn" id="btn-friend-add">
-          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить друга</span>
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-chart"/></svg> Статистика</h3>
+        <p class="hint" style="margin:0 0 8px">Статистика по отдельной привычке — тапни её карточку на главной.</p>
+        <button class="row-btn" id="btn-open-stats">
+          <svg class="ic"><use href="#i-chart"/></svg><span>Общая статистика</span>
         </button>
-        <p class="hint">Прототип: список локальный. Совместные стрики и вызовы появятся с аккаунтами.</p>
       </section>
 
       <!-- тема -->
@@ -321,14 +383,24 @@
       <!-- настройки -->
       <section class="card">
         <h3 class="card-title">Настройки</h3>
-        <label class="setting-row">
-          <span>Показывать блок «Не сегодня»</span>
-          <input type="checkbox" id="set-offday" class="switch" />
-        </label>
-        <label class="setting-row">
-          <span>Итог дня при запуске</span>
-          <input type="checkbox" class="switch" checked disabled />
-        </label>
+        <div class="setting-row">
+          <span id="set-offday-label">Показывать блок «Не сегодня»</span>
+          <button type="button" class="aswitch" id="set-offday" role="switch"
+            aria-checked="false" aria-labelledby="set-offday-label">
+            <span class="as-glow" aria-hidden="true"></span>
+            <span class="as-track" aria-hidden="true"><span class="as-fill"></span></span>
+            <span class="as-thumb" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="setting-row">
+          <span id="set-settle-label">Итог дня при запуске</span>
+          <button type="button" class="aswitch" role="switch" aria-checked="true" disabled
+            aria-labelledby="set-settle-label">
+            <span class="as-glow" aria-hidden="true"></span>
+            <span class="as-track" aria-hidden="true"><span class="as-fill"></span></span>
+            <span class="as-thumb" aria-hidden="true"></span>
+          </button>
+        </div>
         <p class="hint">Автоитог отключить нельзя — в этом весь смысл штрафа 😉</p>
       </section>
 
@@ -364,9 +436,9 @@
         <span class="di-icon"><svg class="ic"><use href="#i-plus"/></svg></span>
         <span class="di-label">Новая</span>
       </button>
-      <button class="dock-item nav-item" data-screen="stats">
-        <span class="di-icon"><svg class="ic"><use href="#i-chart"/></svg></span>
-        <span class="di-label">Статистика</span>
+      <button class="dock-item nav-item" data-screen="friends">
+        <span class="di-icon"><svg class="ic"><use href="#i-users"/></svg></span>
+        <span class="di-label">Друзья</span>
       </button>
       <button class="dock-item nav-item" data-screen="profile">
         <span class="di-icon"><svg class="ic"><use href="#i-user"/></svg></span>
@@ -392,6 +464,23 @@
 
       <span class="field-label">Дни недели <span class="days-count" id="days-count">7 в неделю</span></span>
       <div class="day-picker" id="day-picker"></div>
+
+      <!-- гибкий режим: N раз в неделю вместо строгих дней -->
+      <section class="card wt-card off" id="wt-card">
+        <div class="wt-row">
+          <div>
+            <h3 class="wt-title">Сколько дней в неделю</h3>
+            <p class="wt-sub" id="wt-sub">Строго по выбранным дням</p>
+          </div>
+          <div class="wt-stepper">
+            <button type="button" class="wt-step" id="wt-minus" aria-label="Меньше дней в неделю">−</button>
+            <span class="ac wt-count" id="wt-count" role="status" aria-live="polite"></span>
+            <button type="button" class="wt-step" id="wt-plus" aria-label="Больше дней в неделю">+</button>
+          </div>
+        </div>
+        <p class="hint" id="wt-hint">Не получается день в день? Поставь, сколько раз за неделю —
+          и делай в любые дни. Штраф будет, только если норму уже не успеть добрать.</p>
+      </section>
 
       <span class="field-label">Цель</span>
       <div class="seg" id="goal-type">
@@ -426,14 +515,52 @@
       </div>
 
       <div class="stake-lock" id="stake-lock" hidden>
+        <div class="count-fields">
+          <input class="field-input small" id="f-lock-mins" type="number" inputmode="numeric"
+            min="15" step="15" value="60" aria-label="На сколько блокировать" />
+          <span class="suffix" id="f-lock-suffix">минут за пропуск</span>
+        </div>
         <input class="field-input" id="f-apps" type="text" placeholder="Приложения через запятую: Instagram, TikTok" />
-        <p class="hint">В прототипе блокировка симулируется. Реальная блокировка — в нативной версии.</p>
+        <p class="hint">Пропустил — выбранные приложения блокируются на это время.
+          В прототипе блокировка симулируется, реальная — в нативной версии.</p>
       </div>
 
       <div class="sheet-actions">
         <button class="btn-ghost" id="btn-cancel">Отмена</button>
         <button class="btn-primary" id="btn-save">Создать привычку</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: СТАТИСТИКА ПРИВЫЧКИ / МАРАФОНА ===== -->
+  <div class="sheet-overlay" id="hstat-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hstat-title">
+      <div class="sheet-handle"></div>
+
+      <div class="hstat-head">
+        <div class="hstat-menu-wrap">
+          <button class="icon-btn" id="hstat-menu-btn" aria-label="Меню привычки"
+            aria-haspopup="true" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+              <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+            </svg>
+          </button>
+          <div class="hstat-menu" id="hstat-menu" hidden role="menu">
+            <button class="hstat-mi" id="hstat-edit" role="menuitem">
+              <svg class="ic ic-s"><use href="#i-pencil"/></svg><span>Редактировать</span>
+            </button>
+            <button class="hstat-mi" id="hstat-minimum" role="menuitem">
+              <svg class="ic ic-s"><use href="#i-check"/></svg><span>Отметить минимум</span>
+            </button>
+            <button class="hstat-mi danger" id="hstat-del" role="menuitem">
+              <svg class="ic ic-s"><use href="#i-trash"/></svg><span>Удалить</span>
+            </button>
+          </div>
+        </div>
+        <h2 class="sheet-title" id="hstat-title">Привычка</h2>
+      </div>
+
+      <div id="hstat-body"></div>
     </div>
   </div>
 

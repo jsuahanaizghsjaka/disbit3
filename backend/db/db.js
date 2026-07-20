@@ -20,6 +20,9 @@ db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 
 // мягкие миграции для баз, созданных до появления авторизации
 for (const sql of [
+  "ALTER TABLE habits ADD COLUMN week_target INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE habits ADD COLUMN stake_minutes INTEGER NOT NULL DEFAULT 60",
+  "ALTER TABLE habits ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE charges ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE users ADD COLUMN login TEXT",
   "ALTER TABLE users ADD COLUMN pass_hash TEXT",
@@ -54,6 +57,8 @@ export function rowToHabit(row, completions = []) {
     icon: row.icon,
     color: row.color,
     schedule: JSON.parse(row.schedule || '[0,1,2,3,4,5,6]'),
+    weekTarget: row.week_target || 0,
+    pinned: !!row.pinned,
     createdAt: row.created_day,
     goal: {
       type: row.goal_type,
@@ -62,7 +67,7 @@ export function rowToHabit(row, completions = []) {
     },
     stake: row.stake_mode === 'money'
       ? { mode: 'money', amount: row.stake_amount, recipient: row.stake_recipient }
-      : { mode: 'lock', apps: JSON.parse(row.stake_apps || '[]') },
+      : { mode: 'lock', apps: JSON.parse(row.stake_apps || '[]'), minutes: row.stake_minutes || 60 },
     history,
     counts
   };
@@ -76,6 +81,8 @@ export function habitToParams(h) {
     icon: h.icon || '🎯',
     color: h.color || '#3B82F6',
     schedule: JSON.stringify(h.schedule?.length ? h.schedule : [0,1,2,3,4,5,6]),
+    week_target: Math.max(0, Math.min(7, Number(h.weekTarget) || 0)),
+    pinned: h.pinned ? 1 : 0,
     goal_type: h.goal?.type === 'count' ? 'count' : 'check',
     goal_target: Number(h.goal?.target) || 1,
     goal_unit: h.goal?.unit || '',
@@ -83,6 +90,7 @@ export function habitToParams(h) {
     stake_amount: Number(h.stake?.amount) || 0,
     stake_recipient: h.stake?.recipient || null,
     stake_apps: JSON.stringify(h.stake?.apps || []),
+    stake_minutes: Math.max(15, Math.min(1440, Number(h.stake?.minutes) || 60)),
     created_day: h.createdAt || new Date().toISOString().slice(0, 10)
   };
 }

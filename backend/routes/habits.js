@@ -34,11 +34,11 @@ router.post('/', (req, res) => {
   try {
     db.prepare(`
       INSERT OR IGNORE INTO habits
-        (id, user_id, name, icon, color, schedule, goal_type, goal_target, goal_unit,
-         stake_mode, stake_amount, stake_recipient, stake_apps, created_day)
+        (id, user_id, name, icon, color, schedule, week_target, pinned, goal_type, goal_target, goal_unit,
+         stake_mode, stake_amount, stake_recipient, stake_apps, stake_minutes, created_day)
       VALUES
-        (:id, :user_id, :name, :icon, :color, :schedule, :goal_type, :goal_target, :goal_unit,
-         :stake_mode, :stake_amount, :stake_recipient, :stake_apps, :created_day)
+        (:id, :user_id, :name, :icon, :color, :schedule, :week_target, :pinned, :goal_type, :goal_target, :goal_unit,
+         :stake_mode, :stake_amount, :stake_recipient, :stake_apps, :stake_minutes, :created_day)
     `).run({ ...p, user_id: uid(req) });
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -68,10 +68,10 @@ router.put('/:id', (req, res) => {
   const p = habitToParams({ ...req.body, id: req.params.id });
   db.prepare(`
     UPDATE habits SET
-      name = :name, icon = :icon, color = :color, schedule = :schedule,
+      name = :name, icon = :icon, color = :color, schedule = :schedule, week_target = :week_target, pinned = :pinned,
       goal_type = :goal_type, goal_target = :goal_target, goal_unit = :goal_unit,
       stake_mode = :stake_mode, stake_amount = :stake_amount,
-      stake_recipient = :stake_recipient, stake_apps = :stake_apps,
+      stake_recipient = :stake_recipient, stake_apps = :stake_apps, stake_minutes = :stake_minutes,
       created_day = :created_day
     WHERE id = :id
   `).run(p);

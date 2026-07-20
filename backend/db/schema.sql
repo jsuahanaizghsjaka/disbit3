@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS habits (
   icon            TEXT,
   color           TEXT,
   schedule        TEXT NOT NULL DEFAULT '[0,1,2,3,4,5,6]', -- JSON: дни недели, 0=Пн
+  week_target     INTEGER NOT NULL DEFAULT 0,              -- 0 = строго по дням, N = «N дней в неделю»
+  pinned          INTEGER NOT NULL DEFAULT 0,              -- закреплена наверху списка
   goal_type       TEXT NOT NULL DEFAULT 'check',   -- 'check' | 'count'
   goal_target     INTEGER DEFAULT 1,
   goal_unit       TEXT,
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS habits (
   stake_amount    INTEGER DEFAULT 0,               -- в рублях, если money
   stake_recipient TEXT,                            -- 'charity' | 'creators'
   stake_apps      TEXT,                            -- JSON-массив приложений, если lock
+  stake_minutes   INTEGER NOT NULL DEFAULT 60,     -- на сколько блокируем, минут
   created_day     TEXT NOT NULL,                   -- 'YYYY-MM-DD' (для стриков/автоитога)
   created_at      TEXT DEFAULT (datetime('now')),
   archived        INTEGER DEFAULT 0

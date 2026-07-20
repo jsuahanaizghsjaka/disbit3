@@ -51,28 +51,61 @@ function iconOf(v) {
 }
 
 // медали достижений
+// Достижения. art — файл 3D-иконки в icons/medals/ (у разных порогов разные
+// картинки); нет файла — тихо покажется SVG-запаска (см. medalIconHtml).
 const MEDALS = [
-  ...[100,200,300,400,500,600,700,800,900,1000].map(n =>
-    ({ id: 's' + n, kind: 'streak', at: n, name: `${n} дней`, cls: 'gold', ic: 'i-flame' })),
-  ...[1000,2500,5000,10000].map(n =>
-    ({ id: 'f' + n, kind: 'fines', at: n, name: `${n}₽ штрафов`, cls: 'red', ic: 'i-coins' })),
-  ...[5,10,20].map(n =>
-    ({ id: 'l' + n, kind: 'locks', at: n, name: `${n} блокировок`, cls: 'violet', ic: 'i-lock' })),
-  // марафоны: доведённые до финиша
-  ...[
-    { at: 1,  name: 'Первый финиш' },
-    { at: 3,  name: '3 марафона'   },
-    { at: 5,  name: '5 марафонов'  },
-    { at: 10, name: '10 марафонов' }
-  ].map(m => ({ id: 'm' + m.at, kind: 'marathons', at: m.at, name: m.name, cls: 'blue', ic: 'i-target' })),
-  // шаги, пройденные путником во всех марафонах
-  ...[100,500,1000].map(n =>
-    ({ id: 'ms' + n, kind: 'steps', at: n, name: `${n} шагов`, cls: 'blue', ic: 'i-h-run' }))
+  // ДРУЗЬЯ (metric = число добавленных друзей)
+  { id: 'fr1', kind: 'friends', at: 1, cls: 'blue', art: 'bubble-1.png',
+    name: 'Дуэт', desc: 'Первый друг в команде. Вместе держать дисциплину проще.' },
+  { id: 'fr5', kind: 'friends', at: 5, cls: 'blue', art: 'bubble-2.png',
+    name: 'Полный сквад', desc: 'Пятеро в отряде. Теперь вас так просто не сбить.' },
+
+  // СЕРИЯ ОГОНЬКА (metric = лучшая серия среди привычек)
+  { id: 's100', kind: 'streak', at: 100, cls: 'gold', art: 'fire-100.png',
+    name: 'Век Дисциплины', desc: '100 дней подряд. Привычка стала частью тебя.' },
+  { id: 's250', kind: 'streak', at: 250, cls: 'gold', art: 'fire-100.png',
+    name: 'Железный Рубеж', desc: '250 дней. Дисциплина закалилась до железа.' },
+  { id: 's500', kind: 'streak', at: 500, cls: 'gold', art: 'fire-500.png',
+    name: 'Адепт Постоянства', desc: '500 дней без сдачи. Ты мастер постоянства.' },
+  { id: 's750', kind: 'streak', at: 750, cls: 'gold', art: 'fire-500.png',
+    name: 'Титан Воли', desc: '750 дней. Волю титана уже ничем не сбить.' },
+  { id: 's1000', kind: 'streak', at: 1000, cls: 'gold', art: 'fire-500.png',
+    name: 'Тысячелетний Хранитель', desc: '1000 дней без пропусков. Абсолютный статус Легенды.' },
+
+  // МАРАФОНЫ (metric = число доведённых до финиша)
+  { id: 'm1', kind: 'marathons', at: 1, cls: 'gold', art: 'trophy-1.png',
+    name: 'Первый финиш', desc: 'Первый марафон пройден. Ты доказал себе, что можешь доходить до конца.' },
+  { id: 'm3', kind: 'marathons', at: 3, cls: 'gold', art: 'trophy-3.png',
+    name: 'Хет-трик', desc: 'Три из трёх! Марафонец, который не останавливается.' },
+
+  // БЛОКИРОВКИ ТЕЛЕФОНА (metric = число блокировок-штрафов)
+  { id: 'l10', kind: 'locks', at: 10, cls: 'violet', art: 'lock.png',
+    name: 'Быстрый фокус', desc: 'Зашёл, отметил привычку, заблокировал. Никаких отвлечений.' },
+  { id: 'l25', kind: 'locks', at: 25, cls: 'violet', art: 'lock.png',
+    name: 'Без лишних слов', desc: 'Ты не тратишь время на лишний скроллинг. Сделал дело — экран погас.' },
+  { id: 'l50', kind: 'locks', at: 50, cls: 'violet', art: 'lock.png',
+    name: 'Режим ниндзя', desc: '50 быстрых заходов. Быстро, чётко, эффективно.' },
+
+  // ШТРАФЫ ДЕНЬГАМИ (metric = ЧИСЛО денежных штрафов, не сумма)
+  { id: 'f10', kind: 'fines', at: 10, cls: 'red', art: 'wallet.png',
+    name: 'Щедрый вклад', desc: '10 штрафов превратились в реальную помощь. Ошибки тоже могут приносить пользу!' },
+  { id: 'f15', kind: 'fines', at: 15, cls: 'red', art: 'wallet.png',
+    name: 'Покровитель добра', desc: 'Твои промахи заставляют мир крутиться чуть лучше.' },
+  { id: 'f25', kind: 'fines', at: 25, cls: 'red', art: 'cash.png',
+    name: 'Меценат месяца', desc: '25 отчислений на добрые дела. Кармический баланс перевешивает в плюс!' },
+  { id: 'f40', kind: 'fines', at: 40, cls: 'red', art: 'cash.png',
+    name: 'Ангел-хранитель', desc: 'Весомый вклад и в благотворительность, и в развитие проекта.' },
+  { id: 'f50', kind: 'fines', at: 50, cls: 'red', art: 'coin.png',
+    name: 'Главный благотворитель', desc: '50 добрых дел вместо самобичевания. Ты превратил ошибки в суперсилу!' }
 ];
+// SVG-запаска по виду достижения, если картинка не загрузилась
+const MEDAL_FALLBACK = { friends: 'i-users', streak: 'i-flame', marathons: 'i-award', locks: 'i-lock', fines: 'i-coins' };
 const COLORS = ['#5B8DFF','#4ADE80','#38BDF8','#F472B6','#A78BFA','#F87171','#FBBF24','#E8722A'];
 const AVA_EMOJIS = ['😀','😎','🦊','🐻','🐼','🦁','🐯','🐸','🦉','🐨','🦄','🐢','🚀','🔥','⚡','🌟','🍀','🌊','🎧','🎮','🏔️','🌙','🍕','☕'];
 const DAY_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-const SCREENS = ['today','calendar','stats','profile'];
+// вкладка «Статистика» уехала в карточку привычки, её слот занял экран друзей;
+// общая статистика осталась отдельным экраном — вход из профиля
+const SCREENS = ['today','calendar','friends','stats','medals','profile'];
 
 // темы приложения: id → цвет свотча
 const THEMES = [
@@ -202,8 +235,33 @@ function migrate(h) {
   if (!Array.isArray(h.schedule) || !h.schedule.length) h.schedule = [0,1,2,3,4,5,6];
   if (!h.createdAt) h.createdAt = dateKey();
   if (typeof h.min !== 'string') h.min = '';
+  h.weekTarget = Math.max(0, Math.min(7, Number(h.weekTarget) || 0));  // 0 = строго по дням
+  h.pinned = !!h.pinned;                                               // закреплена наверху
   h.history = h.history || {};
   h.counts  = h.counts  || {};
+}
+
+/* ---------- АНИМИРОВАННЫЙ СЧЁТЧИК ----------
+   Порт AnimateCount (motion/react) на ванильный CSS: основное приложение без
+   React, поэтому эффект собран на CSS-анимациях с теми же параметрами —
+   450 мс, cubic-bezier(0.23,0.88,0.26,0.92), blur 2px, уход вверх / приход снизу. */
+const AC_MS = 450;
+function animateCount(el, value) {
+  if (!el) return;
+  const next = String(value);
+  const prev = el.dataset.acValue;
+  el.dataset.acValue = next;
+  const still = `<span class="ac-item">${escapeHtml(next)}</span>`;
+  if (prev === undefined || prev === next) { el.innerHTML = still; return; }
+
+  el.innerHTML =
+    `<span class="ac-item ac-out" aria-hidden="true">${escapeHtml(prev)}</span>` +
+    `<span class="ac-item ac-in">${escapeHtml(next)}</span>`;
+  clearTimeout(el._acTimer);
+  // после анимации оставляем одно число, чтобы не копить узлы
+  el._acTimer = setTimeout(() => {
+    if (el.dataset.acValue === next) el.innerHTML = still;
+  }, AC_MS + 60);
 }
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(habits)); }
 function loadLedger() {
@@ -297,7 +355,41 @@ function addDays(d, n) {
 const TODAY = dateKey();
 
 /* ---------- ЛОГИКА ПРИВЫЧЕК ---------- */
-function isScheduledOn(h, d) { return h.schedule.includes(dayIdx(d)); }
+/* ---------- ГИБКИЙ РЕЖИМ: N дней в неделю ----------
+   Для тех, кто не может делать день в день. Конкретные дни недели тогда не
+   важны — важно набрать норму за неделю.
+   Два разных вопроса, поэтому две функции:
+   • isScheduledOn — ПОКАЗЫВАТЬ ли привычку в этот день (пока норма не закрыта);
+   • isRequiredOn  — СПРАШИВАТЬ ли за неё (штраф/разрыв серии). Обязательным
+     день становится, только когда запаса не осталось: до конца недели ровно
+     столько дней, сколько ещё нужно сделать. Пропуск «с запасом» не наказывается. */
+function isFlexible(h) { return Number(h.weekTarget) > 0; }
+function weekStartOf(d) { return addDays(d, -dayIdx(d)); }
+
+// сколько выполнено на неделе дня d, СТРОГО до самого d
+function doneInWeekBefore(h, d) {
+  const start = weekStartOf(d);
+  const stop = dateKey(d);
+  let n = 0;
+  for (let i = 0; i < 7; i++) {
+    const key = dateKey(addDays(start, i));
+    if (key >= stop) break;
+    if (doneOn(h, key)) n++;
+  }
+  return n;
+}
+
+function isScheduledOn(h, d) {
+  if (isFlexible(h)) return doneInWeekBefore(h, d) < Number(h.weekTarget);
+  return h.schedule.includes(dayIdx(d));
+}
+function isRequiredOn(h, d) {
+  if (!isFlexible(h)) return h.schedule.includes(dayIdx(d));
+  const need = Number(h.weekTarget) - doneInWeekBefore(h, d);
+  if (need <= 0) return false;
+  const daysLeft = 7 - dayIdx(d);        // включая сам день d
+  return need >= daysLeft;               // запаса нет — сегодня обязателен
+}
 function isScheduledToday(h) { return isScheduledOn(h, new Date()); }
 
 // выполнена ли (полностью или «минимумом»)
@@ -319,7 +411,12 @@ function computeStreak(h) {
   for (let i = 0; i < 3660; i++) {
     const key = dateKey(d);
     if (key < h.createdAt) break;
-    if (isScheduledOn(h, d)) {
+    if (isFlexible(h)) {
+      // гибкая: отметка в любой день продолжает серию, а рвёт её только пропуск
+      // дня, который был обязателен (запас кончился). День «с запасом» нейтрален.
+      if (doneOn(h, key)) { streak++; misses = 0; }
+      else if (isRequiredOn(h, d)) { misses++; if (misses >= 2) break; }
+    } else if (isScheduledOn(h, d)) {
       if (doneOn(h, key)) { streak++; misses = 0; }
       else { misses++; if (misses >= 2) break; }
     }
@@ -335,7 +432,8 @@ function computeBestStreak(h) {
   const end = new Date();
   for (let i = 0; i < 3660 && d <= end; i++) {
     const key = dateKey(d);
-    if (isScheduledOn(h, d)) {
+    const counts = isFlexible(h) ? (doneOn(h, key) || isRequiredOn(h, d)) : isScheduledOn(h, d);
+    if (counts) {
       if (doneOn(h, key)) {
         cur++; misses = 0;
         if (cur > best) best = cur;
@@ -464,7 +562,9 @@ function settlePastDays() {
     const key = dateKey(d);
     habits.forEach(h => {
       if (h.createdAt > key) return;
-      if (!isScheduledOn(h, d)) return;
+      // штраф только за ОБЯЗАТЕЛЬНЫЙ день: у гибкой привычки пропуск,
+      // пока норму недели ещё можно добрать, наказывать не за что
+      if (!isRequiredOn(h, d)) return;
       if (doneOn(h, key)) return;
       fresh.push({
         day: key,
@@ -474,7 +574,8 @@ function settlePastDays() {
         mode: h.stake.mode,
         amount: h.stake.mode === 'money' ? Number(h.stake.amount || 0) : 0,
         recipient: h.stake.recipient || null,
-        apps: h.stake.mode === 'lock' ? (h.stake.apps || []) : []
+        apps: h.stake.mode === 'lock' ? (h.stake.apps || []) : [],
+        minutes: h.stake.mode === 'lock' ? (h.stake.minutes || LOCK_MINUTES_DEFAULT) : 0
       });
     });
   }
@@ -503,8 +604,10 @@ function showSettleModal(entries) {
       <div class="label">штрафов за пропуски</div></div>`;
   }
   if (apps.size) {
+    const maxLock = Math.max(...entries.map(e => Number(e.minutes) || 0));
     html += `<div class="summary-row"><span class="big lock">${icon('i-lock')}</span>
-      <div><div>Заблокировались бы</div><b>${[...apps].map(escapeHtml).join(', ')}</b></div></div>`;
+      <div><div>Заблокировались бы${maxLock ? ' на ' + formatLock(maxLock) : ''}</div>
+      <b>${[...apps].map(escapeHtml).join(', ')}</b></div></div>`;
   }
   html += entries.slice(-8).reverse().map(e => `
     <div class="ledger-row">
@@ -1110,7 +1213,9 @@ function renderWeek() {
       const sched = habits.filter(h => h.createdAt <= key && isScheduledOn(h, d));
       if (sched.length) {
         const done = sched.filter(h => doneOn(h, key)).length;
-        dotCls = done === sched.length ? 'full' : (done > 0 ? 'half' : (isToday ? '' : 'miss'));
+        // «пропуск» — только если день был кому-то обязателен (см. isRequiredOn)
+        const missed = sched.some(h => isRequiredOn(h, d));
+        dotCls = done === sched.length ? 'full' : (done > 0 ? 'half' : (isToday || !missed ? '' : 'miss'));
       }
     }
 
@@ -1140,9 +1245,15 @@ function habitCard(h, off) {
     ? `${h.counts?.[TODAY] || 0}/${h.goal.target} ${h.goal.unit || ''}`.trim()
     : '';
 
+  // при блокировке показываем НА СКОЛЬКО и что именно блокируется
+  const lockApps = h.stake.apps || [];
+  const lockTitle = lockApps.length ? lockApps.join(', ') : 'выбранные приложения';
   const stake = h.stake.mode === 'money'
     ? `<span class="stake-badge money">${icon('i-coins')}${h.stake.amount}₽</span>`
-    : `<span class="stake-badge lock">${icon('i-lock')}${(h.stake.apps || []).length || ''} прил.</span>`;
+    : `<span class="stake-badge lock" title="${escapeHtml(lockTitle)}">${icon('i-lock')}${
+        formatLock(h.stake.minutes || LOCK_MINUTES_DEFAULT)}${
+        lockApps.length ? ' · ' + escapeHtml(lockApps[0]) + (lockApps.length > 1 ? ` +${lockApps.length - 1}` : '') : ''
+      }</span>`;
 
   const schedText = h.schedule.length === 7
     ? 'каждый день'
@@ -1156,10 +1267,11 @@ function habitCard(h, off) {
   }
 
   const card = document.createElement('div');
-  card.className = 'habit' + (done ? ' done' : '') + (off ? ' off' : '');
+  card.className = 'habit' + (done ? ' done' : '') + (off ? ' off' : '') + (h.pinned ? ' pinned' : '');
+  card.dataset.hid = h.id;          // якорь для FLIP-анимации переезда между секциями
   card.innerHTML = `
     <div class="habit-icon">${iconOf(h.icon)}</div>
-    <div class="habit-main" data-edit="${h.id}" role="button" tabindex="0" aria-label="Редактировать: ${escapeHtml(h.name)}">
+    <div class="habit-main" data-stats="${h.id}" role="button" tabindex="0" aria-label="Статистика: ${escapeHtml(h.name)}">
       <div class="habit-name">${escapeHtml(h.name)}</div>
       <div class="habit-meta">
         <span class="streak ${streak ? '' : 'zero'}">${icon('i-flame')}${streak}</span>
@@ -1169,19 +1281,225 @@ function habitCard(h, off) {
         ${minHtml}
       </div>
     </div>
-    <button class="habit-del" data-del="${h.id}" aria-label="Удалить привычку">${icon('i-x')}</button>
+    <button class="habit-pin${h.pinned ? ' on' : ''}" data-pin="${h.id}"
+      aria-pressed="${h.pinned ? 'true' : 'false'}"
+      aria-label="${h.pinned ? 'Открепить' : 'Закрепить'}: ${escapeHtml(h.name)}">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 17v5"/>
+        <path d="M9 10.8V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5.8a2 2 0 0 0 .6 1.4l1.3 1.3A2 2 0 0 1 16.4 17H7.6a2 2 0 0 1-1.5-3.5l1.3-1.3A2 2 0 0 0 9 10.8Z"/>
+      </svg>
+    </button>
     ${off ? '' : `<button class="habit-check" data-check="${h.id}" aria-label="Отметить: ${escapeHtml(h.name)}">${checkContent}</button>`}
   `;
   return card;
+}
+
+/* ---------- СТАТИСТИКА ОТДЕЛЬНОЙ ПРИВЫЧКИ ----------
+   Раньше статистика жила отдельной вкладкой и была общей на всё. Теперь она
+   привязана к конкретной привычке: тап по карточке — и видно именно её путь.
+   Редактирование и удаление уехали в меню-три-точки, чтобы тап по карточке
+   не открывал сразу форму. */
+let hstatId = null;
+
+function openHabitStats(id) {
+  const h = habits.find(x => x.id === id);
+  if (!h) return;
+  hstatId = id;
+  closeHabitMenu();
+  renderHabitStats();
+  openSheet('hstat-overlay');
+}
+
+// сколько раз выполнена за последние N дней и сколько из них было обязательных
+function habitStatsFor(h, days = 30) {
+  let done = 0, required = 0, missed = 0;
+  for (let i = 0; i < days; i++) {
+    const d = addDays(new Date(), -i);
+    const key = dateKey(d);
+    if (key < h.createdAt) break;
+    const did = doneOn(h, key);
+    if (did) done++;
+    if (isRequiredOn(h, d)) {
+      required++;
+      if (!did && key !== TODAY) missed++;
+    }
+  }
+  return { done, required, missed };
+}
+
+function renderHabitStats() {
+  const h = habits.find(x => x.id === hstatId);
+  const body = document.getElementById('hstat-body');
+  if (!h || !body) return;
+
+  document.getElementById('hstat-title').textContent = h.name;
+
+  const streak = computeStreak(h);
+  const best = computeBestStreak(h);
+  const s30 = habitStatsFor(h, 30);
+  const pct30 = s30.required ? Math.round(((s30.required - s30.missed) / s30.required) * 100) : 100;
+  const totalDone = Object.keys(h.history || {}).filter(k => doneOn(h, k)).length;
+
+  // штрафы именно этой привычки
+  const mine = ledger.filter(e => e.habitId === h.id);
+  const money = mine.filter(e => e.mode === 'money').reduce((s, e) => s + (e.amount || 0), 0);
+  const locks = mine.filter(e => e.mode === 'lock').length;
+
+  // мини-heatmap по этой привычке за 12 недель
+  const weeks = 12;
+  const today = new Date();
+  const start = addDays(weekStartOf(today), -7 * (weeks - 1));
+  let cells = '';
+  for (let w = 0; w < weeks; w++) {
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(start, w * 7 + i);
+      const key = dateKey(d);
+      let cls = 'off';
+      if (key > TODAY) cls = 'future';
+      else if (key < h.createdAt) cls = 'off';
+      else if (doneOn(h, key)) cls = isMinOn(h, key) ? 'l2' : 'l4';
+      else if (isRequiredOn(h, d)) cls = 'miss';
+      cells += `<i class="hm-cell ${cls}" title="${formatDay(key)}"></i>`;
+    }
+  }
+
+  const modeText = isFlexible(h)
+    ? `${h.weekTarget} дней в неделю, любые`
+    : (h.schedule.length === 7 ? 'каждый день' : h.schedule.map(i => DAY_NAMES[i]).join(' · '));
+
+  const stakeText = h.stake.mode === 'money'
+    ? `${h.stake.amount}₽ за пропуск`
+    : `${formatLock(h.stake.minutes || LOCK_MINUTES_DEFAULT)} блокировки${
+        (h.stake.apps || []).length ? ' · ' + h.stake.apps.map(escapeHtml).join(', ') : ''}`;
+
+  body.innerHTML = `
+    <div class="hstat-grid">
+      <div class="hstat-tile"><span class="ht-num">${streak}</span><span class="ht-lbl">серия сейчас</span></div>
+      <div class="hstat-tile"><span class="ht-num">${best}</span><span class="ht-lbl">лучшая серия</span></div>
+      <div class="hstat-tile"><span class="ht-num">${totalDone}</span><span class="ht-lbl">выполнено всего</span></div>
+      <div class="hstat-tile"><span class="ht-num">${pct30}%</span><span class="ht-lbl">за 30 дней</span></div>
+    </div>
+
+    <span class="field-label">Последние 12 недель</span>
+    <div class="hstat-hm">${cells}</div>
+
+    <div class="hstat-rows">
+      <div class="ledger-row">
+        <span class="ledger-icon">${icon('i-calendar')}</span>
+        <div class="ledger-main"><div class="ledger-name">Режим</div>
+          <div class="ledger-day">${escapeHtml(modeText)}</div></div>
+      </div>
+      <div class="ledger-row">
+        <span class="ledger-icon">${icon(h.stake.mode === 'money' ? 'i-coins' : 'i-lock')}</span>
+        <div class="ledger-main"><div class="ledger-name">Штраф</div>
+          <div class="ledger-day">${stakeText}</div></div>
+      </div>
+      <div class="ledger-row">
+        <span class="ledger-icon">${icon('i-alert')}</span>
+        <div class="ledger-main"><div class="ledger-name">Пропуски</div>
+          <div class="ledger-day">${mine.length} шт.${money ? ' · ' + money + '₽' : ''}${
+            locks ? ' · блокировок: ' + locks : ''}</div></div>
+      </div>
+    </div>`;
+}
+
+function closeHabitMenu() {
+  const menu = document.getElementById('hstat-menu');
+  const btn = document.getElementById('hstat-menu-btn');
+  if (menu) menu.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+function wireHabitStats() {
+  const btn = document.getElementById('hstat-menu-btn');
+  const menu = document.getElementById('hstat-menu');
+  if (!btn || !menu) return;
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  // клик мимо меню закрывает его, но не саму шторку
+  document.getElementById('hstat-overlay').addEventListener('click', () => closeHabitMenu());
+
+  document.getElementById('hstat-edit').addEventListener('click', () => {
+    const id = hstatId;
+    closeHabitMenu();
+    closeSheet('hstat-overlay');
+    openEditSheet(id);
+  });
+  document.getElementById('hstat-minimum').addEventListener('click', () => {
+    const h = habits.find(x => x.id === hstatId);
+    closeHabitMenu();
+    if (!h) return;
+    if (!h.min) { toast('У этой привычки не задан минимум'); return; }
+    toggleMinMark(h, TODAY);
+    render();
+    renderHabitStats();
+    toast('Минимум сделан — серия продолжается 👊');
+  });
+  document.getElementById('hstat-del').addEventListener('click', () => {
+    const id = hstatId;
+    closeHabitMenu();
+    const before = habits.length;
+    deleteHabit(id);                       // в нём и отвязка от марафона, и confirm
+    if (habits.length !== before) closeSheet('hstat-overlay');
+  });
+}
+
+/* ---------- ЗАКРЕПЛЕНИЕ ----------
+   Порт PinnedList: закреплённые уезжают в свою секцию наверх. В оригинале
+   плавный переезд делает layoutId из motion/react; здесь то же самое даёт
+   техника FLIP — запоминаем позиции ДО перерисовки, после неё сдвигаем
+   карточку обратно трансформом и отпускаем в ноль. */
+function flipHabits(mutate) {
+  const before = new Map();
+  document.querySelectorAll('#screen-today .habit[data-hid]').forEach(c =>
+    before.set(c.dataset.hid, c.getBoundingClientRect()));
+
+  mutate();
+
+  document.querySelectorAll('#screen-today .habit[data-hid]').forEach(c => {
+    const b = before.get(c.dataset.hid);
+    if (!b) return;
+    const a = c.getBoundingClientRect();
+    const dx = b.left - a.left, dy = b.top - a.top;
+    if (!dx && !dy) return;
+    c.style.animation = 'none';                 // гасим fadeUp, иначе спорит с переездом
+    c.style.transition = 'none';
+    c.style.transform = `translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(() => {
+      c.style.transition = 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)';
+      c.style.transform = '';
+      setTimeout(() => { c.style.transition = ''; c.style.animation = ''; }, 440);
+    });
+  });
+}
+
+function togglePin(id) {
+  const h = habits.find(x => x.id === id);
+  if (!h) return;
+  flipHabits(() => {
+    h.pinned = !h.pinned;
+    save();
+    apiCall('PUT', `/habits/${h.id}`, h);
+    renderHabits();
+  });
 }
 
 function renderHabits() {
   const list = document.getElementById('habit-list');
   const offList = document.getElementById('offday-list');
   const offBlock = document.getElementById('offday-block');
+  const pinnedList = document.getElementById('pinned-list');
+  const pinnedBlock = document.getElementById('pinned-block');
   const empty = document.getElementById('empty-state');
   list.innerHTML = '';
   offList.innerHTML = '';
+  pinnedList.innerHTML = '';
 
   empty.hidden = habits.length > 0;
   document.getElementById('btn-day-summary').hidden = habits.length === 0;
@@ -1189,7 +1507,14 @@ function renderHabits() {
   const todays = habits.filter(isScheduledToday);
   const off = habits.filter(h => !isScheduledToday(h));
 
-  todays.forEach(h => list.appendChild(habitCard(h, false)));
+  // закреплённые — отдельной секцией наверху; секции нет, пока некого показывать
+  const pinned = todays.filter(h => h.pinned);
+  const rest = todays.filter(h => !h.pinned);
+  pinned.forEach(h => pinnedList.appendChild(habitCard(h, false)));
+  pinnedBlock.hidden = pinned.length === 0;
+  document.getElementById('mine-title').hidden = rest.length === 0;
+
+  rest.forEach(h => list.appendChild(habitCard(h, false)));
   if (settings.showOffday) off.forEach(h => offList.appendChild(habitCard(h, true)));
   offBlock.hidden = !settings.showOffday || off.length === 0;
 
@@ -1203,12 +1528,13 @@ function renderHabits() {
       render();
       toast('Минимум сделан — серия продолжается 👊');
     }));
-  document.querySelectorAll('#screen-today [data-del]').forEach(b =>
-    b.addEventListener('click', () => deleteHabit(b.dataset.del)));
-  document.querySelectorAll('#screen-today [data-edit]').forEach(b => {
-    b.addEventListener('click', () => openEditSheet(b.dataset.edit));
+  document.querySelectorAll('#screen-today [data-pin]').forEach(b =>
+    b.addEventListener('click', () => togglePin(b.dataset.pin)));
+  // тап по карточке — статистика этой привычки (редактирование — в меню внутри)
+  document.querySelectorAll('#screen-today [data-stats]').forEach(b => {
+    b.addEventListener('click', () => openHabitStats(b.dataset.stats));
     b.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditSheet(b.dataset.edit); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHabitStats(b.dataset.stats); }
     });
   });
 }
@@ -1249,7 +1575,9 @@ function dayState(d) {
   const done = sched.filter(h => doneOn(h, key)).length;
   if (done === sched.length) return 'done';
   if (done > 0) return 'part';
-  return key < TODAY ? 'fail' : 'plain';
+  // провал засчитываем, только если день был обязателен хоть для одной привычки
+  const wasRequired = sched.some(h => isRequiredOn(h, d));
+  return (key < TODAY && wasRequired) ? 'fail' : 'plain';
 }
 
 function renderCalendar() {
@@ -1305,7 +1633,7 @@ function renderCalMonthStats(y, m, daysInMonth) {
     habits.forEach(h => {
       if (h.createdAt > key || !isScheduledOn(h, d)) return;
       if (doneOn(h, key)) doneCount++;
-      else if (key < TODAY) failCount++;
+      else if (key < TODAY && isRequiredOn(h, d)) failCount++;
     });
   }
   const prefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
@@ -1644,11 +1972,18 @@ function renderProfile() {
 
   // мотивация
   const lvl = profile.motivation?.level ?? 50;
-  document.getElementById('mot-level').value = lvl;
+  const motSlider = document.getElementById('mot-level');
+  motSlider.value = lvl;
+  motSlider._paint?.();        // значение выставили из профиля — подтянуть заливку трека
   document.getElementById('mot-out').textContent = lvl + '%';
   document.getElementById('mot-text').value = profile.motivation?.text || '';
 
-  document.getElementById('set-offday').checked = !!settings.showOffday;
+  // переключатель — не чекбокс, состояние живёт в aria-checked (+ положение ползунка)
+  const offdaySw = document.getElementById('set-offday');
+  if (offdaySw) {
+    offdaySw.setAttribute('aria-checked', String(!!settings.showOffday));
+    offdaySw.style.setProperty('--as-x', (settings.showOffday ? SWITCH_TRAVEL : 0) + 'px');
+  }
 
   renderRewards();
   renderFriends();
@@ -1656,29 +1991,101 @@ function renderProfile() {
   renderAccount();
 }
 
-/* достижения-медали */
-function renderMedals() {
-  const box = document.getElementById('medal-grid');
-  if (!box) return;
-  const metrics = {
+/* ---------- ДОСТИЖЕНИЯ ----------
+   Считаем текущее значение по каждому виду; медаль получена, если оно ≥ порога.
+   Штрафы деньгами считаем ПО ЧИСЛУ (сколько раз оштрафовался), а не по сумме. */
+function medalMetrics() {
+  return {
+    friends: friends.length,
     streak: habits.length ? Math.max(...habits.map(computeBestStreak)) : 0,
-    fines: ledger.filter(e => e.mode === 'money').reduce((s, e) => s + (e.amount || 0), 0),
-    locks: ledger.filter(e => e.mode === 'lock').length,
     marathons: goals.filter(g => isMarathon(g) && goalPct(g) >= 100).length,
-    steps: totalSteps()
+    locks: ledger.filter(e => e.mode === 'lock').length,
+    fines: ledger.filter(e => e.mode === 'money').length
   };
-  box.innerHTML = MEDALS.map(m => {
-    const cur = metrics[m.kind];
-    const earned = cur >= m.at;
-    const sub = earned ? 'получена' : `${Math.min(cur, m.at)}/${m.at}`;
-    return `
-      <div class="medal ${earned ? 'earned ' + m.cls : 'locked'}"
-        title="${m.name}${earned ? '' : ' — ещё ' + (m.at - cur)}">
-        <span class="m-ic">${icon(m.ic)}</span>
-        <span class="m-name">${m.name}</span>
-        <span class="m-sub">${sub}</span>
-      </div>`;
-  }).join('');
+}
+
+// иконка достижения: 3D-картинка поверх SVG-запаски. Битую картинку удаляем
+// (см. wireMedalArt) — тогда остаётся SVG, приложение не ломается без файла.
+function medalIconHtml(m) {
+  const art = m.art ? 'icons/medals/' + m.art : null;
+  return `<span class="m-ic">
+    ${art ? `<img class="m-art" src="${art}" alt="" loading="lazy">` : ''}
+    <span class="m-fallback">${icon(MEDAL_FALLBACK[m.kind] || 'i-award')}</span>
+  </span>`;
+}
+// нет файла картинки → убираем <img>, остаётся SVG
+function wireMedalArt(box) {
+  box.querySelectorAll('.m-art').forEach(img =>
+    img.addEventListener('error', () => img.remove()));
+}
+
+// строка достижения на экране: иконка + название + описание + статус
+function medalRowHtml(m, cur) {
+  const earned = cur >= m.at;
+  const status = earned
+    ? `<span class="mr-badge">${icon('i-check', 'ic ic-s')} есть</span>`
+    : `<span class="mr-progress">${Math.min(cur, m.at)} / ${m.at}</span>`;
+  return `
+    <div class="medal-row ${earned ? 'earned ' + m.cls : 'locked'}">
+      ${medalIconHtml(m)}
+      <div class="mr-main">
+        <div class="mr-name">${escapeHtml(m.name)}</div>
+        <div class="mr-desc">${escapeHtml(m.desc || '')}</div>
+      </div>
+      ${status}
+    </div>`;
+}
+
+// компактная карточка в профиле: прогресс + несколько последних значков
+function renderMedals() {
+  const preview = document.getElementById('ach-preview');
+  if (!preview) return;
+  const metrics = medalMetrics();
+  const earned = MEDALS.filter(m => metrics[m.kind] >= m.at);
+
+  document.getElementById('ach-count').textContent = `${earned.length} / ${MEDALS.length}`;
+  document.getElementById('ach-fill').style.width =
+    Math.round((earned.length / MEDALS.length) * 100) + '%';
+
+  // показываем последние полученные, а если их нет — ближайшие к получению
+  const show = earned.length
+    ? earned.slice(-5)
+    : MEDALS.slice().sort((a, b) =>
+        (b.at ? metrics[b.kind] / b.at : 0) - (a.at ? metrics[a.kind] / a.at : 0)).slice(0, 5);
+
+  preview.innerHTML = show.map(m => `
+    <span class="ach-chip ${earned.includes(m) ? 'on' : ''}" title="${m.name}">
+      ${medalIconHtml(m)}
+    </span>`).join('');
+  wireMedalArt(preview);
+}
+
+// экран со всей коллекцией: сначала полученные, потом закрытые
+function renderMedalsScreen() {
+  const earnedBox = document.getElementById('ach-earned');
+  const lockedBox = document.getElementById('ach-locked');
+  if (!earnedBox || !lockedBox) return;
+
+  const metrics = medalMetrics();
+  const earned = MEDALS.filter(m => metrics[m.kind] >= m.at);
+  const locked = MEDALS.filter(m => metrics[m.kind] < m.at);
+
+  document.getElementById('ach-screen-count').textContent =
+    `${earned.length} / ${MEDALS.length}`;
+  document.getElementById('ach-screen-fill').style.width =
+    Math.round((earned.length / MEDALS.length) * 100) + '%';
+
+  earnedBox.innerHTML = earned.map(m => medalRowHtml(m, metrics[m.kind])).join('');
+  // закрытые — ближе к получению сверху, чтобы было видно, что вот-вот откроется
+  lockedBox.innerHTML = locked
+    .slice()
+    .sort((a, b) => (metrics[b.kind] / b.at) - (metrics[a.kind] / a.at))
+    .map(m => medalRowHtml(m, metrics[m.kind])).join('');
+
+  document.getElementById('ach-earned-block').hidden = earned.length === 0;
+  document.getElementById('ach-locked-block').hidden = locked.length === 0;
+  wireMedalArt(earnedBox);
+  wireMedalArt(lockedBox);
 }
 
 /* большие цели */
@@ -1930,6 +2337,37 @@ function renderFriends() {
       renderFriends();
     }));
 }
+/* Доска соревнования. Честно: данных о чужом прогрессе у нас пока нет —
+   друзья хранятся локально, без серверных аккаунтов. Поэтому показываем СВОЙ
+   результат как ориентир и не выдумываем чужие цифры. */
+function renderFriendsBoard() {
+  const box = document.getElementById('friends-board');
+  if (!box) return;
+
+  const myStreak = bestCurrentStreak();
+  const pct = weekCompletion(weekStartOf(new Date()));   // null, если на неделе ничего не было
+  const myWeek = pct === null ? '—' : pct + '%';
+
+  if (!friends.length) {
+    box.innerHTML = `<p class="hint" style="margin:0">Добавь друга — и здесь появится, кто на какой серии.</p>`;
+    return;
+  }
+  box.innerHTML = `
+    <div class="friend-row">
+      <span class="friend-ava">${avatarHtml(profile)}</span>
+      <span class="friend-name">${escapeHtml(profile.name || 'Ты')}</span>
+      <span class="goal-text">${icon('i-flame', 'ic ic-s')} ${myStreak} · ${myWeek}</span>
+    </div>
+    ${friends.map(f => `
+      <div class="friend-row">
+        <span class="friend-ava">${escapeHtml(f.emoji || '🙂')}</span>
+        <span class="friend-name">${escapeHtml(f.name)}</span>
+        <span class="goal-text dim">ждёт аккаунт</span>
+      </div>`).join('')}
+    <p class="hint" style="margin:8px 0 0">Чужие серии подтянутся, когда друзья будут по аккаунтам,
+      а не локальным списком.</p>`;
+}
+
 function saveFriend() {
   const name = document.getElementById('fr-name').value.trim();
   if (!name) { alert('Введи имя друга'); return; }
@@ -2310,6 +2748,8 @@ function switchScreen(name, updateHash = true) {
   }
   if (name === 'stats') renderStats();
   if (name === 'calendar') renderCalendar();
+  if (name === 'friends') { renderFriends(); renderFriendsBoard(); }
+  if (name === 'medals') renderMedalsScreen();
   if (name === 'profile') renderProfile();
 }
 
@@ -2351,9 +2791,28 @@ function buildScenePicker(containerId, selectedScene) {
     b.className = 'scene-pick' + (sc.id === selectedScene ? ' selected' : '');
     b.dataset.scene = sc.id;
     b.setAttribute('aria-label', 'Сцена: ' + sc.name);
+    // цвет фигурки задаёт сцена (на снегу — тёмная), как и в самой карточке
+    b.style.setProperty('--w-ink', sc.ink || '#F3EDE4');
+    // превью — та же сцена, что и в марафоне: небо, рельеф, финиш и фигурка
+    // на середине пути. Это стоп-кадр: анимации в пикере выключены (CSS).
+    const p = walkerPath(sc, 0.45);
     b.innerHTML = `
-      <span class="sp-art" style="background:linear-gradient(180deg, ${sc.sky[0]}, ${sc.sky[1]} 55%, ${sc.sky[2]})">
-        <span class="sp-ground" style="background:${sc.ground}"></span>
+      <span class="sp-art">
+        <svg class="sp-svg" viewBox="0 0 320 132" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="sp-sky-${sc.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="${sc.sky[0]}"/>
+              <stop offset="0.55" stop-color="${sc.sky[1]}"/>
+              <stop offset="1" stop-color="${sc.sky[2]}"/>
+            </linearGradient>
+          </defs>
+          <rect width="320" height="132" fill="url(#sp-sky-${sc.id})"/>
+          ${walkerSky(sc)}
+          ${walkerTerrain(sc)}
+          ${walkerFinish(sc)}
+          <g transform="translate(${p.x},${p.y})">${walkerFigure(sc)}</g>
+          ${walkerForeground(sc)}
+        </svg>
       </span>
       <span class="sp-name">${escapeHtml(sc.name)}</span>`;
     b.addEventListener('click', () => selectIn(sp, b));
@@ -2432,6 +2891,159 @@ function selectedDays() {
     .map(b => Number(b.dataset.day));
 }
 
+/* ---------- ПЕРЕКЛЮЧАТЕЛЬ (порт AppleSwitch на ваниль) ----------
+   Оригинал на motion/react; здесь то же поведение без React:
+   • клик переключает;
+   • ползунок можно ПОТЯНУТЬ — на отпускании доводится к ближнему краю;
+   • при нажатии «капля» растягивается (класс .grabbing);
+   • клик, который браузер шлёт сразу после перетаскивания, гасим. */
+const SWITCH_TRAVEL = 22;            // 62 − 32 − 4*2, метрики размера md из оригинала
+
+function initSwitch(el, onChange) {
+  if (!el || el.dataset.asWired) return;
+  el.dataset.asWired = '1';
+
+  let pointerId = null, startX = 0, startThumb = 0, dragging = false, suppressClick = false;
+  const isOn = () => el.getAttribute('aria-checked') === 'true';
+  const setX = px => el.style.setProperty('--as-x', px + 'px');
+  const curX = () => parseFloat(el.style.getPropertyValue('--as-x')) || 0;
+
+  const apply = (on, notify) => {
+    el.setAttribute('aria-checked', String(on));
+    setX(on ? SWITCH_TRAVEL : 0);
+    if (notify) onChange?.(on);
+  };
+  setX(isOn() ? SWITCH_TRAVEL : 0);          // стартовое положение без анимации
+
+  el.addEventListener('pointerdown', e => {
+    if (el.disabled) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    el.setPointerCapture(e.pointerId);
+    pointerId = e.pointerId;
+    startX = e.clientX;
+    startThumb = isOn() ? SWITCH_TRAVEL : 0;
+    dragging = false;
+    el.classList.add('grabbing');
+  });
+
+  el.addEventListener('pointermove', e => {
+    if (pointerId === null || e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX;
+    if (Math.abs(dx) > 3) {
+      dragging = true;
+      el.classList.add('dragging');          // снимает доводчик: идём за пальцем
+    }
+    if (!dragging) return;
+    e.preventDefault();
+    setX(Math.min(SWITCH_TRAVEL, Math.max(0, startThumb + dx)));
+  });
+
+  const finish = e => {
+    if (pointerId === null) return;
+    if (e?.pointerId != null && el.hasPointerCapture?.(e.pointerId)) {
+      el.releasePointerCapture(e.pointerId);
+    }
+    pointerId = null;
+    el.classList.remove('grabbing', 'dragging');
+    if (!dragging) return;                   // это был обычный клик — обработает click
+    dragging = false;
+    suppressClick = true;
+    apply(curX() >= SWITCH_TRAVEL / 2, true);
+  };
+  el.addEventListener('pointerup', finish);
+  el.addEventListener('pointercancel', finish);
+
+  el.addEventListener('click', () => {
+    if (el.disabled) return;
+    if (suppressClick) { suppressClick = false; return; }
+    apply(!isOn(), true);                    // сюда же приходят Space/Enter с клавиатуры
+  });
+
+  // клик по подписи строки тоже переключает — как <label> в оригинале.
+  // Клики по самому переключателю пропускаем, иначе сработает дважды.
+  const row = el.closest('.setting-row');
+  if (row) {
+    row.addEventListener('click', e => {
+      if (el.disabled || e.target.closest('.aswitch')) return;
+      el.click();
+    });
+  }
+}
+
+/* ---------- СЛАЙДЕР (тот же язык, что у переключателя) ----------
+   Нативный <input type="range"> оставляем ради доступности и клавиатуры,
+   меняем только вид: --val красит заполненную часть трека, класс .grabbing
+   растягивает «каплю» на время перетаскивания. */
+function initSlider(el, onInput) {
+  if (!el || el.dataset.asWired) return;
+  el.dataset.asWired = '1';
+
+  const paint = () => {
+    const min = Number(el.min) || 0;
+    const max = Number(el.max) || 100;
+    const pct = max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0;
+    el.style.setProperty('--val', Math.max(0, Math.min(100, pct)) + '%');
+  };
+  el._paint = paint;            // вызвать после программной установки value
+  paint();
+
+  el.addEventListener('input', () => { paint(); onInput?.(el.value); });
+  el.addEventListener('pointerdown', () => el.classList.add('grabbing'));
+  ['pointerup', 'pointercancel', 'blur'].forEach(ev =>
+    el.addEventListener(ev, () => el.classList.remove('grabbing')));
+}
+
+/* ---------- БЛОКИРОВКА: на сколько ---------- */
+const LOCK_MINUTES_DEFAULT = 60;
+function lockMinutesValue() {
+  const raw = Number(document.getElementById('f-lock-mins')?.value) || LOCK_MINUTES_DEFAULT;
+  return Math.max(15, Math.min(1440, Math.round(raw / 15) * 15));   // 15 мин … сутки
+}
+// 60 → «1 ч», 90 → «1 ч 30 мин», 45 → «45 мин»
+function formatLock(mins) {
+  const m = Math.max(0, Number(mins) || 0);
+  if (!m) return '';
+  const h = Math.floor(m / 60), rest = m % 60;
+  if (!h) return `${rest} мин`;
+  return rest ? `${h} ч ${rest} мин` : `${h} ч`;
+}
+// подпись рядом с полем показывает человекочитаемую длительность
+function updateLockSuffix() {
+  const el = document.getElementById('f-lock-suffix');
+  if (el) el.textContent = `мин — это ${formatLock(lockMinutesValue())} за пропуск`;
+}
+
+/* ---------- «СКОЛЬКО ДНЕЙ В НЕДЕЛЮ» (гибкий режим) ---------- */
+let wtValue = 0;                       // 0 = выкл, строго по дням недели
+function setWeekTarget(n, animate = true) {
+  wtValue = Math.max(0, Math.min(7, n));
+  const card = document.getElementById('wt-card');
+  const count = document.getElementById('wt-count');
+  if (!card || !count) return;
+
+  const on = wtValue > 0;
+  card.classList.toggle('off', !on);
+  document.getElementById('day-picker').classList.toggle('dimmed', on);
+  document.getElementById('wt-sub').textContent = on
+    ? 'Любые дни — важна норма за неделю'
+    : 'Строго по выбранным дням';
+  document.getElementById('wt-minus').disabled = wtValue <= 0;
+  document.getElementById('wt-plus').disabled = wtValue >= 7;
+
+  // при открытии шторки показываем значение без анимации: снимаем прошлое
+  // состояние счётчика (именно delete — присваивание undefined положило бы
+  // в data-атрибут строку "undefined", и она бы улетала в анимации)
+  if (!animate) delete count.dataset.acValue;
+  animateCount(count, on ? wtValue : '—');
+}
+function wireWeekTarget() {
+  const minus = document.getElementById('wt-minus');
+  const plus = document.getElementById('wt-plus');
+  if (!minus || !plus) return;
+  minus.addEventListener('click', () => setWeekTarget(wtValue - 1));
+  plus.addEventListener('click', () => setWeekTarget(wtValue + 1));
+}
+
 function wireSeg(segId, onChange) {
   const seg = document.getElementById(segId);
   seg.querySelectorAll('.seg-btn').forEach(btn => {
@@ -2467,6 +3079,7 @@ function openEditSheet(id) {
   setPickSelected('icon-picker', 'icon', h.icon);
   setPickSelected('color-picker', 'color', h.color);
   buildDayPicker(h.schedule);
+  setWeekTarget(Number(h.weekTarget) || 0, false);
   document.getElementById('f-name').value = h.name;
   document.getElementById('f-min').value = h.min || '';
 
@@ -2484,6 +3097,8 @@ function openEditSheet(id) {
     setSegActive('recipient', 'rec', h.stake.recipient);
   } else {
     document.getElementById('f-apps').value = (h.stake.apps || []).join(', ');
+    document.getElementById('f-lock-mins').value = h.stake.minutes || LOCK_MINUTES_DEFAULT;
+    updateLockSuffix();
   }
 
   openSheet('add-overlay');
@@ -2505,9 +3120,12 @@ function resetAddForm() {
   document.getElementById('f-unit').value = '';
   document.getElementById('f-amount').value = 100;
   document.getElementById('f-apps').value = '';
+  document.getElementById('f-lock-mins').value = LOCK_MINUTES_DEFAULT;
+  updateLockSuffix();
   document.getElementById('f-min').value = '';
   buildPickers();
   buildDayPicker();
+  setWeekTarget(0, false);
   ['goal-type','stake-mode','recipient'].forEach(id => {
     const seg = document.getElementById(id);
     seg.querySelectorAll('.seg-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
@@ -2521,8 +3139,13 @@ function submitHabit() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { alert('Введите название привычки'); return; }
 
-  const schedule = selectedDays();
-  if (!schedule.length) { alert('Выбери хотя бы один день недели'); return; }
+  // в гибком режиме конкретные дни не важны — привычка доступна в любой день
+  const weekTarget = wtValue;
+  const schedule = weekTarget > 0 ? [0,1,2,3,4,5,6] : selectedDays();
+  if (!weekTarget && !schedule.length) {
+    alert('Выбери хотя бы один день недели — или задай, сколько дней в неделю');
+    return;
+  }
 
   const goalType = segValue('goal-type', 'goal');
   const stakeMode = segValue('stake-mode', 'stake');
@@ -2532,6 +3155,7 @@ function submitHabit() {
     icon: document.querySelector('#icon-picker .selected').dataset.icon,
     color: document.querySelector('#color-picker .selected').dataset.color,
     schedule,
+    weekTarget,
     min: document.getElementById('f-min').value.trim(),
     goal: {
       type: goalType,
@@ -2546,6 +3170,7 @@ function submitHabit() {
         }
       : {
           mode: 'lock',
+          minutes: lockMinutesValue(),
           apps: document.getElementById('f-apps').value
             .split(',').map(s => s.trim()).filter(Boolean)
         }
@@ -2645,8 +3270,11 @@ function showDaySummary() {
         <div><div>Создателям</div><b>${creators}₽</b></div></div>`;
     }
     if (apps.size) {
+      const maxLock = Math.max(...notDone
+        .filter(h => h.stake.mode === 'lock')
+        .map(h => Number(h.stake.minutes) || LOCK_MINUTES_DEFAULT));
       html += `<div class="summary-row"><span class="big lock">${icon('i-lock')}</span>
-        <div><div>Заблокируются приложения</div>
+        <div><div>Заблокируются приложения${maxLock ? ' на ' + formatLock(maxLock) : ''}</div>
         <b>${[...apps].map(escapeHtml).join(', ')}</b></div></div>`;
     }
     body.innerHTML = html + marathonSummaryHtml();
@@ -2675,6 +3303,17 @@ function init() {
 
   buildPickers();
   buildDayPicker();
+  wireWeekTarget();
+  wireHabitStats();
+  document.getElementById('btn-open-stats').addEventListener('click', () => switchScreen('stats'));
+  const achCard = document.getElementById('ach-card');
+  achCard.addEventListener('click', () => switchScreen('medals'));
+  achCard.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchScreen('medals'); }
+  });
+  setWeekTarget(0, false);
+  document.getElementById('f-lock-mins').addEventListener('input', updateLockSuffix);
+  updateLockSuffix();
 
   wireSeg('goal-type', btn => {
     document.getElementById('count-fields').hidden = btn.dataset.goal !== 'count';
@@ -2748,8 +3387,8 @@ function init() {
   });
 
   // мотивация
-  document.getElementById('mot-level').addEventListener('input', e => {
-    document.getElementById('mot-out').textContent = e.target.value + '%';
+  initSlider(document.getElementById('mot-level'), v => {
+    document.getElementById('mot-out').textContent = v + '%';
   });
   document.getElementById('mot-save').addEventListener('click', saveMotivation);
 
@@ -2786,11 +3425,13 @@ function init() {
   document.getElementById('idea-save').addEventListener('click', saveIdea);
 
   // настройки и данные
-  document.getElementById('set-offday').addEventListener('change', e => {
-    settings.showOffday = e.target.checked;
+  initSwitch(document.getElementById('set-offday'), on => {
+    settings.showOffday = on;
     saveJson(SETTINGS_KEY, settings);
     renderHabits();
   });
+  // «Итог дня при запуске» — выключить нельзя, но переключатель должен выглядеть живым
+  document.querySelectorAll('.aswitch[disabled]').forEach(el => initSwitch(el));
   document.getElementById('btn-export').addEventListener('click', exportData);
   document.getElementById('btn-import').addEventListener('click', () =>
     document.getElementById('import-file').click());
