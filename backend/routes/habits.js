@@ -89,14 +89,15 @@ router.put('/:id/day/:day', (req, res) => {
     return res.status(400).json({ error: 'Неверный формат дня, нужен YYYY-MM-DD' });
   }
 
-  const done = req.body?.done ? 1 : 0;
+  const skip = req.body?.skip ? 1 : 0;
+  const done = (!skip && req.body?.done) ? 1 : 0;   // пропуск и «выполнено» взаимоисключаемы
   const count = Number(req.body?.count) || 0;
   db.prepare(`
-    INSERT INTO completions (habit_id, day, count, done) VALUES (?, ?, ?, ?)
-    ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done
-  `).run(req.params.id, req.params.day, count, done);
+    INSERT INTO completions (habit_id, day, count, done, skip) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done, skip = excluded.skip
+  `).run(req.params.id, req.params.day, count, done, skip);
 
-  res.json({ ok: true, day: req.params.day, done: !!done, count });
+  res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count });
 });
 
 // DELETE /api/habits/:id — удалить привычку (отметки — каскадом)

@@ -428,13 +428,16 @@ function isRequiredOn(h, d) {
 }
 function isScheduledToday(h) { return isScheduledOn(h, new Date()); }
 
-// выполнена ли (полностью или «минимумом»)
+// выполнена ли (полностью или «минимумом»). Пропуск («skip») — НЕ выполнение.
 function doneOn(h, key) {
-  if (h.history?.[key] === 'min') return true;
+  const v = h.history?.[key];
+  if (v === 'skip') return false;
+  if (v === 'min') return true;
   if (h.goal.type === 'count') return (h.counts?.[key] || 0) >= h.goal.target;
-  return !!h.history?.[key];
+  return !!v;
 }
 function isMinOn(h, key) { return h.history?.[key] === 'min'; }
+function isSkipOn(h, key) { return h.history?.[key] === 'skip'; }   // день пропущен — нейтрально
 function isDoneToday(h) { return doneOn(h, TODAY); }
 
 // ТЕКУЩИЙ СТРИК с грейс-днём: один пропуск не рвёт серию,
@@ -447,7 +450,9 @@ function computeStreak(h) {
   for (let i = 0; i < 3660; i++) {
     const key = dateKey(d);
     if (key < h.createdAt) break;
-    if (isFlexible(h)) {
+    if (isSkipOn(h, key)) {
+      // пропуск: серия стоит на месте — ни +1, ни разрыв
+    } else if (isFlexible(h)) {
       // гибкая: отметка в любой день продолжает серию, а рвёт её только пропуск
       // дня, который был обязателен (запас кончился). День «с запасом» нейтрален.
       if (doneOn(h, key)) { streak++; misses = 0; }
@@ -469,7 +474,9 @@ function computeBestStreak(h) {
   for (let i = 0; i < 3660 && d <= end; i++) {
     const key = dateKey(d);
     const counts = isFlexible(h) ? (doneOn(h, key) || isRequiredOn(h, d)) : isScheduledOn(h, d);
-    if (counts) {
+    if (isSkipOn(h, key)) {
+      // пропуск нейтрален — серию не наращивает и не рвёт
+    } else if (counts) {
       if (doneOn(h, key)) {
         cur++; misses = 0;
         if (cur > best) best = cur;
@@ -602,6 +609,7 @@ function settlePastDays() {
     const key = dateKey(d);
     habits.forEach(h => {
       if (h.createdAt > key) return;
+      if (isSkipOn(h, key)) return;          // явный пропуск — штрафа нет, серия сохранена
       // штраф только за ОБЯЗАТЕЛЬНЫЙ день: у гибкой привычки пропуск,
       // пока норму недели ещё можно добрать, наказывать не за что
       if (!isRequiredOn(h, d)) return;
@@ -2938,7 +2946,7 @@ function selectedDays() {
    Камеру нельзя протестировать без устройства — всё обёрнуто в try/guard, чтобы
    отсутствие камеры/разрешения не ломало приложение (остаётся кнопка «Пропустить»). */
 let proofHabit = null, proofStream = null, proofBlob = null, proofType = 'photo';
-let proofFacing = 'user', proofRecorder = null, proofChunks = [], proofRecTimer = null;
+let proofFacing = 'user', proofRecorder = null, proofChunks = [], proofRecTimer = null, proofMirrorRAF = null;
 
 function openProofBanner(h) {
   proofHabit = h;
@@ -2977,6 +2985,8 @@ async function startProofCam() {
     const cam = document.getElementById('proof-cam');
     cam.srcObject = proofStream;
     cam.muted = true;
+    // фронталку показываем зеркально (селфи-ощущение); результат снимем так же
+    cam.classList.toggle('mirror', proofFacing === 'user');
   } catch (e) {
     err.hidden = false;
     err.textContent = 'Нет доступа к камере. Разреши камеру — снимать нужно вживую, из галереи нельзя.';
@@ -2991,7 +3001,10 @@ function proofCapturePhoto() {
   if (!cam.videoWidth) return;
   const c = document.createElement('canvas');
   c.width = cam.videoWidth; c.height = cam.videoHeight;
-  c.getContext('2d').drawImage(cam, 0, 0);
+  const ctx = c.getContext('2d');
+  // зеркалим кадр так же, как превью на фронталке — что видел, то и снял
+  if (proofFacing === 'user') { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(cam, 0, 0);
   c.toBlob(b => {
     if (!b) return;
     proofBlob = b; proofType = 'photo';
@@ -3007,12 +3020,36 @@ function proofPickVideoMime() {
 function proofToggleVideo() {
   if (proofRecorder && proofRecorder.state === 'recording') { proofRecorder.stop(); return; }
   if (!proofStream || !window.MediaRecorder) return;
+
+  // источник записи: фронталку зеркалим через canvas, чтобы видео совпало с превью.
+  // если не поддерживается/падает — пишем поток как есть, видео не ломается.
+  let recordStream = proofStream;
+  const cam = document.getElementById('proof-cam');
+  if (proofFacing === 'user' && cam.videoWidth && typeof HTMLCanvasElement.prototype.captureStream === 'function') {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = cam.videoWidth; canvas.height = cam.videoHeight;
+      const ctx = canvas.getContext('2d');
+      const draw = () => {
+        ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+        ctx.drawImage(cam, 0, 0); ctx.restore();
+        proofMirrorRAF = requestAnimationFrame(draw);
+      };
+      draw();
+      const cs = canvas.captureStream(30);
+      const audio = proofStream.getAudioTracks()[0];
+      if (audio) cs.addTrack(audio);
+      recordStream = cs;
+    } catch { cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null; recordStream = proofStream; }
+  }
+
   proofChunks = [];
-  try { proofRecorder = new MediaRecorder(proofStream, { mimeType: proofPickVideoMime() || undefined }); }
-  catch { return; }
+  try { proofRecorder = new MediaRecorder(recordStream, { mimeType: proofPickVideoMime() || undefined }); }
+  catch { cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null; return; }
   proofRecorder.ondataavailable = e => { if (e.data && e.data.size) proofChunks.push(e.data); };
   proofRecorder.onstop = () => {
     clearInterval(proofRecTimer);
+    cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null;
     document.getElementById('proof-rec').hidden = true;
     const b = new Blob(proofChunks, { type: proofRecorder.mimeType || 'video/webm' });
     proofBlob = b; proofType = 'video';
@@ -3049,26 +3086,36 @@ async function proofSend() {
   const mime = proofBlob.type || (proofType === 'video' ? 'video/webm' : 'image/jpeg');
   const blob = proofBlob;
   closeProofBanner();
-  toast('Пруф отправлен на проверку ⏳');
+  toast('Спасибо, что поделился! Отправлено ⏳');
   if (!API) return;
   try {
     const headers = { 'Content-Type': mime };
     if (authToken) headers.Authorization = 'Bearer ' + authToken;
     const r = await fetch(API + '/proofs?' + q.toString(), { method: 'POST', headers, body: blob });
-    if (!r.ok) toast('Не удалось отправить пруф — попробуй ещё раз');
-  } catch { toast('Пруф не ушёл — проверь связь'); }
+    if (!r.ok) toast('Не удалось отправить — попробуй ещё раз');
+  } catch { toast('Не ушло — проверь связь'); }
 }
 
 function proofSkip() {
   if (skipsLeft() <= 0) { toast('Пропуски на этот месяц кончились'); return; }
+  const h = proofHabit;
   skips.left--; saveSkips();
-  toast('Пропущено. Осталось пропусков: ' + skips.left);
+  // помечаем день пропущенным: серия стоит на месте, штрафа не будет
+  if (h) {
+    h.history[TODAY] = 'skip';
+    if (h.goal.type === 'count') h.counts[TODAY] = 0;
+    save();
+    apiCall('PUT', `/habits/${h.id}/day/${TODAY}`, { skip: true, done: false, count: 0 });
+    render();
+  }
+  toast('Пропущено — серия сохранена. Осталось пропусков: ' + skips.left);
   closeProofBanner();
 }
 
 function closeProofBanner() {
   if (proofRecorder && proofRecorder.state === 'recording') { try { proofRecorder.stop(); } catch {} }
   clearInterval(proofRecTimer);
+  cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null;
   stopProofCam();
   proofHabit = null; proofBlob = null; proofRecorder = null;
   document.getElementById('proof-overlay').hidden = true;

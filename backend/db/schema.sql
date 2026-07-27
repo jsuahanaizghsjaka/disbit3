@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS completions (
   day      TEXT NOT NULL,            -- 'YYYY-MM-DD'
   count    INTEGER DEFAULT 0,        -- для целей-счётчиков
   done     INTEGER DEFAULT 0,        -- 1 = выполнено
+  skip     INTEGER DEFAULT 0,        -- 1 = пропуск (нейтрально: серия стоит, штрафа нет)
   UNIQUE(habit_id, day)
 );
 

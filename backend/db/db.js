@@ -26,6 +26,7 @@ db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 for (const sql of [
   "ALTER TABLE habits ADD COLUMN week_target INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN stake_minutes INTEGER NOT NULL DEFAULT 60",
+  "ALTER TABLE completions ADD COLUMN skip INTEGER DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE charges ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE users ADD COLUMN login TEXT",
@@ -52,7 +53,8 @@ export function rowToHabit(row, completions = []) {
   const history = {};
   const counts = {};
   for (const c of completions) {
-    if (c.done) history[c.day] = true;
+    if (c.skip) history[c.day] = 'skip';       // пропуск — нейтрально
+    else if (c.done) history[c.day] = true;
     if (c.count) counts[c.day] = c.count;
   }
   return {
