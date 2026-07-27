@@ -5,14 +5,18 @@
    ============================================================ */
 
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// DB_PATH задаёт хостинг (persistent volume), локально — файл рядом
-export const db = new DatabaseSync(process.env.DB_PATH || path.join(__dirname, 'disbit.db'));
+// DB_PATH задаёт хостинг (persistent volume), локально — файл рядом.
+// Каталог создаём заранее: если DB_PATH указывает на ещё не смонтированный том
+// (например, /data до создания volume), DatabaseSync иначе упал бы на open.
+const DB_FILE = process.env.DB_PATH || path.join(__dirname, 'disbit.db');
+mkdirSync(path.dirname(DB_FILE), { recursive: true });
+export const db = new DatabaseSync(DB_FILE);
 
 // внешние ключи + схема
 db.exec('PRAGMA foreign_keys = ON;');

@@ -19,11 +19,25 @@ const BACKLOG_KEY  = 'disbit_backlog_v1';
 const TOKEN_KEY    = 'disbit_token_v1';
 const AUTH_USER_KEY = 'disbit_auth_user_v1';
 
-// с Vercel-статики ходим на Railway-бэкенд; на самом Railway и localhost — тот же origin
-const API_HOST = location.hostname.endsWith('vercel.app')
-  ? 'https://disbit3-production.up.railway.app'
-  : '';
-const API = location.protocol.startsWith('http') ? API_HOST + '/api' : null;
+// Куда ходить за API:
+//  • на самом Railway-домене — тот же origin (пусто), фронт и API вместе;
+//  • в мобильном приложении (Capacitor: хост localhost, но своего сервера нет)
+//    и с внешнего хоста (vercel и пр.) — на живой Railway-бэкенд.
+// Без этого аккаунты и синхронизация в приложении не работали бы: localhost
+// внутри WebView ведёт в пустоту.
+const BACKEND = 'https://zippy-ambition-production-18fd.up.railway.app';
+const isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+// same-origin (API_HOST пусто) — когда фронт и сервер это ОДИН origin:
+//  Railway-домен в проде и localhost при локальной разработке в БРАУЗЕРЕ.
+// В приложении хост тоже localhost, но своего сервера там нет — поэтому только !isNativeApp.
+const sameOrigin = !isNativeApp && (
+  location.hostname.endsWith('.up.railway.app') ||
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1'
+);
+const API_HOST = sameOrigin ? '' : BACKEND;   // иначе (приложение, vercel, свой домен) — живой Railway
+// на file:// (без сервера) API недоступен; в приложении и по http — доступен
+const API = (isNativeApp || location.protocol.startsWith('http')) ? API_HOST + '/api' : null;
 
 /* ---------- АККАУНТ (Bearer-токен) ---------- */
 let authToken = localStorage.getItem(TOKEN_KEY) || null;
@@ -172,7 +186,7 @@ let statePushTimer = null;
 
 function stateBlob() {
   return {
-    profile, settings, goals, rewards, friends, backlog,
+    profile, settings, goals, rewards, friends, backlog, skips,
     settled: localStorage.getItem(SETTLED_KEY)
   };
 }
@@ -199,6 +213,11 @@ function applyRemoteState(data, ts) {
     rewards = Array.isArray(data.rewards) ? data.rewards : rewards;
     friends = Array.isArray(data.friends) ? data.friends : friends;
     backlog = Array.isArray(data.backlog) ? data.backlog : backlog;
+    // пропуски: берём серверные только для текущего месяца, иначе оставляем свежие 5
+    if (data.skips && data.skips.month === monthKey()) {
+      skips = { month: monthKey(), left: Math.max(0, Math.min(SKIPS_PER_MONTH, Number(data.skips.left) || 0)) };
+      localStorage.setItem(SKIPS_KEY, JSON.stringify(skips));
+    }
     if (data.settled && data.settled > (localStorage.getItem(SETTLED_KEY) || '')) {
       localStorage.setItem(SETTLED_KEY, data.settled);
     }
@@ -354,6 +373,23 @@ function addDays(d, n) {
 }
 const TODAY = dateKey();
 
+/* ---------- ПРОПУСКИ ПРУФА: 5 в месяц, сброс в новом месяце ---------- */
+const SKIPS_KEY = 'disbit_skips_v1';
+const SKIPS_PER_MONTH = 5;
+function monthKey() { return TODAY.slice(0, 7); }   // 'YYYY-MM'
+let skips = (() => {
+  try { const s = JSON.parse(localStorage.getItem(SKIPS_KEY)); if (s && s.month === monthKey()) return s; } catch {}
+  return { month: monthKey(), left: SKIPS_PER_MONTH };
+})();
+function skipsLeft() {
+  if (skips.month !== monthKey()) { skips = { month: monthKey(), left: SKIPS_PER_MONTH }; saveSkips(); }
+  return skips.left;
+}
+function saveSkips() {
+  localStorage.setItem(SKIPS_KEY, JSON.stringify(skips));
+  if (!applyingRemote) { touchStateTs(); scheduleStatePush(); }
+}
+
 /* ---------- ЛОГИКА ПРИВЫЧЕК ---------- */
 /* ---------- ГИБКИЙ РЕЖИМ: N дней в неделю ----------
    Для тех, кто не может делать день в день. Конкретные дни недели тогда не
@@ -495,6 +531,7 @@ function toggleHabit(id) {
   const h = habits.find(x => x.id === id);
   if (!h) return;
   const wasFull = todayPct() === 100;
+  const wasDone = isDoneToday(h);
   if (h.goal.type === 'count') {
     const cur = h.counts[TODAY] || 0;
     setDayMark(h, TODAY, { count: cur >= h.goal.target ? 0 : cur + 1 });
@@ -502,7 +539,10 @@ function toggleHabit(id) {
     setDayMark(h, TODAY, { done: h.history[TODAY] === 'min' ? true : !h.history[TODAY] });
   }
   render();
-  if (!wasFull && todayPct() === 100) {
+  // привычка только что стала выполненной → просим пруф (живое фото/видео)
+  if (!wasDone && isDoneToday(h)) {
+    openProofBanner(h);
+  } else if (!wasFull && todayPct() === 100) {
     toast(PRAISES[Math.floor(Math.random() * PRAISES.length)]);
   }
 }
@@ -2891,6 +2931,203 @@ function selectedDays() {
     .map(b => Number(b.dataset.day));
 }
 
+/* ---------- ПРУФ ВЫПОЛНЕНИЯ (живое фото/видео) ----------
+   Открывается сразу после отметки привычки. Камера — только живая (getUserMedia),
+   из галереи грузить нельзя. Пруф уходит на сервер в статус pending, дальше его
+   вручную проверяет админ на /review. Пропуск тратит один из 5 месячных.
+   Камеру нельзя протестировать без устройства — всё обёрнуто в try/guard, чтобы
+   отсутствие камеры/разрешения не ломало приложение (остаётся кнопка «Пропустить»). */
+let proofHabit = null, proofStream = null, proofBlob = null, proofType = 'photo';
+let proofFacing = 'user', proofRecorder = null, proofChunks = [], proofRecTimer = null;
+
+function openProofBanner(h) {
+  proofHabit = h;
+  proofBlob = null;
+  proofType = 'photo';
+  document.getElementById('proof-habit-name').textContent = h.name || 'Привычка';
+  document.getElementById('proof-skip-left').textContent = skipsLeft();
+  document.getElementById('proof-skip').disabled = skipsLeft() <= 0;
+  proofShowCapture();
+  document.getElementById('proof-overlay').hidden = false;
+  startProofCam();
+}
+
+function proofShowCapture() {
+  document.getElementById('proof-cam').hidden = false;
+  document.getElementById('proof-preview').hidden = true;
+  document.getElementById('proof-preview-vid').hidden = true;
+  document.getElementById('proof-cap').hidden = false;
+  document.getElementById('proof-confirm').hidden = true;
+  document.getElementById('proof-rec').hidden = true;
+}
+
+async function startProofCam() {
+  stopProofCam();
+  const err = document.getElementById('proof-cam-err');
+  err.hidden = true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    err.hidden = false;
+    err.textContent = 'Камера недоступна в этом браузере. Открой в приложении или разреши камеру.';
+    return;
+  }
+  try {
+    proofStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: proofFacing }, audio: true
+    });
+    const cam = document.getElementById('proof-cam');
+    cam.srcObject = proofStream;
+    cam.muted = true;
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = 'Нет доступа к камере. Разреши камеру — снимать нужно вживую, из галереи нельзя.';
+  }
+}
+function stopProofCam() {
+  if (proofStream) { proofStream.getTracks().forEach(t => t.stop()); proofStream = null; }
+}
+
+function proofCapturePhoto() {
+  const cam = document.getElementById('proof-cam');
+  if (!cam.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = cam.videoWidth; c.height = cam.videoHeight;
+  c.getContext('2d').drawImage(cam, 0, 0);
+  c.toBlob(b => {
+    if (!b) return;
+    proofBlob = b; proofType = 'photo';
+    proofShowPreview(URL.createObjectURL(b), 'photo');
+  }, 'image/jpeg', 0.85);
+}
+
+function proofPickVideoMime() {
+  const opts = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+  return (window.MediaRecorder && MediaRecorder.isTypeSupported)
+    ? (opts.find(m => MediaRecorder.isTypeSupported(m)) || '') : '';
+}
+function proofToggleVideo() {
+  if (proofRecorder && proofRecorder.state === 'recording') { proofRecorder.stop(); return; }
+  if (!proofStream || !window.MediaRecorder) return;
+  proofChunks = [];
+  try { proofRecorder = new MediaRecorder(proofStream, { mimeType: proofPickVideoMime() || undefined }); }
+  catch { return; }
+  proofRecorder.ondataavailable = e => { if (e.data && e.data.size) proofChunks.push(e.data); };
+  proofRecorder.onstop = () => {
+    clearInterval(proofRecTimer);
+    document.getElementById('proof-rec').hidden = true;
+    const b = new Blob(proofChunks, { type: proofRecorder.mimeType || 'video/webm' });
+    proofBlob = b; proofType = 'video';
+    proofShowPreview(URL.createObjectURL(b), 'video');
+  };
+  proofRecorder.start();
+  let t = 0;
+  const rec = document.getElementById('proof-rec');
+  rec.hidden = false;
+  document.getElementById('proof-rec-time').textContent = '0';
+  document.getElementById('proof-video').textContent = '■ Стоп';
+  proofRecTimer = setInterval(() => {
+    t++; document.getElementById('proof-rec-time').textContent = t;
+    if (t >= 15 && proofRecorder.state === 'recording') proofRecorder.stop();  // максимум 15с
+  }, 1000);
+}
+
+function proofShowPreview(url, type) {
+  document.getElementById('proof-cam').hidden = true;
+  document.getElementById('proof-video').textContent = '● Видео';
+  const img = document.getElementById('proof-preview');
+  const vid = document.getElementById('proof-preview-vid');
+  if (type === 'photo') { img.src = url; img.hidden = false; vid.hidden = true; }
+  else { vid.src = url; vid.hidden = false; img.hidden = true; }
+  document.getElementById('proof-cap').hidden = true;
+  document.getElementById('proof-confirm').hidden = false;
+}
+function proofRetake() { proofBlob = null; proofShowCapture(); }
+
+async function proofSend() {
+  if (!proofBlob || !proofHabit) return;
+  const h = proofHabit;
+  const q = new URLSearchParams({ habitId: h.id, day: TODAY, type: proofType, name: h.name || '' });
+  const mime = proofBlob.type || (proofType === 'video' ? 'video/webm' : 'image/jpeg');
+  const blob = proofBlob;
+  closeProofBanner();
+  toast('Пруф отправлен на проверку ⏳');
+  if (!API) return;
+  try {
+    const headers = { 'Content-Type': mime };
+    if (authToken) headers.Authorization = 'Bearer ' + authToken;
+    const r = await fetch(API + '/proofs?' + q.toString(), { method: 'POST', headers, body: blob });
+    if (!r.ok) toast('Не удалось отправить пруф — попробуй ещё раз');
+  } catch { toast('Пруф не ушёл — проверь связь'); }
+}
+
+function proofSkip() {
+  if (skipsLeft() <= 0) { toast('Пропуски на этот месяц кончились'); return; }
+  skips.left--; saveSkips();
+  toast('Пропущено. Осталось пропусков: ' + skips.left);
+  closeProofBanner();
+}
+
+function closeProofBanner() {
+  if (proofRecorder && proofRecorder.state === 'recording') { try { proofRecorder.stop(); } catch {} }
+  clearInterval(proofRecTimer);
+  stopProofCam();
+  proofHabit = null; proofBlob = null; proofRecorder = null;
+  document.getElementById('proof-overlay').hidden = true;
+}
+
+function wireProof() {
+  const $ = id => document.getElementById(id);
+  if (!$('proof-overlay')) return;
+  $('proof-photo').onclick = proofCapturePhoto;
+  $('proof-video').onclick = proofToggleVideo;
+  $('proof-retake').onclick = proofRetake;
+  $('proof-send').onclick = proofSend;
+  $('proof-skip').onclick = proofSkip;
+  $('proof-flip').onclick = () => { proofFacing = proofFacing === 'user' ? 'environment' : 'user'; startProofCam(); };
+}
+
+/* ---------- ОНБОРДИНГ (3 экрана в первый запуск) ---------- */
+const ONBOARD_KEY = 'disbit_onboard_v1';
+function openOnboarding(done) {
+  const box = document.getElementById('onboard');
+  const slidesWrap = document.getElementById('ob-slides');
+  const slides = [...slidesWrap.querySelectorAll('.ob-slide')];
+  const dotsBox = document.getElementById('ob-dots');
+  const nextBtn = document.getElementById('ob-next');
+  if (!box || !slides.length) { done?.(); return; }
+
+  let i = 0;
+  dotsBox.innerHTML = slides.map((_, k) => `<i class="ob-dot ${k === 0 ? 'on' : ''}"></i>`).join('');
+  const dots = [...dotsBox.querySelectorAll('.ob-dot')];
+
+  const show = n => {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slidesWrap.style.transform = `translateX(${-i * 100}%)`;
+    dots.forEach((d, k) => d.classList.toggle('on', k === i));
+    nextBtn.textContent = i === slides.length - 1 ? 'Начать' : 'Далее';
+  };
+  const finish = () => {
+    localStorage.setItem(ONBOARD_KEY, '1');
+    box.hidden = true;
+    done?.();
+  };
+
+  box.hidden = false;
+  show(0);
+  nextBtn.onclick = () => (i === slides.length - 1 ? finish() : show(i + 1));
+  document.getElementById('ob-skip').onclick = finish;
+
+  // свайп пальцем между экранами
+  let x0 = null;
+  slidesWrap.ontouchstart = e => { x0 = e.touches[0].clientX; };
+  slidesWrap.ontouchend = e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (dx < -40) show(i + 1);
+    else if (dx > 40) show(i - 1);
+    x0 = null;
+  };
+}
+
 /* ---------- ПЕРЕКЛЮЧАТЕЛЬ (порт AppleSwitch на ваниль) ----------
    Оригинал на motion/react; здесь то же поведение без React:
    • клик переключает;
@@ -3305,6 +3542,7 @@ function init() {
   buildDayPicker();
   wireWeekTarget();
   wireHabitStats();
+  wireProof();
   document.getElementById('btn-open-stats').addEventListener('click', () => switchScreen('stats'));
   const achCard = document.getElementById('ach-card');
   achCard.addEventListener('click', () => switchScreen('medals'));
@@ -3464,8 +3702,13 @@ function init() {
   // обязательная регистрация при входе:
   // с сервером — всегда, пока нет токена; без сервера — один раз, с локальным режимом
   const needGate = !authToken && (API || !localStorage.getItem(GATE_KEY));
-  if (needGate) openAuthGate();
-  else if (fresh.length) showSettleModal(fresh);
+  // онбординг — 3 экрана в самый первый запуск, ДО гейта. Дальше идёт обычный поток.
+  const afterOnboard = () => {
+    if (needGate) openAuthGate();
+    else if (fresh.length) showSettleModal(fresh);
+  };
+  if (!localStorage.getItem(ONBOARD_KEY)) openOnboarding(afterOnboard);
+  else afterOnboard();
 
   apiBootstrap();
 }

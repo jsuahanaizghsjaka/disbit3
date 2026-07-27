@@ -15,6 +15,7 @@ import habitsRouter from './routes/habits.js';
 import chargesRouter from './routes/charges.js';
 import authRouter, { authMiddleware } from './routes/auth.js';
 import stateRouter from './routes/state.js';
+import proofsRouter from './routes/proofs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -33,6 +34,16 @@ app.use('/api/auth', authRouter);
 app.use('/api/habits', habitsRouter);
 app.use('/api/charges', chargesRouter);
 app.use('/api/state', stateRouter);
+app.use('/api/proofs', proofsRouter);
+
+// чистый URL для политики конфиденциальности (нужен сторам): /privacy
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'privacy.html'));
+});
+// панель проверки пруфов (только для админа — вход по ключу внутри страницы)
+app.get('/review', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'review.html'));
+});
 
 // раздаём фронтенд статикой (http://localhost:3000 → приложение)
 app.use(express.static(path.join(__dirname, '..', 'frontend')));

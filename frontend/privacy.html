@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Политика конфиденциальности — disbit</title>
+  <link rel="icon" href="icons/app.ico" />
+  <link rel="stylesheet" href="fonts.css" />
+  <style>
+    :root {
+      --bg: #0C1422; --card: rgba(91,141,255,0.07); --line: rgba(91,141,255,0.16);
+      --text: #EAF2FF; --text-2: #9DB4E6; --text-3: #5F7396; --primary: #5B8DFF;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: 'Onest', system-ui, sans-serif; line-height: 1.6;
+      padding: max(24px, env(safe-area-inset-top)) 20px calc(48px + env(safe-area-inset-bottom));
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    .logo { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+    .logo span { color: var(--primary); }
+    h1 { font-family: 'Unbounded', sans-serif; font-size: 26px; line-height: 1.2; margin: 20px 0 6px; }
+    .upd { color: var(--text-3); font-size: 13px; margin: 0 0 28px; }
+    h2 { font-size: 17px; font-weight: 800; margin: 28px 0 10px; }
+    p, li { color: var(--text-2); font-size: 15px; }
+    a { color: var(--primary); }
+    ul { padding-left: 20px; margin: 8px 0; }
+    li { margin-bottom: 6px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; padding: 16px 18px; margin: 14px 0;
+    }
+    .card strong { color: var(--text); }
+    .back { display: inline-block; margin-top: 32px; color: var(--primary); text-decoration: none; font-weight: 700; }
+    .foot { color: var(--text-3); font-size: 12px; margin-top: 28px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">dis<span>bit</span></div>
+    <h1>Политика конфиденциальности</h1>
+    <p class="upd">Обновлено: 23 июля 2026</p>
+
+    <p>disbit — приложение для отслеживания привычек с самоназначенным штрафом за пропуск.
+      Эта страница объясняет простыми словами, какие данные мы храним, зачем и что с ними можно сделать.</p>
+
+    <div class="card">
+      <strong>Коротко:</strong> мы храним только то, что нужно для работы приложения.
+      Мы <strong>не продаём</strong> ваши данные, не передаём их третьим лицам, не показываем рекламу
+      и не встраиваем сторонние трекеры. Штрафы в приложении — <strong>симуляция</strong>:
+      реальные деньги не списываются.
+    </div>
+
+    <h2>Какие данные мы обрабатываем</h2>
+    <ul>
+      <li><strong>Аккаунт</strong> (если вы зарегистрировались): логин и адрес почты.
+        Пароль хранится только в виде необратимого хэша (scrypt) — в открытом виде мы его не видим.</li>
+      <li><strong>Привычки и отметки</strong>: названия, иконки, расписание, ваши отметки выполнения по дням.</li>
+      <li><strong>Штрафы</strong>: журнал пропусков (сумма или блокировка) — как симуляция, без реальных списаний.</li>
+      <li><strong>Профиль</strong>: имя, аватар, ваши цели, желания, список друзей, настройки — как вы их заполнили.</li>
+      <li><strong>Пруфы выполнения</strong>: если вы подтверждаете привычку, снятое вами <strong>живое фото или короткое видео</strong>
+        отправляется на нашу проверку. Съёмка только с камеры и только по вашему действию — из галереи ничего не берётся,
+        фоновой съёмки нет. Медиа видит только модератор для проверки и не публикуется.</li>
+    </ul>
+    <p>Мы <strong>не</strong> собираем геолокацию, контакты, историю браузера и не имеем доступа к вашим платёжным данным.</p>
+
+    <div class="card">
+      <strong>О фото и видео:</strong> камера включается только когда вы сами решили подтвердить привычку.
+      Пруф можно не отправлять — есть кнопка «Пропустить». Присланные медиа хранятся на нашем сервере
+      ради проверки и удаляются по вашему запросу.
+    </div>
+
+    <h2>Где это хранится</h2>
+    <p>Без входа в аккаунт данные остаются <strong>только на вашем устройстве</strong> (в памяти браузера).
+      Если вы вошли — данные синхронизируются с нашим сервером, чтобы приложение работало на нескольких устройствах.
+      Сервер — наш собственный, база данных SQLite; данные не размещаются у сторонних аналитических сервисов.</p>
+
+    <h2>Зачем мы их используем</h2>
+    <p>Только чтобы приложение работало: показывать ваши привычки и прогресс, считать серии и штрафы,
+      синхронизировать между устройствами. Мы не используем ваши данные ни для чего другого.</p>
+
+    <h2>Ваши права</h2>
+    <ul>
+      <li><strong>Экспорт</strong>: в приложении (Профиль → Данные) можно выгрузить все свои данные в файл JSON.</li>
+      <li><strong>Удаление на устройстве</strong>: там же — кнопка стереть все локальные данные.</li>
+      <li><strong>Удаление аккаунта и данных с сервера</strong>: напишите нам на почту ниже — удалим по запросу.</li>
+    </ul>
+
+    <h2>Дети</h2>
+    <p>Приложение не предназначено для детей младше 13 лет и не собирает их данные осознанно.</p>
+
+    <h2>Изменения</h2>
+    <p>Если политика изменится, мы обновим дату вверху этой страницы.</p>
+
+    <h2>Контакт</h2>
+    <p>Вопросы о данных и запросы на удаление — на почту:
+      <a href="mailto:aktancirkesov05@gmail.com">aktancirkesov05@gmail.com</a></p>
+
+    <a class="back" href="index.html">← Вернуться в приложение</a>
+    <p class="foot">disbit · прототип. Реальные списания и блокировки появятся в нативной версии и будут отдельно описаны.</p>
+  </div>
+</body>
+</html>

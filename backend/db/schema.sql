@@ -78,3 +78,20 @@ CREATE TABLE IF NOT EXISTS charges (
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(habit_id, day)                            -- не начисляем дважды за один день
 );
+
+-- Пруфы выполнения: живое фото/видео, которое пользователь снял в подтверждение.
+-- Файл лежит в PROOFS_DIR (на volume рядом с базой), здесь только метаданные.
+CREATE TABLE IF NOT EXISTS proofs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL DEFAULT 0,
+  user_login  TEXT,                                 -- чтобы в панели видеть, кто прислал
+  habit_id    TEXT NOT NULL,
+  habit_name  TEXT,
+  day         TEXT NOT NULL,                        -- 'YYYY-MM-DD'
+  type        TEXT NOT NULL DEFAULT 'photo',        -- 'photo' | 'video'
+  file        TEXT NOT NULL,                        -- имя файла в PROOFS_DIR
+  mime        TEXT,
+  status      TEXT NOT NULL DEFAULT 'pending',      -- 'pending' | 'approved' | 'rejected'
+  created_at  TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_proofs_status ON proofs(status, id);

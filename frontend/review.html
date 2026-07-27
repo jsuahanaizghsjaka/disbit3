@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>disbit — проверка пруфов</title>
+  <link rel="stylesheet" href="fonts.css" />
+  <style>
+    :root { --bg:#0C1422; --card:rgba(91,141,255,0.08); --line:rgba(91,141,255,0.18);
+      --text:#EAF2FF; --text-2:#9DB4E6; --text-3:#5F7396; --primary:#5B8DFF;
+      --green:#3EBE7D; --red:#F0666A; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:'Onest',system-ui,sans-serif; }
+    .wrap { max-width:720px; margin:0 auto; padding:20px 16px 60px; }
+    h1 { font-family:'Unbounded',sans-serif; font-size:22px; margin:0 0 4px; }
+    .sub { color:var(--text-3); font-size:13px; margin:0 0 20px; }
+    .gate { max-width:360px; margin:60px auto; text-align:center; }
+    .inp { width:100%; padding:14px; border-radius:12px; border:1px solid var(--line);
+      background:rgba(255,255,255,0.05); color:var(--text); font-size:16px; outline:none; }
+    .btn { border:none; border-radius:12px; padding:12px 16px; font-weight:800; font-size:14px;
+      cursor:pointer; font-family:inherit; }
+    .btn-primary { background:var(--primary); color:#fff; width:100%; margin-top:12px; }
+    .tabs { display:flex; gap:8px; margin-bottom:16px; }
+    .tab { flex:1; padding:10px; border-radius:10px; border:1px solid var(--line);
+      background:transparent; color:var(--text-2); font-weight:700; cursor:pointer; }
+    .tab.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+    .empty { color:var(--text-3); text-align:center; padding:40px 0; }
+    .proof { background:var(--card); border:1px solid var(--line); border-radius:16px;
+      padding:14px; margin-bottom:14px; }
+    .p-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; gap:8px; }
+    .p-habit { font-weight:800; font-size:16px; }
+    .p-meta { color:var(--text-3); font-size:12px; }
+    .p-media { width:100%; border-radius:12px; background:#000; display:block; max-height:60vh; object-fit:contain; }
+    .p-actions { display:flex; gap:10px; margin-top:12px; }
+    .btn-ok { background:rgba(62,190,125,0.16); color:var(--green); flex:1; }
+    .btn-no { background:rgba(240,102,106,0.16); color:var(--red); flex:1; }
+    .err { color:var(--red); font-size:13px; margin-top:8px; }
+    .badge { font-size:11px; font-weight:800; padding:3px 8px; border-radius:20px; }
+    .b-approved { background:rgba(62,190,125,0.16); color:var(--green); }
+    .b-rejected { background:rgba(240,102,106,0.16); color:var(--red); }
+  </style>
+</head>
+<body>
+  <!-- вход по ключу -->
+  <div class="gate" id="gate">
+    <h1>Проверка пруфов</h1>
+    <p class="sub">Введи админ-ключ, чтобы увидеть присланные подтверждения.</p>
+    <input class="inp" id="key" type="password" placeholder="Админ-ключ" autocomplete="off" />
+    <button class="btn btn-primary" id="enter">Войти</button>
+    <p class="err" id="gate-err" hidden></p>
+  </div>
+
+  <!-- панель -->
+  <div class="wrap" id="panel" hidden>
+    <h1>Проверка пруфов</h1>
+    <p class="sub" id="counts"></p>
+    <div class="tabs">
+      <button class="tab on" data-status="pending">Ожидают</button>
+      <button class="tab" data-status="approved">Одобрены</button>
+      <button class="tab" data-status="rejected">Отклонены</button>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    let KEY = '';
+    let status = 'pending';
+    const H = () => ({ 'X-Admin-Key': KEY });
+
+    async function load() {
+      const list = document.getElementById('list');
+      list.innerHTML = '<p class="empty">Загрузка…</p>';
+      let data;
+      try {
+        const r = await fetch('/api/proofs?status=' + status, { headers: H() });
+        if (!r.ok) throw new Error('unauth');
+        data = await r.json();
+      } catch { list.innerHTML = '<p class="empty">Ошибка загрузки</p>'; return; }
+
+      const c = data.counts || {};
+      document.getElementById('counts').textContent =
+        `Ожидают: ${c.pending || 0} · Одобрены: ${c.approved || 0} · Отклонены: ${c.rejected || 0}`;
+
+      if (!data.items.length) { list.innerHTML = '<p class="empty">Здесь пусто</p>'; return; }
+      list.innerHTML = '';
+      for (const p of data.items) {
+        const el = document.createElement('div');
+        el.className = 'proof';
+        const media = p.type === 'video'
+          ? `<video class="p-media" src="/api/proofs/${p.id}/media?key=${encodeURIComponent(KEY)}" controls playsinline></video>`
+          : `<img class="p-media" src="/api/proofs/${p.id}/media?key=${encodeURIComponent(KEY)}" alt="">`;
+        const actions = status === 'pending'
+          ? `<div class="p-actions">
+               <button class="btn btn-ok" data-ok="${p.id}">✓ Одобрить</button>
+               <button class="btn btn-no" data-no="${p.id}">✕ Отклонить</button>
+             </div>`
+          : `<span class="badge b-${p.status}">${p.status === 'approved' ? 'одобрен' : 'отклонён'}</span>`;
+        el.innerHTML = `
+          <div class="p-top">
+            <span class="p-habit">${escapeHtml(p.habit_name || 'Привычка')}</span>
+            <span class="p-meta">${escapeHtml(p.user_login || 'гость')} · ${p.day}</span>
+          </div>
+          ${media}
+          ${actions}`;
+        list.appendChild(el);
+      }
+      list.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => decide(b.dataset.ok, 'approved'));
+      list.querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no, 'rejected'));
+    }
+
+    async function decide(id, decision) {
+      await fetch('/api/proofs/' + id + '/decision', {
+        method: 'POST',
+        headers: { ...H(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: decision })
+      });
+      load();
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+
+    document.getElementById('enter').onclick = async () => {
+      KEY = document.getElementById('key').value.trim();
+      const err = document.getElementById('gate-err');
+      const r = await fetch('/api/proofs?status=pending', { headers: H() });
+      if (!r.ok) { err.hidden = false; err.textContent = 'Неверный ключ'; return; }
+      sessionStorage.setItem('disbit_admin_key', KEY);
+      document.getElementById('gate').hidden = true;
+      document.getElementById('panel').hidden = false;
+      load();
+    };
+    document.getElementById('key').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('enter').click();
+    });
+    document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+      t.classList.add('on');
+      status = t.dataset.status;
+      load();
+    });
+
+    // если ключ уже вводили в этой вкладке — сразу входим
+    const saved = sessionStorage.getItem('disbit_admin_key');
+    if (saved) { document.getElementById('key').value = saved; document.getElementById('enter').click(); }
+  </script>
+</body>
+</html>

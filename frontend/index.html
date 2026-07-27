@@ -417,6 +417,9 @@
         <button class="row-btn danger" id="btn-wipe">
           <svg class="ic"><use href="#i-trash"/></svg><span>Стереть все данные</span>
         </button>
+        <a class="row-btn" href="privacy.html">
+          <svg class="ic"><use href="#i-lock"/></svg><span>Политика конфиденциальности</span>
+        </a>
       </section>
 
       <p class="about-note">disbit v0.4 · прототип · штрафы симулируются<br/>Реальные списания и блокировки — в нативной версии.</p>
@@ -710,6 +713,69 @@
     </div>
   </div>
 
+  <!-- ===== БАННЕР ПРУФА: сними живое фото/видео после отметки ===== -->
+  <div class="proof-overlay" id="proof-overlay" hidden>
+    <div class="proof-inner">
+      <h2 class="proof-title">Подтверди привычку</h2>
+      <p class="proof-habit" id="proof-habit-name"></p>
+      <p class="proof-sub">Сними <b>живое</b> фото или короткое видео. Из галереи — нельзя.</p>
+
+      <div class="proof-stage">
+        <video class="proof-media proof-cam" id="proof-cam" autoplay playsinline muted></video>
+        <img class="proof-media proof-preview" id="proof-preview" alt="" hidden />
+        <video class="proof-media proof-preview" id="proof-preview-vid" playsinline controls hidden></video>
+        <span class="proof-rec" id="proof-rec" hidden>● <b id="proof-rec-time">0</b>с</span>
+      </div>
+      <p class="proof-cam-err" id="proof-cam-err" hidden></p>
+
+      <!-- режим съёмки -->
+      <div class="proof-controls" id="proof-cap">
+        <button class="proof-flip" id="proof-flip" aria-label="Сменить камеру">⟲</button>
+        <button class="proof-shoot" id="proof-photo" aria-label="Снять фото"></button>
+        <button class="proof-vidbtn" id="proof-video">● Видео</button>
+      </div>
+      <!-- подтверждение снятого -->
+      <div class="proof-controls" id="proof-confirm" hidden>
+        <button class="btn-ghost" id="proof-retake">Переснять</button>
+        <button class="btn-primary" id="proof-send">Отправить на проверку</button>
+      </div>
+
+      <button class="proof-skip" id="proof-skip">
+        Пропустить · осталось <b id="proof-skip-left">5</b>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== ОНБОРДИНГ: 3 экрана в первый запуск ===== -->
+  <div class="onboard" id="onboard" hidden>
+    <div class="ob-slides" id="ob-slides">
+      <section class="ob-slide">
+        <div class="ob-art ob-art-1"><svg class="ic"><use href="#i-coins"/></svg></div>
+        <h2 class="ob-title">Не ставки, а штраф</h2>
+        <p class="ob-text">Пропустил привычку — теряешь то, что назначил себе сам заранее:
+          деньги на благотворительность или блокировку приложений. Дисциплина через ответственность.</p>
+      </section>
+      <section class="ob-slide">
+        <div class="ob-art ob-art-2"><svg class="ic"><use href="#i-flame"/></svg></div>
+        <h2 class="ob-title">Грейс-день и минимум</h2>
+        <p class="ob-text">Один пропуск серию не рвёт — два подряд рвут. Нет сил на полную?
+          Сделай запасной «минимум» — дисциплина не прервётся.</p>
+      </section>
+      <section class="ob-slide">
+        <div class="ob-art ob-art-3"><svg class="ic"><use href="#i-award"/></svg></div>
+        <h2 class="ob-title">Награды и цели</h2>
+        <p class="ob-text">Сам выбираешь награды за серии, копишь достижения и ведёшь путника
+          к большой цели-марафону. Каждая привычка — шаг вперёд.</p>
+      </section>
+    </div>
+
+    <div class="ob-dots" id="ob-dots" aria-hidden="true"></div>
+    <div class="ob-actions">
+      <button class="btn-ghost" id="ob-skip">Пропустить</button>
+      <button class="btn-primary" id="ob-next">Далее</button>
+    </div>
+  </div>
+
   <!-- ===== ШТОРКА: ВХОД / РЕГИСТРАЦИЯ ===== -->
   <div class="sheet-overlay" id="auth-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="auth-title">
@@ -761,6 +827,10 @@
       </button>
       <p class="hint" style="text-align:center;margin-top:10px" id="auth-note">
         Аккаунт хранит привычки на сервере и синхронизирует устройства.
+      </p>
+      <p class="hint" style="text-align:center;margin-top:8px">
+        Регистрируясь, ты соглашаешься с
+        <a href="privacy.html" target="_blank" style="color:var(--primary)">политикой конфиденциальности</a>.
       </p>
     </div>
   </div>

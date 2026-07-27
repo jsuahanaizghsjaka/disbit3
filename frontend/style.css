@@ -1098,6 +1098,114 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
 }
 .setting-row:last-of-type { border-bottom: none; }
 
+/* ---------- БАННЕР ПРУФА (живое фото/видео) ---------- */
+.proof-overlay {
+  position: fixed; inset: 0; z-index: 210;
+  background: rgba(6, 10, 18, 0.96);
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+}
+.proof-overlay[hidden] { display: none; }
+.proof-inner { width: 100%; max-width: 380px; text-align: center; }
+.proof-title { font-family: 'Unbounded', sans-serif; font-size: 20px; margin: 0 0 2px; }
+.proof-habit { font-size: 16px; font-weight: 800; color: var(--primary); margin: 0 0 4px; }
+.proof-sub { font-size: 13px; color: var(--text-2); margin: 0 0 18px; }
+
+/* сцена-кружок, как видео-сообщение */
+.proof-stage {
+  position: relative;
+  width: min(280px, 74vw); height: min(280px, 74vw);
+  margin: 0 auto 14px;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: #000;
+  border: 2px solid rgba(var(--tint), 0.35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.proof-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.proof-cam { transform: scaleX(-1); }         /* фронталка как зеркало */
+.proof-rec {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  background: rgba(240, 102, 106, 0.9); color: #fff;
+  font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: var(--r-full);
+  display: flex; align-items: center; gap: 4px;
+}
+.proof-rec b { animation: proofBlink 1s steps(1) infinite; }
+@keyframes proofBlink { 50% { opacity: 0.35; } }
+.proof-cam-err { font-size: 13px; color: #F0A0A0; margin: 0 0 14px; line-height: 1.5; }
+
+.proof-controls { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
+/* большая круглая кнопка спуска */
+.proof-shoot {
+  width: 68px; height: 68px; flex: none;
+  border-radius: var(--r-full);
+  background: #fff; border: 4px solid rgba(255, 255, 255, 0.4);
+  cursor: pointer; transition: transform var(--t-fast);
+}
+.proof-shoot:active { transform: scale(0.92); }
+.proof-flip, .proof-vidbtn {
+  border: 1px solid var(--neutral-line); background: rgba(255, 255, 255, 0.06);
+  color: var(--text); border-radius: var(--r-full);
+  min-height: 44px; padding: 0 16px; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.proof-flip { width: 48px; padding: 0; font-size: 20px; }
+.proof-confirm .btn-primary, .proof-confirm .btn-ghost { flex: 1; }
+
+.proof-skip {
+  width: 100%; min-height: 48px;
+  background: none; border: none; color: var(--text-3);
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.proof-skip b { color: var(--text-2); }
+.proof-skip:disabled { opacity: 0.4; }
+
+/* ---------- ОНБОРДИНГ (3 экрана первого запуска) ---------- */
+.onboard {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  padding: calc(32px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+}
+.onboard[hidden] { display: none; }
+.ob-slides {
+  flex: 1;
+  display: flex;
+  transition: transform var(--t-med) var(--ease);
+}
+.ob-slide {
+  flex: 0 0 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 8px;
+  padding: 0 8px;
+}
+.ob-art {
+  width: 116px; height: 116px;
+  border-radius: var(--r-full);
+  display: grid; place-items: center;
+  margin-bottom: 20px;
+  border: 1px solid rgba(var(--tint), 0.28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 40px rgba(0,0,0,0.3);
+}
+.ob-art .ic { width: 52px; height: 52px; color: var(--primary); }
+.ob-art-1 { background: linear-gradient(160deg, rgba(251,191,36,0.22), rgba(var(--tint),0.06)); }
+.ob-art-1 .ic { color: #FBBF24; }
+.ob-art-2 { background: linear-gradient(160deg, rgba(232,114,42,0.22), rgba(var(--tint),0.06)); }
+.ob-art-2 .ic { color: #E8722A; }
+.ob-art-3 { background: linear-gradient(160deg, rgba(var(--tint),0.22), rgba(var(--tint),0.05)); }
+.ob-title { font-family: 'Unbounded', sans-serif; font-size: 24px; line-height: 1.2; margin: 0; }
+.ob-text { font-size: 15px; color: var(--text-2); line-height: 1.6; max-width: 360px; margin: 4px auto 0; }
+
+.ob-dots { display: flex; gap: 8px; justify-content: center; margin: 24px 0; }
+.ob-dot {
+  width: 8px; height: 8px; border-radius: var(--r-full);
+  background: var(--neutral-2); transition: width var(--t-med) var(--ease), background var(--t-med);
+}
+.ob-dot.on { width: 22px; background: var(--primary); }
+
+.ob-actions { display: flex; gap: 12px; }
+.ob-actions .btn-ghost { flex: none; }
+.ob-actions .btn-primary { flex: 1; }
+
 /* ---------- ПЕРЕКЛЮЧАТЕЛЬ (порт AppleSwitch) ----------
    Ползунок можно не только нажать, но и ПОТЯНУТЬ пальцем: на отпускании
    доводится в ближайшее положение. При нажатии «капля» растягивается.

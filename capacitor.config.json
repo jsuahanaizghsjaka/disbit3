@@ -1,5 +1,10 @@
 {
   "appId": "io.disbit.app",
   "appName": "disbit",
-  "webDir": "frontend"
+  "webDir": "frontend",
+  "backgroundColor": "#0C1422",
+  "android": {
+    "backgroundColor": "#0C1422",
+    "allowMixedContent": false
+  }
 }
