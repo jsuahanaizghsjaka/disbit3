@@ -16,6 +16,10 @@ import chargesRouter from './routes/charges.js';
 import authRouter, { authMiddleware } from './routes/auth.js';
 import stateRouter from './routes/state.js';
 import proofsRouter from './routes/proofs.js';
+import friendsRouter from './routes/friends.js';
+import invitesRouter from './routes/invites.js';
+import aiRouter from './routes/ai.js';
+import walletRouter from './routes/wallet.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,6 +39,10 @@ app.use('/api/habits', habitsRouter);
 app.use('/api/charges', chargesRouter);
 app.use('/api/state', stateRouter);
 app.use('/api/proofs', proofsRouter);
+app.use('/api/friends', friendsRouter);
+app.use('/api/invites', invitesRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/wallet', walletRouter);
 
 // чистый URL для политики конфиденциальности (нужен сторам): /privacy
 app.get('/privacy', (req, res) => {

@@ -187,6 +187,17 @@ let statePushTimer = null;
 function stateBlob() {
   return {
     profile, settings, goals, rewards, friends, backlog, skips,
+    // «визитка» — то, что видят друзья (сервер сам стрики не считает).
+    // shared: статусы ТОЛЬКО совместных привычек — остальные друзьям не видны
+    card: {
+      streak: bestCurrentStreak(),
+      weekPct: weekCompletion(weekStartOf(new Date())),
+      habits: habits.length,
+      shared: Object.fromEntries(
+        habits.filter(h => h.buddy)
+              .map(h => [h.name.trim().toLowerCase(), doneOn(h, TODAY)])
+      )
+    },
     settled: localStorage.getItem(SETTLED_KEY)
   };
 }
@@ -256,6 +267,7 @@ function migrate(h) {
   if (typeof h.min !== 'string') h.min = '';
   h.weekTarget = Math.max(0, Math.min(7, Number(h.weekTarget) || 0));  // 0 = строго по дням
   h.pinned = !!h.pinned;                                               // закреплена наверху
+  if (typeof h.buddy !== 'string') h.buddy = '';                       // логин друга, если привычка совместная
   h.history = h.history || {};
   h.counts  = h.counts  || {};
 }
@@ -353,8 +365,22 @@ async function apiBootstrap() {
     } else {
       scheduleStatePush();   // на сервере пусто/старее — заливаем своё
     }
+    await loadFriends();     // друзья живут на сервере, не в localStorage
+    await loadWallet();      // депозит: сколько денег реально на кону
   }
   render();
+  renderFriends();
+  renderFriendsBoard();
+  renderWallet();
+  handleInviteLink();        // пришёл по ссылке-приглашению — добавим друга
+
+  // приглашение «делать вместе»: из адреса или отложенное (пришёл без входа)
+  const pending = localStorage.getItem(PENDING_JOIN_KEY);
+  if (pending && authToken) {
+    localStorage.removeItem(PENDING_JOIN_KEY);
+    history.replaceState(null, '', location.pathname + '?join=' + pending + location.hash);
+  }
+  handleJoinLink();
 }
 
 /* ---------- ДАТЫ ---------- */
@@ -545,9 +571,13 @@ function toggleHabit(id) {
   } else {
     setDayMark(h, TODAY, { done: h.history[TODAY] === 'min' ? true : !h.history[TODAY] });
   }
+  // Если сейчас откроется баннер пруфа — путника ЗАМОРАЖИВАЕМ: иначе он шагнёт
+  // под перекрывшим экран баннером, и пользователь не увидит свой прогресс.
+  // Шаг проиграется после закрытия баннера (см. closeProofBanner).
+  const willAskProof = !wasDone && isDoneToday(h);
+  walkerFrozen = willAskProof;
   render();
-  // привычка только что стала выполненной → просим пруф (живое фото/видео)
-  if (!wasDone && isDoneToday(h)) {
+  if (willAskProof) {
     openProofBanner(h);
   } else if (!wasFull && todayPct() === 100) {
     toast(PRAISES[Math.floor(Math.random() * PRAISES.length)]);
@@ -634,7 +664,12 @@ function settlePastDays() {
   if (fresh.length) {
     ledger.push(...fresh);
     saveLedger();
-    apiCall('POST', '/charges', fresh);
+    // сервер сам спишет деньги с депозита и вернёт новый баланс
+    apiCall('POST', '/charges', fresh).then(r => {
+      if (!r) return;
+      if (r.unpaid) toast(`Не хватило депозита на ${rub(r.unpaid)} — пополни`);
+      loadWallet().then(renderWallet);
+    });
   }
   return fresh;
 }
@@ -1184,8 +1219,53 @@ function walkerSceneHtml(g, sc) {
     </section>`;
 }
 
+/* ---------- ИТОГИ МАРАФОНА ----------
+   Показываем один раз, когда путник дошёл до финиша: за сколько дней, сколько
+   шагов, лучшая серия, какие привычки тащили и во что обошлись пропуски. */
+function showMarathonDone(g) {
+  const box = document.getElementById('mdone-overlay');
+  if (!box) return;
+  const hs = marathonHabits(g);
+  const days = g.startedAt
+    ? Math.max(1, Math.round((keyToDate(TODAY) - keyToDate(g.startedAt)) / 86400000) + 1)
+    : null;
+  const best = hs.length ? Math.max(...hs.map(computeBestStreak)) : 0;
+  const ids = new Set(hs.map(h => h.id));
+  const mine = ledger.filter(e => ids.has(e.habitId) && (!g.startedAt || e.day >= g.startedAt));
+  const money = mine.filter(e => e.mode === 'money').reduce((s, e) => s + (e.amount || 0), 0);
+  const perDay = days ? (g.steps / days) : 0;
+
+  document.getElementById('mdone-goal').textContent = g.name || 'Большая цель';
+  document.getElementById('mdone-grid').innerHTML = `
+    <div class="md-tile"><span class="md-num">${g.steps}</span><span class="md-lbl">шагов пройдено</span></div>
+    <div class="md-tile"><span class="md-num">${days ?? '—'}</span><span class="md-lbl">дней в пути</span></div>
+    <div class="md-tile"><span class="md-num">${best}</span><span class="md-lbl">лучшая серия</span></div>
+    <div class="md-tile"><span class="md-num">${perDay ? perDay.toFixed(1) : '—'}</span><span class="md-lbl">шагов в день</span></div>`;
+
+  const rows = hs.map(h => `
+    <div class="ledger-row">
+      <span class="ledger-icon">${iconOf(h.icon)}</span>
+      <div class="ledger-main">
+        <div class="ledger-name">${escapeHtml(h.name)}</div>
+        <div class="ledger-day">серия ${computeStreak(h)} дн. · лучшая ${computeBestStreak(h)}</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('mdone-habits').innerHTML = `
+    <span class="field-label">Кто тащил (${hs.length})</span>
+    ${rows || '<p class="hint" style="margin:0">Привычки марафона удалены</p>'}
+    ${mine.length ? `<p class="hint" style="margin-top:10px">Пропусков за марафон: ${mine.length}${
+      money ? ' · ' + money + '₽ штрафов' : ''}</p>` : ''}`;
+
+  openSheet('mdone-overlay');
+  if (navigator.vibrate) navigator.vibrate([20, 60, 30]);
+}
+
 let walkerWalkTimer = null;
+// путник заморожен, пока пользователь в баннере пруфа: его шаг должен быть виден,
+// а не проиграться под перекрывшим экран баннером
+let walkerFrozen = false;
 function renderWalker() {
+  if (walkerFrozen) return;
   const box = document.getElementById('walker');
   // ведём первую недошедшую цель с шагами; если все дошли — показываем последнюю
   const g = goals.find(x => x.steps > 0 && goalPct(x) < 100)
@@ -1214,9 +1294,22 @@ function renderWalker() {
   const moved = !stale && Number.isFinite(prevX) &&
     (Math.abs(pos.x - prevX) > 0.5 || Math.abs(pos.y - prevY) > 0.5);
 
+  // путник движется/анимируется ТОЛЬКО когда пользователь на него смотрит.
+  // виден и был шаг → скользит с анимацией ходьбы; не виден → позиция ставится
+  // мгновенно (без скольжения за кадром) и без переставления ног.
+  ensureWalkerObserver(card);
+  const visible = card.classList.contains('w-onscreen');
   card.dataset.x = String(pos.x);
   card.dataset.y = String(pos.y);
-  man.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+  if (moved && visible) {
+    man.style.transition = '';                         // из CSS (плавно)
+    man.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+  } else {
+    man.style.transition = 'none';                     // мгновенно, без анимации за кадром
+    man.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+    void man.offsetWidth;                              // зафиксировать без перехода
+    man.style.transition = '';
+  }
   card.classList.toggle('finished', finished);
   card.setAttribute('aria-label',
     `Путь к цели: ${g.name}, ${done} из ${total} шагов${finished ? ', дошёл' : ''}`);
@@ -1235,12 +1328,34 @@ function renderWalker() {
   flame.classList.toggle('cold', streak === 0);
   flame.innerHTML = `${icon('i-flame', 'ic ic-s')}<b>${streak}</b>`;
 
-  // ноги переставляются только пока идёт перемещение, дальше — дышит стоя
-  if (moved) {
+  // ноги переставляются только если путник виден и реально шагнул
+  if (moved && visible) {
     card.classList.add('walking');
     clearTimeout(walkerWalkTimer);
     walkerWalkTimer = setTimeout(() => card.classList.remove('walking'), 1150);
   }
+
+  // дошёл до финиша — один раз показываем итоги марафона (после анимации финиша)
+  if (finished && !g.doneShown) {
+    g.doneShown = true;
+    saveJson(GOALS_KEY, goals);
+    setTimeout(() => showMarathonDone(g), 1000);
+  }
+}
+
+// следим, виден ли путник на экране; когда не виден — все его анимации на паузе
+// (см. CSS .walker-card:not(.w-onscreen)). Так он «двигается только когда смотрят».
+let walkerObserver = null;
+function ensureWalkerObserver(card) {
+  if (card.dataset.observed) return;
+  card.dataset.observed = '1';
+  if (!('IntersectionObserver' in window)) { card.classList.add('w-onscreen'); return; }
+  if (!walkerObserver) {
+    walkerObserver = new IntersectionObserver(entries => {
+      for (const e of entries) e.target.classList.toggle('w-onscreen', e.isIntersecting);
+    }, { threshold: 0.35 });
+  }
+  walkerObserver.observe(card);
 }
 
 /* ---------- ЭКРАН «СЕГОДНЯ» ---------- */
@@ -1272,9 +1387,10 @@ function renderWeek() {
     el.className = 'day' + (isToday ? ' today' : '');
     el.disabled = isFuture;
     el.setAttribute('aria-label', formatDay(key));
-    el.innerHTML = `<span class="dname">${DAY_NAMES[i]}</span>
-      <span class="dnum">${d.getDate()}</span>
-      <i class="ddot ${dotCls}"></i>`;
+    // светящийся кружок сверху (галочка если выполнено), название дня снизу
+    el.innerHTML = `<i class="ddot ${dotCls}"></i>
+      <span class="dname">${DAY_NAMES[i]}</span>
+      <span class="dnum">${d.getDate()}</span>`;
     el.addEventListener('click', () => openDaySheet(key));
     box.appendChild(el);
   }
@@ -1307,11 +1423,27 @@ function habitCard(h, off) {
     ? 'каждый день'
     : h.schedule.map(i => DAY_NAMES[i]).join(' · ');
 
-  // кнопка/бейдж минимума
+  // совместная привычка: две аватарки — моя и друга. Кто сделал сегодня —
+  // та горит цветом, кто нет — серая. Видно с одного взгляда, кто тянет.
+  let buddyHtml = '';
+  if (h.buddy) {
+    const f = friendByLogin(h.buddy);
+    const bDone = buddyDoneToday(h);
+    const myAva = `<span class="pair-ava${done ? ' lit' : ''}" style="${
+      done ? `background:${profile.color || COLORS[0]}` : ''}" title="Ты${done ? ' — сделано' : ' — ещё нет'}">${
+      profile.emoji ? escapeHtml(profile.emoji) : escapeHtml((profile.name || 'Я')[0])}</span>`;
+    const fAva = `<span class="pair-ava${bDone === true ? ' lit' : ''}" style="${
+      bDone === true ? `background:${f?.color || COLORS[2]}` : ''}" title="${
+      escapeHtml(f?.name || h.buddy)}${bDone === true ? ' — сделал' : bDone === false ? ' — ещё нет' : ' — нет данных'}">${
+      escapeHtml(f?.emoji || (f?.name || h.buddy)[0])}</span>`;
+    buddyHtml = `<span class="buddy-pair" title="Вместе с ${escapeHtml(f?.name || h.buddy)}">${myAva}${fAva}</span>`;
+  }
+
+  // кнопка/бейдж минимума — «нет сил на полное? сделай минимум» (козырь идеи)
   let minHtml = '';
   if (!off && h.min) {
-    if (min) minHtml = `<span class="min-badge">${icon('i-check', 'ic ic-s')} минимум</span>`;
-    else if (!done) minHtml = `<button class="min-btn" data-min="${h.id}" title="${escapeHtml(h.min)}">минимум</button>`;
+    if (min) minHtml = `<span class="min-badge">${icon('i-check', 'ic ic-s')} минимум зачтён</span>`;
+    else if (!done) minHtml = `<button class="min-btn" data-min="${h.id}" title="Нет сил на полное? Сделай минимум: ${escapeHtml(h.min)}">${icon('i-zap', 'ic ic-s')} Минимум</button>`;
   }
 
   const card = document.createElement('div');
@@ -1326,6 +1458,7 @@ function habitCard(h, off) {
         ${goalText && !off && !min ? `<span class="goal-text">${goalText}</span>` : ''}
         ${off ? `<span class="goal-text">${schedText}</span>` : ''}
         ${stake}
+        ${buddyHtml}
         ${minHtml}
       </div>
     </div>
@@ -1382,6 +1515,8 @@ function renderHabitStats() {
   if (!h || !body) return;
 
   document.getElementById('hstat-title').textContent = h.name;
+  const buddyLabel = document.getElementById('hstat-buddy-label');
+  if (buddyLabel) buddyLabel.textContent = h.buddy ? 'Сменить друга' : 'Делать с другом';
 
   const streak = computeStreak(h);
   const best = computeBestStreak(h);
@@ -1478,6 +1613,16 @@ function wireHabitStats() {
     closeHabitMenu();
     closeSheet('hstat-overlay');
     openEditSheet(id);
+  });
+  document.getElementById('hstat-buddy').addEventListener('click', () => {
+    const id = hstatId;
+    closeHabitMenu();
+    openBuddySheet(id);
+  });
+  document.getElementById('hstat-invite').addEventListener('click', () => {
+    const id = hstatId;
+    closeHabitMenu();
+    openInviteSheet(id);
   });
   document.getElementById('hstat-minimum').addEventListener('click', () => {
     const h = habits.find(x => x.id === hstatId);
@@ -2001,7 +2146,9 @@ function avatarHtml(p) {
 }
 function applyAvatar(el, p) {
   el.classList.toggle('emoji', !p.photo && !!p.emoji);
-  el.style.background = p.photo ? 'transparent' : (p.emoji ? '' : (p.color || COLORS[0]));
+  // выбранный цвет — фон и под эмодзи, и под монограммой (раньше для эмодзи
+  // ставилась пустая строка, и побеждал серый фон из класса .avatar.emoji)
+  el.style.background = p.photo ? 'transparent' : (p.color || COLORS[0]);
   el.innerHTML = avatarHtml(p);
 }
 
@@ -2018,13 +2165,17 @@ function renderProfile() {
 
   renderMedals();
 
-  // мотивация
-  const lvl = profile.motivation?.level ?? 50;
-  const motSlider = document.getElementById('mot-level');
-  motSlider.value = lvl;
-  motSlider._paint?.();        // значение выставили из профиля — подтянуть заливку трека
-  document.getElementById('mot-out').textContent = lvl + '%';
-  document.getElementById('mot-text').value = profile.motivation?.text || '';
+  // мотивация: пока пользователь редактирует — поля НЕ трогаем, иначе render()
+  // (от отметки привычки или ответа сервера) затирал бы недописанный текст
+  if (!motEditing) {
+    const lvl = profile.motivation?.level ?? 50;
+    const motSlider = document.getElementById('mot-level');
+    motSlider.value = lvl;
+    motSlider._paint?.();      // значение выставили из профиля — подтянуть заливку трека
+    document.getElementById('mot-out').textContent = lvl + '%';
+    document.getElementById('mot-text').value = profile.motivation?.text || '';
+    setMotivationMode(!hasMotivation());   // уже заполнена → режим просмотра
+  }
 
   // переключатель — не чекбокс, состояние живёт в aria-checked (+ положение ползунка)
   const offdaySw = document.getElementById('set-offday');
@@ -2366,23 +2517,53 @@ function saveReward() {
 }
 
 /* друзья */
+/* ---------- ДРУЗЬЯ (настоящие, по аккаунтам) ----------
+   Раньше это был локальный список имён на одном устройстве. Теперь дружба
+   живёт на сервере: добавляешь по логину, связь взаимная, у друга видно
+   его серию и % недели (он публикует их сам в своей «визитке»). */
+let serverFriends = [];
+let myLogin = null;
+
+async function loadFriends() {
+  if (!API || !authToken) { serverFriends = []; myLogin = null; return; }
+  const r = await apiCall('GET', '/friends');
+  if (r) { serverFriends = r.friends || []; myLogin = r.me || null; }
+}
+
+function inviteLink() {
+  return myLogin ? `${location.origin}/?add=${encodeURIComponent(myLogin)}` : location.origin;
+}
+
 function renderFriends() {
   const box = document.getElementById('friend-list');
-  if (!friends.length) {
-    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Добавь друзей — вместе держать дисциплину проще.</p>`;
+  if (!box) return;
+  const login = document.getElementById('my-login');
+  if (login) login.textContent = myLogin || '— войди в аккаунт';
+
+  if (!API || !authToken) {
+    box.innerHTML = `<p class="hint" style="margin-bottom:8px">
+      Друзья работают с аккаунтом — войди, чтобы добавлять их по логину.</p>`;
     return;
   }
-  box.innerHTML = friends.map(f => `
+  if (!serverFriends.length) {
+    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Пока никого. Добавь друга по логину — вместе держать дисциплину проще.</p>`;
+    return;
+  }
+  box.innerHTML = serverFriends.map(f => `
     <div class="friend-row">
-      <span class="friend-ava">${escapeHtml(f.emoji || '🙂')}</span>
-      <span class="friend-name">${escapeHtml(f.name)}</span>
-      <button class="mini-btn danger" data-fdel="${f.id}">✕</button>
+      <span class="friend-ava" style="background:${f.color || 'var(--surface-2)'}">${
+        escapeHtml(f.emoji || (f.name || f.login || '?')[0])}</span>
+      <span class="friend-name">${escapeHtml(f.name || f.login)}
+        <small class="friend-login">@${escapeHtml(f.login)}</small></span>
+      <button class="mini-btn danger" data-fdel="${escapeHtml(f.login)}">✕</button>
     </div>`).join('');
   box.querySelectorAll('[data-fdel]').forEach(b =>
-    b.addEventListener('click', () => {
-      friends = friends.filter(f => f.id !== b.dataset.fdel);
-      saveJson(FRIENDS_KEY, friends);
+    b.addEventListener('click', async () => {
+      if (!confirm('Удалить друга?')) return;
+      await apiCall('DELETE', '/friends/' + encodeURIComponent(b.dataset.fdel));
+      await loadFriends();
       renderFriends();
+      renderFriendsBoard();
     }));
 }
 /* Доска соревнования. Честно: данных о чужом прогрессе у нас пока нет —
@@ -2396,34 +2577,261 @@ function renderFriendsBoard() {
   const pct = weekCompletion(weekStartOf(new Date()));   // null, если на неделе ничего не было
   const myWeek = pct === null ? '—' : pct + '%';
 
-  if (!friends.length) {
+  if (!serverFriends.length) {
     box.innerHTML = `<p class="hint" style="margin:0">Добавь друга — и здесь появится, кто на какой серии.</p>`;
     return;
   }
-  box.innerHTML = `
-    <div class="friend-row">
-      <span class="friend-ava">${avatarHtml(profile)}</span>
-      <span class="friend-name">${escapeHtml(profile.name || 'Ты')}</span>
-      <span class="goal-text">${icon('i-flame', 'ic ic-s')} ${myStreak} · ${myWeek}</span>
-    </div>
-    ${friends.map(f => `
-      <div class="friend-row">
-        <span class="friend-ava">${escapeHtml(f.emoji || '🙂')}</span>
-        <span class="friend-name">${escapeHtml(f.name)}</span>
-        <span class="goal-text dim">ждёт аккаунт</span>
-      </div>`).join('')}
-    <p class="hint" style="margin:8px 0 0">Чужие серии подтянутся, когда друзья будут по аккаунтам,
-      а не локальным списком.</p>`;
+  // общий зачёт: я и друзья, сортировка по серии — видно, кто впереди
+  const rows = [
+    { me: true, name: profile.name || 'Ты', streak: myStreak, weekPct: pct, ava: avatarHtml(profile), color: profile.color },
+    ...serverFriends.map(f => ({
+      me: false, name: f.name || f.login, streak: f.streak || 0, weekPct: f.weekPct,
+      ava: escapeHtml(f.emoji || (f.name || f.login || '?')[0]), color: f.color
+    }))
+  ].sort((a, b) => b.streak - a.streak);
+
+  box.innerHTML = rows.map((r, i) => `
+    <div class="friend-row${r.me ? ' me' : ''}">
+      <span class="board-place">${i + 1}</span>
+      <span class="friend-ava" style="background:${r.color || 'var(--surface-2)'}">${r.ava}</span>
+      <span class="friend-name">${escapeHtml(r.name)}${r.me ? ' <small class="friend-login">это ты</small>' : ''}</span>
+      <span class="goal-text">${icon('i-flame', 'ic ic-s')} ${r.streak}${
+        r.weekPct === null || r.weekPct === undefined ? '' : ' · ' + r.weekPct + '%'}</span>
+    </div>`).join('');
 }
 
-function saveFriend() {
-  const name = document.getElementById('fr-name').value.trim();
-  if (!name) { alert('Введи имя друга'); return; }
-  const emoji = document.querySelector('#fr-emoji-grid .selected')?.dataset.emoji || '🙂';
-  friends.push({ id: 'f' + Date.now(), name, emoji });
-  saveJson(FRIENDS_KEY, friends);
-  closeSheet('friend-overlay');
+/* ---------- ДЕПОЗИТ ----------
+   Деньги на кону лежат заранее; при пропуске сервер списывает их отсюда.
+   Суммы с сервера приходят в КОПЕЙКАХ — на экран переводим в рубли. */
+let wallet = null;
+
+const rub = kop => (kop / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' ₽';
+
+async function loadWallet() {
+  if (!API || !authToken) { wallet = null; return; }
+  wallet = await apiCall('GET', '/wallet');
+}
+
+function renderWallet() {
+  const card = document.getElementById('wallet-card');
+  if (!card) return;
+  if (!wallet) { card.hidden = true; return; }
+  card.hidden = false;
+
+  document.getElementById('wallet-balance').textContent = rub(wallet.balance || 0);
+  document.getElementById('wallet-sub').textContent = wallet.charged
+    ? `на кону · уже ушло ${rub(wallet.charged)}`
+    : 'на кону';
+  document.getElementById('wallet-sim').hidden = !wallet.payments?.simulated;
+
+  const box = document.getElementById('wallet-history');
+  const items = (wallet.history || []).slice(0, 6);
+  box.innerHTML = items.length ? items.map(h => `
+    <div class="ledger-row">
+      <span class="ledger-icon">${icon(h.amount > 0 ? 'i-download' : 'i-coins')}</span>
+      <div class="ledger-main">
+        <div class="ledger-name">${h.amount > 0 ? 'Пополнение' : escapeHtml(h.meta?.name || 'Штраф')}</div>
+        <div class="ledger-day">${formatDay((h.created_at || '').slice(0, 10))}</div>
+      </div>
+      <span class="ledger-amount ${h.amount > 0 ? 'plus' : ''}">${h.amount > 0 ? '+' : '−'}${rub(Math.abs(h.amount))}</span>
+    </div>`).join('')
+    : '<p class="hint" style="margin:8px 0 0">Пополни депозит — тогда штрафы станут настоящими.</p>';
+}
+
+function openTopupSheet() {
+  if (!API || !authToken) { toast('Депозит работает с аккаунтом — войди сначала'); return; }
+  document.getElementById('topup-error').hidden = true;
+  document.getElementById('topup-custom').value = '';
+  openSheet('topup-overlay');
+}
+
+async function doTopup() {
+  const custom = Number(document.getElementById('topup-custom').value);
+  const chip = document.querySelector('#topup-amounts .topup-chip.on');
+  const kop = custom > 0 ? Math.round(custom * 100) : Number(chip?.dataset.sum || 30000);
+  const err = document.getElementById('topup-error');
+
+  const r = await apiCallStrict('POST', '/wallet/topup', { amount: kop });
+  if (r?.error) { err.hidden = false; err.textContent = r.error; return; }
+
+  if (r.url) { location.href = r.url; return; }   // боевой режим — уходим на оплату
+  closeSheet('topup-overlay');
+  await loadWallet();
+  renderWallet();
+  toast(r.simulated ? `Зачислено ${rub(kop)} (тестовый режим)` : `Депозит пополнен на ${rub(kop)}`);
+}
+
+/* ---------- СОВМЕСТНЫЕ ПРИВЫЧКИ ----------
+   Привычку можно делать вместе с другом: помечаешь её его логином, и на карточке
+   видно, закрыл ли он сегодня свою такую же (сверяем по названию — он публикует
+   статусы совместных привычек в своей визитке). */
+function friendByLogin(login) {
+  return serverFriends.find(f => f.login === login) || null;
+}
+// выполнил ли друг сегодня свою одноимённую привычку: true/false/null (нет данных)
+function buddyDoneToday(h) {
+  const f = friendByLogin(h.buddy);
+  if (!f || !f.shared) return null;
+  const key = (h.name || '').trim().toLowerCase();
+  return key in f.shared ? !!f.shared[key] : null;
+}
+
+/* ---------- ПРИГЛАШЕНИЕ ДЕЛАТЬ ВМЕСТЕ (QR + ссылка) ----------
+   Владелец получает короткий код своей привычки; друг открывает ссылку или
+   сканирует QR — и у него создаётся такая же привычка, а карточки связываются. */
+let inviteUrl = '';
+
+async function openInviteSheet(habitId) {
+  const h = habits.find(x => x.id === habitId);
+  if (!h) return;
+  const box = document.getElementById('invite-qr');
+  document.getElementById('invite-habit').textContent = h.name;
+  box.innerHTML = '<span class="qr-wait">Готовлю код…</span>';
+  inviteUrl = '';
+  openSheet('invite-overlay');
+
+  if (!API || !authToken) {
+    box.innerHTML = '<span class="qr-wait">Нужен аккаунт — войди, чтобы звать друзей</span>';
+    return;
+  }
+  const r = await apiCallStrict('POST', '/invites', { habitId });
+  if (r?.error || !r?.code) {
+    box.innerHTML = `<span class="qr-wait">${escapeHtml(r?.error || 'Не удалось получить код')}</span>`;
+    return;
+  }
+  inviteUrl = `${location.origin}/?join=${r.code}`;
+  drawInviteQr(box, inviteUrl);
+}
+
+function drawInviteQr(box, url) {
+  if (typeof qrcode !== 'function') {   // библиотека не загрузилась — не падаем
+    box.innerHTML = `<span class="qr-wait">${escapeHtml(url)}</span>`;
+    return;
+  }
+  try {
+    const q = qrcode(0, 'M');           // авто-версия, средняя коррекция
+    q.addData(url);
+    q.make();
+    box.innerHTML = q.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+  } catch {
+    box.innerHTML = `<span class="qr-wait">${escapeHtml(url)}</span>`;
+  }
+}
+
+// пришли по ссылке/QR: ?join=<код> — показываем приглашение и принимаем.
+// Своя шторка вместо confirm(): системные диалоги после сетевого запроса
+// мобильные браузеры часто глушат, и приглашение молча терялось.
+let joinCode = null;
+
+async function handleJoinLink() {
+  const code = new URLSearchParams(location.search).get('join');
+  if (!code) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  if (!API) return;
+
+  const info = await apiCall('GET', '/invites/' + encodeURIComponent(code));
+  if (!info?.code) { toast('Приглашение не найдено или устарело'); return; }
+  if (!authToken) {
+    localStorage.setItem(PENDING_JOIN_KEY, code);   // примем сразу после входа
+    toast(`@${info.owner} зовёт делать «${info.name}» вместе — войди в аккаунт`);
+    return;
+  }
+  joinCode = code;
+  document.getElementById('join-icon').innerHTML = info.icon ? iconOf(info.icon) : '🤝';
+  document.getElementById('join-who').textContent = `@${info.owner} — «${info.name}»`;
+  openSheet('join-overlay');
+}
+
+async function acceptJoin() {
+  if (!joinCode) return;
+  const code = joinCode;
+  joinCode = null;
+  closeSheet('join-overlay');
+
+  const r = await apiCallStrict('POST', `/invites/${encodeURIComponent(code)}/accept`);
+  if (r?.error) { toast(r.error); return; }
+
+  // подтягиваем свежие привычки и друзей — привычка уже создана на сервере
+  const remote = await apiCall('GET', '/habits');
+  if (Array.isArray(remote)) { habits = remote; habits.forEach(migrate); save(); }
+  await loadFriends();
+  render();
+  switchScreen('today');
+  const nm = r.habit?.name || 'привычку';
+  toast(r.created
+    ? `Привычка «${nm}» добавлена — делаете вместе с @${r.owner} 👥`
+    : `«${nm}» у тебя уже была — теперь делаете её вместе с @${r.owner} 👥`);
+}
+
+function openBuddySheet(habitId) {
+  const h = habits.find(x => x.id === habitId);
+  if (!h) return;
+  const box = document.getElementById('buddy-list');
+  const hint = document.getElementById('buddy-hint');
+
+  if (!API || !authToken) {
+    hint.textContent = 'Совместные привычки работают с аккаунтом — войди сначала.';
+    box.innerHTML = '';
+  } else if (!serverFriends.length) {
+    hint.textContent = 'Сначала добавь друга на вкладке «Друзья» — по логину или ссылке.';
+    box.innerHTML = '';
+  } else {
+    hint.textContent = 'Выбери друга — вы увидите, кто уже закрыл привычку сегодня. ' +
+      'Важно: у друга привычка должна называться так же.';
+    box.innerHTML = serverFriends.map(f => `
+      <button class="row-btn buddy-pick${h.buddy === f.login ? ' on' : ''}" data-buddy="${escapeHtml(f.login)}">
+        <span class="friend-ava" style="background:${f.color || 'var(--surface-2)'}">${
+          escapeHtml(f.emoji || (f.name || f.login)[0])}</span>
+        <span>${escapeHtml(f.name || f.login)} <small class="friend-login">@${escapeHtml(f.login)}</small></span>
+      </button>`).join('') +
+      (h.buddy ? `<button class="row-btn danger" data-buddy="">Убрать друга — делать одному</button>` : '');
+    box.querySelectorAll('[data-buddy]').forEach(b =>
+      b.addEventListener('click', () => setHabitBuddy(h, b.dataset.buddy)));
+  }
+  openSheet('buddy-overlay');
+}
+
+function setHabitBuddy(h, login) {
+  h.buddy = login || '';
+  save();
+  apiCall('PUT', `/habits/${h.id}`, h);
+  touchStateTs(); scheduleStatePush();      // друг должен увидеть наш статус
+  closeSheet('buddy-overlay');
+  render();
+  renderHabitStats();
+  toast(login ? 'Теперь вы делаете это вместе 👥' : 'Снова делаешь один');
+}
+
+/* добавление друга по логину — через сервер, дружба взаимная */
+async function addFriendByLogin(login, silent = false) {
+  const err = document.getElementById('fr-error');
+  const show = msg => {
+    if (silent) { toast(msg); return; }
+    if (err) { err.hidden = false; err.textContent = msg; }
+  };
+  login = String(login || '').trim().toLowerCase();
+  if (!login) return show('Введи логин друга');
+  if (!API || !authToken) return show('Друзья работают только с аккаунтом — войди сначала');
+  if (login === myLogin) return show('Это твой собственный логин');
+
+  const r = await apiCallStrict('POST', '/friends', { login });
+  if (r?.error) return show(r.error);
+
+  await loadFriends();
   renderFriends();
+  renderFriendsBoard();
+  if (!silent) closeSheet('friend-overlay');
+  toast('Теперь вы друзья 👥');
+}
+
+// перешёл по ссылке-приглашению (?add=login) — добавляем сразу после входа
+async function handleInviteLink() {
+  const add = new URLSearchParams(location.search).get('add');
+  if (!add) return;
+  history.replaceState(null, '', location.pathname + location.hash);   // чистим адрес
+  if (!authToken) { toast('Войди в аккаунт — и друг добавится'); return; }
+  await addFriendByLogin(add, true);
+  switchScreen('friends');
 }
 
 /* идеи на будущее */
@@ -2576,11 +2984,52 @@ async function submitAuth() {
       : `Аккаунт создан. Привет, ${res.user.login}!`);
     renderAccount();
     apiBootstrap();   // подтянуть/залить данные аккаунта
+    if (res.needVerify) openVerifySheet(res.user?.email);
   } finally {
     btn.disabled = false;
     setAuthMode(authMode);
   }
 }
+/* ---------- ПОДТВЕРЖДЕНИЕ ПОЧТЫ ----------
+   После регистрации на почту уходит код из 6 цифр. Подтверждение не блокирует
+   работу приложения (можно «Позже»), но пока почта не подтверждена — восстановить
+   доступ к аккаунту будет нечем, поэтому мягко напоминаем. */
+function openVerifySheet(email) {
+  const err = document.getElementById('verify-error');
+  if (err) err.hidden = true;
+  const input = document.getElementById('verify-code');
+  if (input) input.value = '';
+  const mail = document.getElementById('verify-email');
+  if (mail) mail.textContent = email || authUser?.email || '';
+  openSheet('verify-overlay');
+  setTimeout(() => input?.focus(), 100);
+}
+
+async function submitVerify() {
+  const code = document.getElementById('verify-code').value.trim();
+  const err = document.getElementById('verify-error');
+  if (!/^\d{6}$/.test(code)) {
+    err.hidden = false; err.textContent = 'Код — 6 цифр';
+    return;
+  }
+  const r = await apiCallStrict('POST', '/auth/verify', { code });
+  if (r?.error) { err.hidden = false; err.textContent = r.error; return; }
+  if (authUser) { authUser.emailVerified = true; setAuth(authToken, authUser); }
+  closeSheet('verify-overlay');
+  renderAccount();
+  toast('Почта подтверждена ✅');
+}
+
+async function resendVerify() {
+  const err = document.getElementById('verify-error');
+  const r = await apiCallStrict('POST', '/auth/resend');
+  if (r?.error) { err.hidden = false; err.textContent = r.error; return; }
+  err.hidden = true;
+  toast(r?.configured === false
+    ? 'Почтовый сервис ещё не подключён — код в логах сервера'
+    : 'Код отправлен ещё раз ✉️');
+}
+
 async function logout() {
   await apiCall('POST', '/auth/logout');
   setAuth(null, null);
@@ -2655,7 +3104,10 @@ function openProfileSheet() {
     emoji: profile.emoji || null
   };
   document.getElementById('pf-name-input').value = avaDraft.name;
-  buildColorPicker('pf-color-picker', avaDraft.color);
+  buildColorPicker('pf-color-picker', avaDraft.color, col => {
+    avaDraft.color = col;          // цвет виден в превью сразу, а не после сохранения
+    updateAvaPreview();
+  });
   buildEmojiGrid('ava-emoji-grid', avaDraft.emoji, em => {
     avaDraft.emoji = em;
     avaDraft.photo = null;
@@ -2711,14 +3163,35 @@ function saveProfile() {
   renderProfile();
 }
 
-/* мотивация */
+/* мотивация: записал один раз — дальше она «зафиксирована», менять через «Изменить».
+   Так текст не теряется и воспринимается как обещание себе, а не черновик. */
+let motEditing = false;
+function hasMotivation() { return !!(profile.motivation?.text || '').trim(); }
+
+function setMotivationMode(editing) {
+  motEditing = editing;
+  const text = document.getElementById('mot-text');
+  const slider = document.getElementById('mot-level');
+  const save = document.getElementById('mot-save');
+  const edit = document.getElementById('mot-edit');
+  if (!text || !slider || !save || !edit) return;
+  text.readOnly = !editing;          // readonly, а не disabled: текст остаётся читаемым
+  slider.disabled = !editing;
+  text.classList.toggle('locked', !editing);
+  save.hidden = !editing;
+  edit.hidden = editing;
+}
+
 function saveMotivation() {
+  const text = document.getElementById('mot-text').value.trim();
+  if (!text) { toast('Напиши, что тебя мотивирует'); return; }
   profile.motivation = {
     level: Number(document.getElementById('mot-level').value) || 0,
-    text: document.getElementById('mot-text').value.trim()
+    text
   };
   if (!profile.createdAt) profile.createdAt = TODAY;
   saveJson(PROFILE_KEY, profile);
+  setMotivationMode(false);          // фиксируем: дальше только через «Изменить»
   toast('Мотивация сохранена ⚡');
 }
 
@@ -2791,14 +3264,124 @@ function switchScreen(name, updateHash = true) {
     s.classList.toggle('active', s.id === 'screen-' + name));
   document.querySelectorAll('.nav-item[data-screen]').forEach(b =>
     b.classList.toggle('active', b.dataset.screen === name));
+  moveDockLens();
   if (updateHash && location.hash !== '#' + name) {
     history.replaceState(null, '', '#' + name);
   }
   if (name === 'stats') renderStats();
   if (name === 'calendar') renderCalendar();
-  if (name === 'friends') { renderFriends(); renderFriendsBoard(); }
+  if (name === 'friends') {
+    renderFriends(); renderFriendsBoard();
+    // подтягиваем свежие серии друзей при каждом заходе на вкладку
+    loadFriends().then(() => { renderFriends(); renderFriendsBoard(); });
+  }
   if (name === 'medals') renderMedalsScreen();
   if (name === 'profile') renderProfile();
+}
+
+// стеклянная линза дока: ставим под активную вкладку (её ширина/позиция).
+// offsetLeft/offsetWidth считаются от дока (он position:fixed → offsetParent).
+function moveDockLens() {
+  const dock = document.getElementById('dock');
+  const lens = document.getElementById('dock-lens');
+  const active = document.querySelector('#dock .dock-item.active');
+  if (!dock || !lens || !active) return;
+  // Капля чуть крупнее вкладки, но ЦЕЛИКОМ внутри дока (не вылезает за рамку).
+  // offsetLeft считается от border-box дока, а absolute-капля — от padding-box,
+  // поэтому вычитаем левую рамку, иначе она уезжает вбок.
+  const bl = parseFloat(getComputedStyle(dock).borderLeftWidth) || 0;
+  const lensW = active.offsetWidth + 10;
+  // высота с запасом на раздувание: даже раздутая капля остаётся внутри дока
+  const lensH = dock.clientHeight - 6 - LENS_GROW;
+  const cx = active.offsetLeft + active.offsetWidth / 2;   // центр активной вкладки
+  lens.style.setProperty('--lens-x', clampLensX(dock, cx - lensW / 2 - bl, lensW) + 'px');
+  lens.style.setProperty('--lens-w', lensW + 'px');
+  lens.style.setProperty('--lens-h', lensH + 'px');
+}
+window.addEventListener('resize', moveDockLens);
+
+/* Каплю можно ВОДИТЬ пальцем: тянешь — стекло едет за пальцем, отпускаешь —
+   примагничивается к ближайшей вкладке и переключает экран. Обычный тап
+   работает как раньше (клик после перетаскивания гасим, иначе сработает дважды). */
+let dockDragged = false;
+function dockJustDragged() {          // true один раз сразу после перетаскивания
+  if (!dockDragged) return false;
+  dockDragged = false;
+  return true;
+}
+// держим каплю целиком внутри дока (padding-box), чтобы не вылезала за рамку.
+// pad — запас на раздувание при перетаскивании (капля растёт от центра)
+const LENS_GROW = 8;                 // должно совпадать с --lens-grow в CSS
+function clampLensX(dock, x, w, pad = 0) {
+  return Math.max(pad, Math.min(dock.clientWidth - w - pad, x));
+}
+
+function wireDockDrag() {
+  const dock = document.getElementById('dock');
+  const lens = document.getElementById('dock-lens');
+  if (!dock || !lens) return;
+  let pid = null, startX = 0, lensStart = 0, dragging = false;
+  const lensX = () => parseFloat(lens.style.getPropertyValue('--lens-x')) || 0;
+  const lensW = () => parseFloat(lens.style.getPropertyValue('--lens-w')) || 72;
+
+  // элемент дока под центром капли (вкладка ИЛИ кнопка «+»)
+  const targetUnderLens = () => {
+    const bl = parseFloat(getComputedStyle(dock).borderLeftWidth) || 0;
+    const cx = bl + lensX() + lensW() / 2;
+    let best = null, bestD = Infinity;
+    dock.querySelectorAll('.dock-item').forEach(it => {
+      const d = Math.abs(it.offsetLeft + it.offsetWidth / 2 - cx);
+      if (d < bestD) { bestD = d; best = it; }
+    });
+    return best;
+  };
+  const highlight = el => {
+    dock.querySelectorAll('.dock-item').forEach(it =>
+      it.classList.toggle('lens-over', it === el));
+  };
+
+  dock.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pid = e.pointerId; startX = e.clientX; lensStart = lensX(); dragging = false;
+  });
+
+  dock.addEventListener('pointermove', e => {
+    if (pid === null || e.pointerId !== pid) return;
+    const dx = e.clientX - startX;
+    if (!dragging) {
+      if (Math.abs(dx) < 4) return;   // мелкое дрожание пальца — это ещё тап
+      dragging = true;
+      lens.classList.add('dragging'); // капля раздувается, светится и идёт за пальцем
+      try { dock.setPointerCapture(pid); } catch {}
+    }
+    e.preventDefault();
+    // при перетаскивании капля раздута — держим её внутри дока с этим запасом
+    lens.style.setProperty('--lens-x',
+      clampLensX(dock, lensStart + dx, lensW(), LENS_GROW / 2) + 'px');
+    highlight(targetUnderLens());     // подсвечиваем то, над чем капля
+  });
+
+  const finish = e => {
+    if (pid === null) return;
+    try { if (dock.hasPointerCapture?.(pid)) dock.releasePointerCapture(pid); } catch {}
+    pid = null;
+    if (!dragging) return;
+    dragging = false;
+    dockDragged = true;               // подавить клик, который придёт следом
+    lens.classList.remove('dragging');
+    const target = targetUnderLens();
+    highlight(null);
+    if (navigator.vibrate) navigator.vibrate(8);       // лёгкий отклик «примагнитилось»
+    if (target?.dataset.screen) {
+      switchScreen(target.dataset.screen);             // сам вернёт каплю на место
+    } else {
+      // отпустили над «+» — открываем создание привычки, капля едет назад
+      moveDockLens();
+      if (target?.id === 'btn-add') openAddSheet();
+    }
+  };
+  dock.addEventListener('pointerup', finish);
+  dock.addEventListener('pointercancel', finish);
 }
 
 /* ---------- ШТОРКИ ---------- */
@@ -2867,7 +3450,7 @@ function buildScenePicker(containerId, selectedScene) {
     sp.appendChild(b);
   });
 }
-function buildColorPicker(containerId, selectedColor) {
+function buildColorPicker(containerId, selectedColor, onPick) {
   const cp = document.getElementById(containerId);
   cp.innerHTML = '';
   COLORS.forEach(col => {
@@ -2877,7 +3460,7 @@ function buildColorPicker(containerId, selectedColor) {
     b.style.background = col;
     b.dataset.color = col;
     b.setAttribute('aria-label', 'Цвет ' + col);
-    b.addEventListener('click', () => selectIn(cp, b));
+    b.addEventListener('click', () => { selectIn(cp, b); onPick?.(col); });
     cp.appendChild(b);
   });
 }
@@ -3119,6 +3702,23 @@ function closeProofBanner() {
   stopProofCam();
   proofHabit = null; proofBlob = null; proofRecorder = null;
   document.getElementById('proof-overlay').hidden = true;
+
+  // размораживаем путника: сперва подводим его в кадр, и только потом шагаем,
+  // иначе шаг снова пройдёт мимо глаз
+  if (walkerFrozen) {
+    walkerFrozen = false;
+    revealWalker();
+    setTimeout(renderWalker, 420);
+  }
+}
+
+// подводим путника в кадр, если он за пределами экрана — иначе шаг снова не увидят
+function revealWalker() {
+  const card = document.querySelector('#walker .walker-card');
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  const offscreen = r.top < 60 || r.bottom > window.innerHeight - 60;
+  if (offscreen) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function wireProof() {
@@ -3132,8 +3732,122 @@ function wireProof() {
   $('proof-flip').onclick = () => { proofFacing = proofFacing === 'user' ? 'environment' : 'user'; startProofCam(); };
 }
 
+/* ---------- «НАЧАЛО»: драматичный интро при первом входе ----------
+   Экранного времени в вебе не достать, поэтому спрашиваем часы у пользователя
+   и считаем прогноз: ~60 лет впереди × часы = сколько лет уйдёт в телефон
+   (h×365×60 / (24×365) = h×2.5). disbit «возвращает» долю, если жить, а не скроллить. */
+const INTRO_KEY = 'disbit_intro_v1';
+
+function introYears(hours) {
+  const lose = Math.max(1, Math.round(hours * 2.5));   // лет в телефон за ~60 лет
+  const gain = Math.max(1, Math.round(lose * 0.4));    // сколько реально вернуть дисциплиной
+  return { lose, gain };
+}
+// плавный счёт от 0 до value за ms — драматичный вылет числа
+function countUp(el, value, ms = 1100) {
+  if (!el) return;
+  const start = performance.now();
+  const step = now => {
+    const t = Math.min(1, (now - start) / ms);
+    const eased = 1 - Math.pow(1 - t, 3);              // ease-out
+    el.textContent = Math.round(eased * value);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function openIntro(done) {
+  const box = document.getElementById('intro');
+  if (!box) { done?.(); return; }
+  const steps = [...box.querySelectorAll('.intro-step')];
+  const range = document.getElementById('intro-hours-range');
+  const hOut = document.getElementById('intro-h');
+  const answers = { hours: 4, improve: [], blockers: [], habits: [], source: null };
+  let i = 0, years = introYears(4);
+
+  const showStep = n => {
+    i = Math.max(0, Math.min(steps.length - 1, n));
+    steps.forEach((s, k) => (s.hidden = k !== i));
+    document.getElementById('intro-progress').style.width =
+      Math.round(((i + 1) / steps.length) * 100) + '%';
+    const name = steps[i].dataset.step;
+    if (name === 'lose') countUp(document.getElementById('intro-lose-num'), years.lose);
+    if (name === 'gain') countUp(document.getElementById('intro-gain-num'), years.gain);
+    if (name === 'commit') resetFp();
+  };
+
+  // чипы: одиночный или множественный выбор (data-multi)
+  box.querySelectorAll('.intro-chips').forEach(group => {
+    const multi = group.hasAttribute('data-multi');
+    group.querySelectorAll('.intro-chip').forEach(chip => {
+      chip.onclick = () => {
+        if (multi) chip.classList.toggle('on');
+        else { group.querySelectorAll('.intro-chip').forEach(c => c.classList.remove('on')); chip.classList.add('on'); }
+      };
+    });
+  });
+  const collect = id => [...document.getElementById(id).querySelectorAll('.intro-chip.on')].map(c => c.dataset.v);
+
+  // «Дальше» на любом шаге ведёт вперёд; на шаге hours пересчитываем годы
+  box.querySelectorAll('[data-next]').forEach(btn => {
+    btn.onclick = () => {
+      const name = steps[i].dataset.step;
+      if (name === 'hours') { answers.hours = Number(range.value); years = introYears(answers.hours); }
+      if (name === 'improve') answers.improve = collect('chips-improve');
+      if (name === 'blockers') answers.blockers = collect('chips-blockers');
+      if (name === 'habits') answers.habits = collect('chips-habits');
+      if (name === 'source') answers.source = collect('chips-source')[0] || null;
+      showStep(i + 1);
+    };
+  });
+
+  // отпечаток-обещание: держи палец пару секунд → обещание дано → в приложение
+  let fpTimer = null;
+  const fill = document.getElementById('intro-fp-fill');
+  const hint = document.getElementById('intro-fp-hint');
+  const fpEl = document.getElementById('intro-fp');
+  function resetFp() { fpEl?.classList.remove('holding', 'done'); clearTimeout(fpTimer); if (hint) hint.textContent = 'Держи палец пару секунд'; }
+  function fpStart(e) {
+    e.preventDefault();
+    if (fpEl.classList.contains('done')) return;
+    fpEl.classList.add('holding');
+    hint.textContent = 'Держи…';
+    fpTimer = setTimeout(() => {
+      fpEl.classList.remove('holding'); fpEl.classList.add('done');
+      hint.textContent = 'Обещание дано 🤝';
+      if (navigator.vibrate) navigator.vibrate(30);
+      setTimeout(finish, 700);
+    }, 1600);
+  }
+  function fpCancel() { if (!fpEl.classList.contains('done')) resetFp(); }
+  if (fpEl) {
+    fpEl.addEventListener('pointerdown', fpStart);
+    fpEl.addEventListener('pointerup', fpCancel);
+    fpEl.addEventListener('pointerleave', fpCancel);
+    fpEl.addEventListener('pointercancel', fpCancel);
+  }
+
+  const finish = () => {
+    localStorage.setItem(INTRO_KEY, '1');
+    // сохраняем ответы: профиль знает, что улучшать, а «откуда узнал» — аналитика
+    try {
+      profile.intro = answers;
+      saveJson(PROFILE_KEY, profile);
+    } catch {}
+    box.hidden = true;
+    done?.();
+  };
+
+  box.hidden = false;
+  initSlider(range, v => { hOut.textContent = v; });
+  hOut.textContent = range.value;
+  showStep(0);
+}
+
 /* ---------- ОНБОРДИНГ (3 экрана в первый запуск) ---------- */
 const ONBOARD_KEY = 'disbit_onboard_v1';
+// код приглашения, по которому пришли без входа — примем сразу после регистрации
+const PENDING_JOIN_KEY = 'disbit_pending_join_v1';
 function openOnboarding(done) {
   const box = document.getElementById('onboard');
   const slidesWrap = document.getElementById('ob-slides');
@@ -3590,6 +4304,38 @@ function init() {
   wireWeekTarget();
   wireHabitStats();
   wireProof();
+  document.getElementById('mdone-close').addEventListener('click', () => closeSheet('mdone-overlay'));
+  document.getElementById('buddy-cancel').addEventListener('click', () => closeSheet('buddy-overlay'));
+  document.getElementById('invite-close').addEventListener('click', () => closeSheet('invite-overlay'));
+  document.getElementById('verify-submit').addEventListener('click', submitVerify);
+  document.getElementById('verify-resend').addEventListener('click', resendVerify);
+  document.getElementById('verify-later').addEventListener('click', () => closeSheet('verify-overlay'));
+  document.getElementById('verify-code').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitVerify();
+  });
+  // депозит
+  document.getElementById('btn-topup').addEventListener('click', openTopupSheet);
+  document.getElementById('topup-cancel').addEventListener('click', () => closeSheet('topup-overlay'));
+  document.getElementById('topup-go').addEventListener('click', doTopup);
+  document.querySelectorAll('#topup-amounts .topup-chip').forEach(chip =>
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#topup-amounts .topup-chip').forEach(c => c.classList.remove('on'));
+      chip.classList.add('on');
+      document.getElementById('topup-custom').value = '';   // выбрали готовую сумму
+    }));
+
+  document.getElementById('join-yes').addEventListener('click', acceptJoin);
+  document.getElementById('join-no').addEventListener('click', () => {
+    joinCode = null;
+    closeSheet('join-overlay');
+  });
+  document.getElementById('invite-share').addEventListener('click', async () => {
+    if (!inviteUrl) { toast('Код ещё готовится'); return; }
+    const data = { title: 'disbit', text: 'Погнали делать эту привычку вместе', url: inviteUrl };
+    if (navigator.share) { try { await navigator.share(data); return; } catch {} }
+    try { await navigator.clipboard.writeText(inviteUrl); toast('Ссылка скопирована 🔗'); }
+    catch { prompt('Скопируй ссылку:', inviteUrl); }
+  });
   document.getElementById('btn-open-stats').addEventListener('click', () => switchScreen('stats'));
   const achCard = document.getElementById('ach-card');
   achCard.addEventListener('click', () => switchScreen('medals'));
@@ -3610,9 +4356,10 @@ function init() {
   });
   wireSeg('recipient');
 
-  // навигация
+  // навигация (клик игнорируем, если это был «хвост» перетаскивания капли)
+  wireDockDrag();
   document.querySelectorAll('.nav-item[data-screen]').forEach(b =>
-    b.addEventListener('click', () => switchScreen(b.dataset.screen)));
+    b.addEventListener('click', () => { if (!dockJustDragged()) switchScreen(b.dataset.screen); }));
   window.addEventListener('hashchange', () =>
     switchScreen(location.hash.slice(1), false));
   initDock();
@@ -3645,7 +4392,9 @@ function init() {
   });
 
   // кнопки «Сегодня»
-  document.getElementById('btn-add').addEventListener('click', openAddSheet);
+  document.getElementById('btn-add').addEventListener('click', () => {
+    if (!dockJustDragged()) openAddSheet();   // протащили каплю через «+» — шторку не открываем
+  });
   document.getElementById('btn-empty-add').addEventListener('click', openAddSheet);
   document.getElementById('btn-cancel').addEventListener('click', () => closeSheet('add-overlay'));
   document.getElementById('btn-save').addEventListener('click', submitHabit);
@@ -3670,12 +4419,23 @@ function init() {
     avaDraft.photo = null;
     updateAvaPreview();
   });
+  // без эмодзи аватар возвращается к монограмме (первая буква имени в выбранном цвете)
+  document.getElementById('btn-emoji-remove').addEventListener('click', () => {
+    avaDraft.emoji = null;
+    document.querySelectorAll('#ava-emoji-grid .pick.selected')
+      .forEach(b => b.classList.remove('selected'));
+    updateAvaPreview();
+  });
 
   // мотивация
   initSlider(document.getElementById('mot-level'), v => {
     document.getElementById('mot-out').textContent = v + '%';
   });
   document.getElementById('mot-save').addEventListener('click', saveMotivation);
+  document.getElementById('mot-edit').addEventListener('click', () => {
+    setMotivationMode(true);
+    document.getElementById('mot-text').focus();
+  });
 
   // цели, награды, друзья, идеи
   document.getElementById('btn-goal-add').addEventListener('click', () => openGoalSheet());
@@ -3692,13 +4452,35 @@ function init() {
   document.getElementById('rw-save').addEventListener('click', saveReward);
 
   document.getElementById('btn-friend-add').addEventListener('click', () => {
-    document.getElementById('fr-name').value = '';
-    buildEmojiGrid('fr-emoji-grid', AVA_EMOJIS[0]);
+    document.getElementById('fr-login').value = '';
+    document.getElementById('fr-error').hidden = true;
     openSheet('friend-overlay');
-    document.getElementById('fr-name').focus();
+    document.getElementById('fr-login').focus();
   });
   document.getElementById('fr-cancel').addEventListener('click', () => closeSheet('friend-overlay'));
-  document.getElementById('fr-save').addEventListener('click', saveFriend);
+  document.getElementById('fr-save').addEventListener('click', () =>
+    addFriendByLogin(document.getElementById('fr-login').value));
+  document.getElementById('fr-login').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addFriendByLogin(e.target.value);
+  });
+
+  // пригласить друга: ссылка вида /?add=<логин>
+  document.getElementById('btn-copy-invite').addEventListener('click', async () => {
+    if (!myLogin) { toast('Сначала войди в аккаунт'); return; }
+    try {
+      await navigator.clipboard.writeText(inviteLink());
+      toast('Ссылка скопирована 🔗');
+    } catch { prompt('Скопируй ссылку:', inviteLink()); }
+  });
+  document.getElementById('btn-share-invite').addEventListener('click', async () => {
+    if (!myLogin) { toast('Сначала войди в аккаунт'); return; }
+    const data = { title: 'disbit', text: `Погнали держать привычки вместе — мой логин ${myLogin}`, url: inviteLink() };
+    if (navigator.share) { try { await navigator.share(data); } catch {} }
+    else {
+      try { await navigator.clipboard.writeText(inviteLink()); toast('Ссылка скопирована 🔗'); }
+      catch { prompt('Скопируй ссылку:', inviteLink()); }
+    }
+  });
 
   document.getElementById('btn-backlog-add').addEventListener('click', () => {
     document.getElementById('idea-name').value = '';
@@ -3741,6 +4523,9 @@ function init() {
 
   // стартовый экран из URL
   switchScreen(location.hash.slice(1) || 'today', false);
+  // линза дока: точная позиция после раскладки и загрузки шрифтов
+  setTimeout(moveDockLens, 60);
+  window.addEventListener('load', moveDockLens);
 
   // автоитог прошедших дней
   const fresh = settlePastDays();
@@ -3754,7 +4539,9 @@ function init() {
     if (needGate) openAuthGate();
     else if (fresh.length) showSettleModal(fresh);
   };
-  if (!localStorage.getItem(ONBOARD_KEY)) openOnboarding(afterOnboard);
+  // «Начало» — интро-воронка при первом входе. Экран плюсов внутри заменяет
+  // старый 3-экранный онбординг, поэтому дальше сразу гейт/итог дня.
+  if (!localStorage.getItem(INTRO_KEY)) openIntro(afterOnboard);
   else afterOnboard();
 
   apiBootstrap();

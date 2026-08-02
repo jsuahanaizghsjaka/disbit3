@@ -374,31 +374,58 @@ button:disabled { cursor: default; }
 .week-strip { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
 .day {
   flex: 1;
-  min-height: 62px;
+  min-height: 70px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 8px 0;
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 6px 0;
+  border: none;
   background: transparent;
   color: var(--text-3);
   font-size: 12px;
   font-weight: 600;
-  transition: background var(--t-fast), border-color var(--t-fast);
 }
-.day:hover { background: var(--surface); }
-.day .dnum { font-size: 15px; font-weight: 800; color: var(--text-2); }
-.day.today { background: var(--surface-2); border-color: rgba(var(--tint), 0.45); }
-.day.today .dnum { color: var(--text); }
-.day.today .dname { color: var(--primary); }
+.day .dname { font-size: 11px; }
+.day .dnum { font-size: 12px; font-weight: 700; color: var(--text-3); }
+.day.today .dnum { color: var(--text-2); }
+.day.today .dname { color: var(--primary); font-weight: 800; }
 
-.ddot { width: 5px; height: 5px; border-radius: var(--r-full); background: transparent; }
-.ddot.full { background: var(--primary); }
-.ddot.half { background: var(--gold); }
-.ddot.miss { background: var(--bad); opacity: 0.8; }
+/* кружок-индикатор дня: пустой → выполнено (заливка+галочка+свечение) → сегодня (кольцо) */
+.ddot {
+  position: relative;
+  width: 30px; height: 30px;
+  border-radius: var(--r-full);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+  transition: background var(--t-med), box-shadow var(--t-med);
+}
+/* галочка внутри — рисуем бордюром, без иконки */
+.ddot.full::after, .ddot.half::after {
+  content: '';
+  position: absolute; left: 50%; top: 46%;
+  width: 7px; height: 12px;
+  border: solid #08110A; border-width: 0 2.5px 2.5px 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.ddot.full {
+  background: var(--primary); border-color: transparent;
+  box-shadow: 0 0 14px rgba(var(--tint), 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.ddot.half {
+  background: var(--gold); border-color: transparent;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.55);
+}
+.ddot.half::after { border-color: #1C1503; }
+.ddot.miss { background: rgba(240, 102, 106, 0.18); border-color: rgba(240, 102, 106, 0.4); }
+/* сегодня без выполнения — светящееся кольцо (в процессе) */
+.day.today .ddot:not(.full):not(.half):not(.miss) {
+  background: transparent;
+  border: 2.5px solid var(--primary);
+  box-shadow: 0 0 12px rgba(var(--tint), 0.5);
+}
+.day:disabled { opacity: 0.5; }   /* будущие дни тусклее */
 
 /* ---------- КАРТОЧКА ПРОГРЕССА (layout — см. свойства декора выше) ---------- */
 .progress-title {
@@ -486,11 +513,14 @@ button:disabled { cursor: default; }
 .streak {
   display: inline-flex; align-items: center; gap: 3px;
   font-size: 12px; font-weight: 800;
-  color: var(--gold);
+  color: #FF7A2F;                       /* тёплый оранжевый огонёк, как на референсе */
   font-variant-numeric: tabular-nums;
 }
-.streak .ic { width: 14px; height: 14px; }
+/* свечение пламени, когда серия горит */
+.streak .ic { width: 15px; height: 15px; color: #FF6A1F;
+  filter: drop-shadow(0 0 5px rgba(255, 106, 31, 0.75)); }
 .streak.zero { color: var(--text-3); }
+.streak.zero .ic { filter: none; color: var(--text-3); }
 
 .stake-badge {
   display: inline-flex; align-items: center; gap: 4px;
@@ -503,18 +533,22 @@ button:disabled { cursor: default; }
 .stake-badge.money { color: var(--gold); background: rgba(251, 191, 36, 0.12); }
 .stake-badge.lock  { color: var(--lock); background: rgba(167, 139, 250, 0.12); }
 
-/* бейдж и кнопка «минимум» */
+/* бейдж и кнопка «минимум» — козырь идеи, поэтому заметный золотой пилюль,
+   а не бледный пунктир. Пусть люди видят: нет сил на полное — сделай минимум. */
 .min-btn {
-  border: 1px dashed var(--line);
-  background: transparent;
-  color: var(--text-2);
-  font-size: 11px; font-weight: 700;
-  padding: 6px 12px;
-  min-height: 36px;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--gold);
+  font-size: 12px; font-weight: 800;
+  padding: 8px 14px;
+  min-height: 44px;
   border-radius: var(--r-full);
-  transition: color var(--t-fast), border-color var(--t-fast);
+  transition: background var(--t-fast), transform var(--t-fast);
 }
-.min-btn:hover { color: var(--gold); border-color: var(--gold); }
+.min-btn .ic { width: 14px; height: 14px; }
+.min-btn:hover { background: rgba(251, 191, 36, 0.22); }
+.min-btn:active { transform: scale(0.94); }
 .min-badge {
   display: inline-flex; align-items: center; gap: 3px;
   font-size: 11px; font-weight: 700;
@@ -983,6 +1017,25 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
   input[type="range"].slider::-webkit-slider-thumb { transition-duration: 1ms; }
   input[type="range"].slider::-moz-range-thumb { transition-duration: 1ms; }
 }
+/* мотивация зафиксирована — это обещание себе, поэтому читается ЯРКО:
+   акцентная рамка, подсветка фона и крупный светлый текст, а не блёклая заметка */
+.field-textarea.locked {
+  background:
+    linear-gradient(160deg, rgba(var(--tint), 0.14), rgba(var(--tint), 0.05));
+  border: 1px solid rgba(var(--tint), 0.35);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.55;
+  cursor: default;
+  resize: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
+
 .field-textarea {
   width: 100%;
   min-height: 76px;
@@ -1158,6 +1211,107 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
 }
 .proof-skip b { color: var(--text-2); }
 .proof-skip:disabled { opacity: 0.4; }
+
+/* ---------- «НАЧАЛО»: интро-воронка (фон как у приложения) ---------- */
+.intro {
+  position: fixed; inset: 0; z-index: 250;
+  overflow-y: auto; overflow-x: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);             /* тот же фон, что и у приложения */
+  padding: calc(40px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom));
+}
+.intro[hidden] { display: none; }
+.intro .aura { position: absolute; inset: 0; z-index: 0; }   /* стеклянные пятна как в приложении */
+
+/* тонкий прогресс воронки сверху */
+.intro-progress {
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--neutral); z-index: 2;
+}
+.intro-progress-fill { display: block; height: 100%; width: 0;
+  background: var(--primary); transition: width var(--t-med) var(--ease); }
+
+.intro-inner { position: relative; z-index: 1; width: 100%; max-width: 420px; text-align: center; }
+.intro-step { display: flex; flex-direction: column; align-items: center; gap: 8px;
+  animation: introIn var(--t-med) var(--ease); }
+.intro-step[hidden] { display: none; }
+.intro-step-wide { max-width: 100%; }
+@keyframes introIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+.intro-kicker { font-size: 14px; font-weight: 700; color: var(--text-2); letter-spacing: 0.3px; margin: 0; text-transform: uppercase; }
+.intro-q { font-family: 'Unbounded', sans-serif; font-size: 23px; line-height: 1.25; margin: 6px 0 8px; }
+.intro-hint { font-size: 13px; color: var(--text-3); margin: 0 0 18px; }
+
+/* чипы выбора */
+.intro-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 24px; }
+.intro-chip {
+  border: 1px solid var(--neutral-line);
+  background: var(--neutral);
+  color: var(--text-2);
+  font-size: 14px; font-weight: 700;
+  padding: 10px 16px; min-height: 44px;
+  border-radius: var(--r-full);
+  transition: border-color var(--t-fast), background var(--t-fast), color var(--t-fast), transform var(--t-fast);
+}
+.intro-chip:active { transform: scale(0.95); }
+.intro-chip.on {
+  background: rgba(var(--tint), 0.16);
+  border-color: rgba(var(--tint), 0.55);
+  color: var(--text);
+}
+
+/* список главных плюсов */
+.intro-perks { list-style: none; padding: 0; margin: 0 0 22px; text-align: left; display: flex; flex-direction: column; gap: 12px; }
+.intro-perks li { display: flex; gap: 12px; align-items: flex-start; }
+.intro-perks .ip-ic {
+  flex: none; width: 40px; height: 40px; border-radius: var(--r-md);
+  background: var(--neutral); display: grid; place-items: center; font-size: 20px;
+}
+.intro-perks b { display: block; font-size: 14px; font-weight: 800; margin-bottom: 2px; }
+.intro-perks span { font-size: 13px; color: var(--text-3); line-height: 1.45; }
+
+/* отпечаток-обещание */
+.fp {
+  position: relative;
+  width: 148px; height: 148px; margin: 8px 0 6px;
+  border-radius: var(--r-full);
+  border: 1px solid rgba(var(--tint), 0.28);
+  background: var(--neutral);
+  color: var(--text-3);
+  overflow: hidden;
+  transition: transform var(--t-fast);
+}
+.fp:active { transform: scale(0.97); }
+.fp .fp-svg { position: relative; z-index: 1; width: 84px; height: 84px; }
+/* заливка снизу вверх, пока держишь палец */
+.fp-fill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+  background: linear-gradient(0deg, var(--primary), var(--primary-hi));
+  z-index: 0;
+}
+.fp.holding .fp-fill { height: 100%; transition: height 1.6s linear; }
+.fp.holding { color: #fff; box-shadow: 0 0 30px rgba(var(--tint), 0.5); }
+.fp.done { color: #fff; border-color: var(--primary); }
+.fp.done .fp-fill { height: 100%; }
+
+.intro-hours { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.intro-hours b { font-family: 'Unbounded', sans-serif; font-size: 52px; color: var(--primary); font-variant-numeric: tabular-nums; }
+.intro-hours span { font-size: 15px; color: var(--text-3); }
+.intro-slider { width: 100%; max-width: 300px; margin-bottom: 24px; }
+
+/* огромное число драмы */
+.intro-big {
+  font-family: 'Unbounded', sans-serif; font-weight: 800;
+  font-size: clamp(64px, 22vw, 104px); line-height: 1;
+  color: #F0666A;                    /* «сколько теряешь» — тревожный красный */
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 30px rgba(240,102,106,0.4);
+  margin-bottom: 4px;
+}
+.intro-big::after { content: ' лет'; font-size: 0.34em; color: var(--text-2); font-weight: 700; }
+.intro-gain { color: #3EBE7D; text-shadow: 0 6px 30px rgba(62,190,125,0.4); }  /* «возврат» — зелёный */
+.intro-big-sub { font-size: 16px; color: var(--text); line-height: 1.5; margin: 0 0 28px; max-width: 320px; }
+.intro-cta { width: 100%; max-width: 320px; min-height: 52px; }
 
 /* ---------- ОНБОРДИНГ (3 экрана первого запуска) ---------- */
 .onboard {
@@ -1389,6 +1543,10 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
 @keyframes wSun { from { transform: translateY(0); } to { transform: translateY(-4px); } }
 
 .w-walker { transition: transform 1100ms cubic-bezier(0.34, 0.05, 0.28, 1); }
+/* путник «живёт» только когда на него смотрят: вне экрана все анимации на паузе
+   (класс .w-onscreen ставит IntersectionObserver). Экономит батарею и точно
+   выполняет «двигается только когда смотрит пользователь». */
+.walker-card:not(.w-onscreen) * { animation-play-state: paused !important; }
 .w-man path, .w-man circle {
   fill: none;
   stroke: var(--w-ink, #F3EDE4);   /* цвет фигурки задаёт сцена: светлый на тёмном фоне, тёмный на снегу */
@@ -1539,6 +1697,9 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
    секции, граница должна читаться сразу (шаг сетки 8).
    У .habit-list нижнего margin нет (flex + gap), поэтому весь зазор задаётся здесь. */
 #goals-card { margin-top: 40px; }
+/* воздух между секцией привычек (в т.ч. «Не сегодня») и марафоном — чтобы
+   карточки не липли друг к другу */
+#walker { display: block; margin-top: 28px; }
 
 /* пикер сцен в шторке цели */
 .scene-picker { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -1674,9 +1835,13 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
     var(--shadow-2),
     0 18px 44px rgba(var(--tint), 0.16);
   max-width: calc(100vw - 20px);
+  /* каплю водят пальцем по горизонтали, поэтому горизонтальный жест забираем себе,
+     а вертикальный скролл страницы оставляем системе */
+  touch-action: pan-y;
 }
 .dock-item {
   position: relative;
+  z-index: 1;                       /* над линзой (.dock-lens: z-index 0) */
   width: 62px;
   min-height: 56px;
   border: none;
@@ -1697,27 +1862,105 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
   border-radius: 14px;
   transform-origin: 50% 100%;   /* растёт вверх, как в dock.tsx */
   will-change: transform;
-  transition: background var(--t-fast);
+  transition: background var(--t-fast), transform var(--t-med) var(--ease);
 }
 .dock-item .di-icon .ic { width: 22px; height: 22px; }
-.dock-item:hover .di-icon { background: rgba(var(--tint), 0.10); }
 .dock-item:hover { color: var(--text-2); }
 .dock-item.active { color: var(--primary); }
-.dock-item.active .di-icon { background: rgba(var(--tint), 0.14); }
+/* активная вкладка: иконка приподнимается из линзы и светится.
+   Подъём + рост посчитаны так, чтобы иконка НЕ вылезала за рамку дока
+   (сверху остаётся ~3px запаса) */
+.dock-item.active .di-icon { background: transparent; transform: translateY(-4px) scale(1.08); }
+.dock-item.active .ic { filter: drop-shadow(0 5px 9px rgba(var(--tint), 0.55)); }
+/* подпись показывается только у активной (плавно всплывает) */
 .dock-item .di-label {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.2px;
   white-space: nowrap;
   pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--t-med) var(--ease), transform var(--t-med) var(--ease);
 }
+.dock-item.active .di-label { opacity: 1; transform: translateY(0); }
 .dock-item:active .di-icon { transform: scale(0.9); }
+
+/* стеклянная линза-ползунок: скользит и меняет ширину под активную вкладку.
+   Радужные края — имитация дисперсии стекла, как на видео. Позицию задаёт JS
+   через --lens-x/--lens-w. Пружинная кривая — плавный «перелёт» при переходе. */
+/* Овальная «капля стекла» — как в референс-видео: КРУПНЕЕ вкладки и выше дока,
+   поэтому выходит за его границы (у .dock нет overflow, это осознанно).
+   Размер и центр по активной вкладке считает JS. */
+.dock-lens {
+  position: absolute;
+  top: 50%; left: 0;
+  /* --lens-grow раздувает каплю при перетаскивании; отрицательный margin
+     компенсирует рост влево, чтобы центр остался на месте */
+  width: calc(var(--lens-w, 72px) + var(--lens-grow, 0px));
+  height: calc(var(--lens-h, 66px) + var(--lens-grow, 0px));
+  margin-left: calc(var(--lens-grow, 0px) * -0.5);
+  transform: translate(var(--lens-x, 0px), -50%);
+  border-radius: 22px;                /* капля, но заметно менее округлая, чем эллипс */
+  /* выпуклость: свет собран сверху-центру, к краям стекло темнеет */
+  background:
+    radial-gradient(115% 100% at 50% 18%,
+      rgba(255, 255, 255, 0.17),
+      rgba(255, 255, 255, 0.06) 45%,
+      rgba(255, 255, 255, 0.02) 72%);
+  /* лёгкое размытие + подъём яркости/насыщенности = увеличительное стекло */
+  backdrop-filter: blur(2px) saturate(155%) brightness(1.12);
+  -webkit-backdrop-filter: blur(2px) saturate(155%) brightness(1.12);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  /* только ВНУТРЕННИЕ блики: внешняя тень рисовалась за рамкой дока
+     и выглядела как «капля вылезла наружу» */
+  box-shadow:
+    inset 0 2px 6px rgba(255, 255, 255, 0.34),     /* верхний блик грани */
+    inset 0 -3px 8px rgba(255, 255, 255, 0.10),    /* нижняя грань */
+    inset -3px 0 10px rgba(255, 0, 150, 0.10),     /* дисперсия по краям */
+    inset 3px 0 10px rgba(0, 200, 255, 0.10);
+  z-index: 0;
+  pointer-events: none;
+  transition:
+    transform 0.55s cubic-bezier(0.25, 1.2, 0.5, 1),
+    width 0.55s cubic-bezier(0.25, 1.2, 0.5, 1),
+    height 0.55s cubic-bezier(0.25, 1.2, 0.5, 1);
+}
+/* Пока каплю тянут: она идёт РОВНО за пальцем (у transform нет перехода),
+   но при этом плавно раздувается и разгорается — ощущение живого стекла. */
+.dock-lens.dragging {
+  --lens-grow: 8px;                  /* == LENS_GROW в script.js */
+  transition:
+    width 0.22s var(--ease),
+    height 0.22s var(--ease),
+    margin-left 0.22s var(--ease),
+    box-shadow 0.22s var(--ease),
+    border-color 0.22s var(--ease);
+  border-color: rgba(255, 255, 255, 0.42);
+  /* «разгорается» изнутри — без внешнего ореола, чтобы не вылезать за док */
+  box-shadow:
+    inset 0 2px 10px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 12px rgba(255, 255, 255, 0.20),
+    inset -4px 0 14px rgba(255, 0, 150, 0.18),
+    inset 4px 0 14px rgba(0, 200, 255, 0.18),
+    inset 0 0 22px rgba(var(--tint), 0.45);
+}
+
+/* элемент, над которым сейчас капля — оживает (в т.ч. кнопка «+») */
+.dock-item.lens-over { color: var(--text); }
+.dock-item.lens-over .di-icon { transform: translateY(-3px) scale(1.10); }
+.dock-item.fab.lens-over .di-icon {
+  box-shadow: 0 4px 12px rgba(var(--tint), 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  filter: brightness(1.15);
+}
+@media (prefers-reduced-motion: reduce) { .dock-lens { transition: none; } }
 
 /* центральная кнопка «добавить» */
 .dock-item.fab { color: var(--on-primary); }
 .dock-item.fab .di-icon {
   background: linear-gradient(135deg, var(--primary), var(--primary-hi));
-  box-shadow: 0 6px 18px rgba(var(--tint), 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  /* компактное свечение: раньше ореол на 18px расплывался далеко за рамку дока */
+  box-shadow: 0 3px 9px rgba(var(--tint), 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   border-radius: var(--r-full);
 }
 .dock-item.fab .di-icon .ic { stroke-width: 2.5; }
@@ -1964,6 +2207,162 @@ input[type="range"].slider.grabbing::-moz-range-thumb { width: 42px; }
    не загрузилась, JS удаляет <img>, правило перестаёт действовать — SVG виден. */
 .m-art + .m-fallback { display: none; }
 .medal.locked .m-art { filter: grayscale(1); opacity: 0.55; }
+
+/* ---------- СОВМЕСТНАЯ ПРИВЫЧКА: пара аватарок ---------- */
+.buddy-pair { display: inline-flex; align-items: center; }
+.pair-ava {
+  width: 26px; height: 26px;
+  border-radius: var(--r-full);
+  display: grid; place-items: center;
+  font-size: 13px; font-weight: 800;
+  background: var(--neutral);              /* не сделал — серая */
+  color: var(--text-3);
+  border: 2px solid var(--bg);             /* обводка «под фон», чтобы кружки не слипались */
+  filter: grayscale(1);
+  transition: filter var(--t-med), color var(--t-med), transform var(--t-med) var(--ease);
+}
+.pair-ava + .pair-ava { margin-left: -8px; }   /* лёгкий нахлёст, как в мессенджерах */
+.pair-ava.lit {                                /* сделал сегодня — загорается */
+  color: #fff;
+  filter: none;
+  transform: scale(1.06);
+  box-shadow: 0 0 10px rgba(var(--tint), 0.45);
+}
+
+/* поле кода подтверждения — крупные цифры с разрядкой */
+.code-input {
+  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 10px;
+  font-variant-numeric: tabular-nums;
+  padding: 14px;
+}
+
+/* шторка «зовут делать вместе» */
+.join-top { text-align: center; margin-bottom: 14px; }
+.join-icon {
+  width: 72px; height: 72px; margin: 0 auto 10px;
+  border-radius: var(--r-full);
+  display: grid; place-items: center;
+  font-size: 34px;
+  background: rgba(var(--tint), 0.16);
+  border: 1px solid rgba(var(--tint), 0.32);
+}
+.join-icon .ic { width: 34px; height: 34px; color: var(--primary); }
+.join-top .sheet-title { margin-bottom: 2px; }
+.join-who { font-size: 15px; font-weight: 700; color: var(--primary); margin: 0; }
+
+/* QR приглашения */
+.qr-box {
+  display: grid; place-items: center;
+  min-height: 200px;
+  padding: 16px;
+  margin: 4px 0 10px;
+  border-radius: var(--r-lg);
+  background: #fff;                        /* QR должен быть тёмным по светлому */
+  border: 1px solid var(--neutral-line);
+}
+.qr-box svg { width: 100%; max-width: 220px; height: auto; display: block; }
+.qr-wait { color: #5F7396; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+
+/* ---------- ДЕПОЗИТ ---------- */
+.wallet-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wallet-balance {
+  font-family: 'Unbounded', sans-serif; font-size: 28px; font-weight: 800;
+  color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.wallet-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.wallet-topup { flex: none; padding: 10px 18px; font-size: 14px; }
+.ledger-amount.plus { color: #3EBE7D; }
+
+/* выбор суммы пополнения */
+.topup-amounts { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.topup-chip {
+  flex: 1 1 auto; min-width: 74px; min-height: 44px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--neutral-line);
+  background: var(--neutral);
+  color: var(--text-2);
+  font-size: 14px; font-weight: 800;
+  transition: border-color var(--t-fast), background var(--t-fast), color var(--t-fast);
+}
+.topup-chip.on {
+  background: rgba(var(--tint), 0.16);
+  border-color: rgba(var(--tint), 0.5);
+  color: var(--text);
+}
+
+/* ---------- СОВМЕСТНАЯ ПРИВЫЧКА ---------- */
+.buddy-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--r-full);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+  color: var(--text-2);
+  font-size: 11px; font-weight: 700;
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.buddy-badge .ic { width: 13px; height: 13px; flex: none; }
+.buddy-badge.done {                       /* друг уже закрыл сегодня */
+  background: rgba(62, 190, 125, 0.16);
+  border-color: rgba(62, 190, 125, 0.4);
+  color: #3EBE7D;
+}
+.buddy-badge.wait { color: var(--text-3); }   /* друг ещё не закрыл */
+/* выбор друга в шторке */
+.buddy-pick { display: flex; align-items: center; gap: 10px; }
+.buddy-pick.on { border-color: rgba(var(--tint), 0.5); background: rgba(var(--tint), 0.12); }
+.buddy-pick .friend-ava { width: 32px; height: 32px; font-size: 16px; }
+
+/* ---------- ДРУЗЬЯ (серверные) ---------- */
+.friend-login { color: var(--text-3); font-size: 12px; font-weight: 600; }
+.friend-row.me { background: rgba(var(--tint), 0.10); border-color: rgba(var(--tint), 0.30); }
+.board-place {
+  flex: none; width: 22px;
+  font-size: 13px; font-weight: 800; color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.friend-row.me .board-place { color: var(--primary); }
+.invite-login {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+}
+.il-label { font-size: 13px; color: var(--text-3); }
+.il-value {
+  font-family: 'Unbounded', sans-serif; font-size: 16px; color: var(--primary);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- ИТОГИ МАРАФОНА ---------- */
+.mdone-top { text-align: center; margin-bottom: 18px; }
+.mdone-medal {
+  font-size: 56px; line-height: 1; margin-bottom: 8px;
+  animation: mdPop 0.6s var(--ease) backwards;
+}
+@keyframes mdPop {
+  from { transform: scale(0.4) rotate(-18deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0); opacity: 1; }
+}
+.mdone-top .sheet-title { margin-bottom: 2px; }
+.mdone-goal { font-size: 15px; font-weight: 700; color: var(--primary); margin: 0; }
+.mdone-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 18px; }
+.md-tile {
+  padding: 14px 12px;
+  border-radius: var(--r-md);
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.md-num {
+  font-family: 'Unbounded', sans-serif; font-size: 24px; font-weight: 800;
+  color: var(--primary); font-variant-numeric: tabular-nums;
+}
+.md-lbl { font-size: 12px; color: var(--text-3); }
 
 /* ---------- СПИСОК ДОСТИЖЕНИЙ (экран) — строки с описанием ---------- */
 .medal-list { display: flex; flex-direction: column; gap: 8px; }

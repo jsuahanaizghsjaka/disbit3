@@ -25,10 +25,12 @@ db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 // мягкие миграции для баз, созданных до появления авторизации
 for (const sql of [
   "ALTER TABLE habits ADD COLUMN week_target INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE habits ADD COLUMN buddy TEXT DEFAULT ''",
   "ALTER TABLE habits ADD COLUMN stake_minutes INTEGER NOT NULL DEFAULT 60",
   "ALTER TABLE completions ADD COLUMN skip INTEGER DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE charges ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE users ADD COLUMN login TEXT",
   "ALTER TABLE users ADD COLUMN pass_hash TEXT",
   "ALTER TABLE users ADD COLUMN pass_salt TEXT"
@@ -64,6 +66,7 @@ export function rowToHabit(row, completions = []) {
     color: row.color,
     schedule: JSON.parse(row.schedule || '[0,1,2,3,4,5,6]'),
     weekTarget: row.week_target || 0,
+    buddy: row.buddy || '',
     pinned: !!row.pinned,
     createdAt: row.created_day,
     goal: {
@@ -88,6 +91,7 @@ export function habitToParams(h) {
     color: h.color || '#3B82F6',
     schedule: JSON.stringify(h.schedule?.length ? h.schedule : [0,1,2,3,4,5,6]),
     week_target: Math.max(0, Math.min(7, Number(h.weekTarget) || 0)),
+    buddy: String(h.buddy || '').slice(0, 24),
     pinned: h.pinned ? 1 : 0,
     goal_type: h.goal?.type === 'count' ? 'count' : 'check',
     goal_target: Number(h.goal?.target) || 1,

@@ -11,7 +11,17 @@ CREATE TABLE IF NOT EXISTS users (
   email      TEXT UNIQUE NOT NULL,
   pass_hash  TEXT NOT NULL,               -- scrypt-хэш пароля
   pass_salt  TEXT NOT NULL,
+  email_verified INTEGER NOT NULL DEFAULT 0,   -- почта подтверждена кодом из письма
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Коды подтверждения почты (живут 15 минут, счётчик попыток от перебора)
+CREATE TABLE IF NOT EXISTS email_codes (
+  user_id    INTEGER PRIMARY KEY,
+  code       TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,                 -- мс с эпохи
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  sent_at    INTEGER NOT NULL DEFAULT 0        -- чтобы не спамить «отправить ещё раз»
 );
 
 -- Сессии (Bearer-токены)
@@ -31,6 +41,7 @@ CREATE TABLE IF NOT EXISTS habits (
   color           TEXT,
   schedule        TEXT NOT NULL DEFAULT '[0,1,2,3,4,5,6]', -- JSON: дни недели, 0=Пн
   week_target     INTEGER NOT NULL DEFAULT 0,              -- 0 = строго по дням, N = «N дней в неделю»
+  buddy           TEXT DEFAULT '',                        -- логин друга, если привычка совместная
   pinned          INTEGER NOT NULL DEFAULT 0,              -- закреплена наверху списка
   goal_type       TEXT NOT NULL DEFAULT 'check',   -- 'check' | 'count'
   goal_target     INTEGER DEFAULT 1,
@@ -96,3 +107,53 @@ CREATE TABLE IF NOT EXISTS proofs (
   created_at  TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_proofs_status ON proofs(status, id);
+
+-- ДЕПОЗИТ (кошелёк). Модель: пользователь заранее пополняет баланс, а при
+-- пропуске сумма списывается ОТСЮДА, а не с карты. Так нет рекуррентных
+-- списаний (меньше юридических и технических рисков), а деньги уже у нас.
+-- Все суммы — в КОПЕЙКАХ целыми числами: дробные рубли дают ошибки округления.
+CREATE TABLE IF NOT EXISTS wallets (
+  user_id    INTEGER PRIMARY KEY,
+  balance    INTEGER NOT NULL DEFAULT 0,      -- копейки
+  currency   TEXT NOT NULL DEFAULT 'RUB',
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Движения по кошельку. Пишем ВСЁ: пополнения, списания, возвраты, выплаты.
+-- provider_id — id платежа у провайдера, по нему сверяемся и не зачисляем дважды.
+CREATE TABLE IF NOT EXISTS transactions (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL,
+  type         TEXT NOT NULL,                 -- 'topup' | 'charge' | 'refund' | 'payout'
+  amount       INTEGER NOT NULL,              -- копейки: + приход, − расход
+  balance_after INTEGER NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'done',  -- 'pending' | 'done' | 'failed' | 'canceled'
+  provider     TEXT,                          -- 'yookassa' | 'tbank' | 'manual'
+  provider_id  TEXT,                          -- id платежа на стороне провайдера
+  meta         TEXT,                          -- JSON: habit_id, day, recipient…
+  created_at   TEXT DEFAULT (datetime('now')),
+  UNIQUE(provider, provider_id)               -- вебхук может прийти дважды
+);
+CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, id DESC);
+
+-- Друзья: настоящая связь между аккаунтами (не локальный список).
+-- Дружба взаимная — при добавлении создаём ОБЕ строки, чтобы каждый видел другого.
+CREATE TABLE IF NOT EXISTS friendships (
+  user_id    INTEGER NOT NULL,
+  friend_id  INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, friend_id)
+);
+CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
+
+-- Приглашения «делать привычку вместе»: короткий код → ссылка/QR.
+-- payload — снимок привычки (название, иконка, расписание…), чтобы у друга
+-- создалась ТАКАЯ ЖЕ. Код постоянный для пары (владелец + привычка).
+CREATE TABLE IF NOT EXISTS habit_invites (
+  code       TEXT PRIMARY KEY,
+  owner_id   INTEGER NOT NULL,
+  habit_id   TEXT NOT NULL,
+  payload    TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(owner_id, habit_id)
+);

@@ -132,6 +132,10 @@
         <button class="btn-primary empty-cta" id="btn-empty-add">Создать привычку</button>
       </div>
 
+      <!-- марафон: путник идёт к цели, 1 привычка = 1 шаг. Стоит сразу под
+           привычками, чтобы прогресс двигался на глазах при отметке -->
+      <div id="walker" hidden></div>
+
       <!-- большие цели (переехали из календаря) -->
       <section class="card" id="goals-card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
@@ -141,9 +145,6 @@
           <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
         </button>
       </section>
-
-      <!-- марафон: путник идёт к цели, 1 выполненная привычка = 1 шаг -->
-      <div id="walker" hidden></div>
 
       <!-- итог дня — в самом низу: это финальное действие экрана -->
       <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
@@ -207,10 +208,18 @@
         <div id="friends-board"></div>
       </section>
 
+      <!-- пригласить: свой логин + ссылка -->
       <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Вместе</h3>
-        <p class="hint" style="margin:0">Совместные привычки и общие марафоны — следующий шаг.
-          Нужны серверные аккаунты друзей: сейчас список локальный, только на этом устройстве.</p>
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-users"/></svg> Пригласить друга</h3>
+        <p class="hint" style="margin:0 0 10px">Дай другу свой логин или отправь ссылку — он добавится в один тап.</p>
+        <div class="invite-login">
+          <span class="il-label">Твой логин</span>
+          <b class="il-value" id="my-login">—</b>
+        </div>
+        <div class="sheet-actions" style="margin-top:10px">
+          <button class="btn-ghost" id="btn-copy-invite">Скопировать ссылку</button>
+          <button class="btn-primary" id="btn-share-invite">Поделиться</button>
+        </div>
       </section>
     </main>
 
@@ -345,6 +354,7 @@
         <textarea class="field-textarea" id="mot-text" maxlength="500"
           placeholder="Что тебя мотивирует? Твои цели, желания, ради чего всё это…"></textarea>
         <div class="sheet-actions" style="margin-top:12px">
+          <button class="btn-ghost" id="mot-edit" hidden>Изменить</button>
           <button class="btn-primary" id="mot-save">Сохранить мотивацию</button>
         </div>
       </section>
@@ -357,6 +367,23 @@
         <button class="row-btn" id="btn-reward-add">
           <svg class="ic"><use href="#i-plus"/></svg><span>Добавить награду</span>
         </button>
+      </section>
+
+      <!-- депозит: деньги на кону лежат заранее, штраф списывается отсюда -->
+      <section class="card" id="wallet-card" hidden>
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-coins"/></svg> Депозит</h3>
+        <div class="wallet-top">
+          <div>
+            <div class="wallet-balance" id="wallet-balance">0 ₽</div>
+            <div class="wallet-sub" id="wallet-sub">на кону</div>
+          </div>
+          <button class="btn-primary wallet-topup" id="btn-topup">Пополнить</button>
+        </div>
+        <p class="sim-note" id="wallet-sim" hidden>
+          <svg class="ic ic-s"><use href="#i-alert"/></svg>
+          Тестовый режим: деньги ненастоящие, платёжка ещё не подключена.
+        </p>
+        <div id="wallet-history"></div>
       </section>
 
       <!-- общая статистика: личная по каждой привычке — в её карточке -->
@@ -427,6 +454,8 @@
 
     <!-- ПЛАВАЮЩИЙ GLASS-ДОК (по мотивам dock.tsx: гауссова магнификация) -->
     <nav class="dock" id="dock" aria-label="Основная навигация">
+      <!-- стеклянная линза-ползунок: скользит под активную вкладку -->
+      <span class="dock-lens" id="dock-lens" aria-hidden="true"></span>
       <button class="dock-item nav-item active" data-screen="today">
         <span class="di-icon"><svg class="ic"><use href="#i-home"/></svg></span>
         <span class="di-label">Главная</span>
@@ -535,6 +564,123 @@
     </div>
   </div>
 
+  <!-- ===== ШТОРКА: ПОДТВЕРЖДЕНИЕ ПОЧТЫ ===== -->
+  <div class="sheet-overlay" id="verify-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="verify-title">
+      <div class="sheet-handle"></div>
+      <div class="join-top">
+        <div class="join-icon">✉️</div>
+        <h2 class="sheet-title" id="verify-title">Подтверди почту</h2>
+        <p class="join-who" id="verify-email"></p>
+      </div>
+      <p class="hint" style="text-align:center">Мы отправили код из 6 цифр. Введи его ниже.</p>
+
+      <input class="field-input code-input" id="verify-code" type="text" inputmode="numeric"
+        maxlength="6" placeholder="000000" autocomplete="one-time-code" />
+      <p class="auth-error" id="verify-error" hidden></p>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="verify-resend">Отправить ещё раз</button>
+        <button class="btn-primary" id="verify-submit">Подтвердить</button>
+      </div>
+      <button class="row-btn" id="verify-later" style="justify-content:center;margin-top:6px">
+        <span>Позже</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ПОПОЛНИТЬ ДЕПОЗИТ ===== -->
+  <div class="sheet-overlay" id="topup-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="topup-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="topup-title">Пополнить депозит</h2>
+      <p class="hint">Штрафы списываются с депозита — карта не привязывается,
+        деньги сами не уходят. Остаток всегда виден.</p>
+
+      <div class="topup-amounts" id="topup-amounts">
+        <button class="topup-chip" data-sum="10000">100 ₽</button>
+        <button class="topup-chip on" data-sum="30000">300 ₽</button>
+        <button class="topup-chip" data-sum="50000">500 ₽</button>
+        <button class="topup-chip" data-sum="100000">1000 ₽</button>
+      </div>
+
+      <label class="field-label" for="topup-custom">Другая сумма, ₽</label>
+      <input class="field-input small" id="topup-custom" type="number" inputmode="numeric"
+        min="50" max="50000" step="50" placeholder="300" />
+      <p class="auth-error" id="topup-error" hidden></p>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="topup-cancel">Отмена</button>
+        <button class="btn-primary" id="topup-go">Пополнить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ПРИНЯТЬ ПРИГЛАШЕНИЕ (пришли по ссылке/QR) ===== -->
+  <div class="sheet-overlay" id="join-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="join-title">
+      <div class="sheet-handle"></div>
+      <div class="join-top">
+        <div class="join-icon" id="join-icon">🤝</div>
+        <h2 class="sheet-title" id="join-title">Зовут делать вместе</h2>
+        <p class="join-who" id="join-who"></p>
+      </div>
+      <p class="hint" style="text-align:center">У тебя появится такая же привычка,
+        и вы будете видеть, кто её сегодня закрыл.</p>
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="join-no">Не сейчас</button>
+        <button class="btn-primary" id="join-yes">Погнали 🔥</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ПРИГЛАШЕНИЕ ДЕЛАТЬ ПРИВЫЧКУ ВМЕСТЕ (QR + ссылка) ===== -->
+  <div class="sheet-overlay" id="invite-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="invite-title">Позвать делать вместе</h2>
+      <p class="hint" id="invite-habit"></p>
+
+      <div class="qr-box" id="invite-qr"><span class="qr-wait">Готовлю код…</span></div>
+      <p class="hint" style="text-align:center">Друг наводит камеру — и у него появится такая же привычка.</p>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="invite-close">Закрыть</button>
+        <button class="btn-primary" id="invite-share">Поделиться ссылкой</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: ВЫБОР ДРУГА ДЛЯ СОВМЕСТНОЙ ПРИВЫЧКИ ===== -->
+  <div class="sheet-overlay" id="buddy-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="buddy-title">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="buddy-title">Делать вместе</h2>
+      <p class="hint" id="buddy-hint">Выбери друга — вы увидите, кто уже закрыл привычку сегодня.</p>
+      <div id="buddy-list"></div>
+      <div class="sheet-actions">
+        <button class="btn-ghost" id="buddy-cancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ШТОРКА: МАРАФОН ЗАВЕРШЁН (итоги) ===== -->
+  <div class="sheet-overlay" id="mdone-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mdone-title">
+      <div class="sheet-handle"></div>
+      <div class="mdone-top">
+        <div class="mdone-medal">🏆</div>
+        <h2 class="sheet-title" id="mdone-title">Марафон пройден!</h2>
+        <p class="mdone-goal" id="mdone-goal"></p>
+      </div>
+      <div class="mdone-grid" id="mdone-grid"></div>
+      <div id="mdone-habits"></div>
+      <div class="sheet-actions">
+        <button class="btn-primary" id="mdone-close">Красавчик 🔥</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== ШТОРКА: СТАТИСТИКА ПРИВЫЧКИ / МАРАФОНА ===== -->
   <div class="sheet-overlay" id="hstat-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hstat-title">
@@ -554,6 +700,12 @@
             </button>
             <button class="hstat-mi" id="hstat-minimum" role="menuitem">
               <svg class="ic ic-s"><use href="#i-check"/></svg><span>Отметить минимум</span>
+            </button>
+            <button class="hstat-mi" id="hstat-invite" role="menuitem">
+              <svg class="ic ic-s"><use href="#i-users"/></svg><span>Позвать по QR / ссылке</span>
+            </button>
+            <button class="hstat-mi" id="hstat-buddy" role="menuitem">
+              <svg class="ic ic-s"><use href="#i-users"/></svg><span id="hstat-buddy-label">Выбрать из друзей</span>
             </button>
             <button class="hstat-mi danger" id="hstat-del" role="menuitem">
               <svg class="ic ic-s"><use href="#i-trash"/></svg><span>Удалить</span>
@@ -601,6 +753,9 @@
 
       <span class="field-label">Или эмодзи из каталога</span>
       <div class="picker emoji-grid" id="ava-emoji-grid"></div>
+      <button class="btn-ghost" id="btn-emoji-remove" style="margin-top:8px">
+        Убрать эмодзи — вернуть монограмму
+      </button>
 
       <span class="field-label">Цвет монограммы</span>
       <div class="picker" id="pf-color-picker"></div>
@@ -661,11 +816,12 @@
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="friend-sheet-title">Добавить друга</h2>
 
-      <label class="field-label" for="fr-name">Имя</label>
-      <input class="field-input" id="fr-name" type="text" placeholder="Имя друга" maxlength="24" />
-
-      <span class="field-label">Аватар</span>
-      <div class="picker emoji-grid" id="fr-emoji-grid"></div>
+      <label class="field-label" for="fr-login">Логин друга</label>
+      <input class="field-input" id="fr-login" type="text" placeholder="например: bob"
+        maxlength="24" autocomplete="off" autocapitalize="none" spellcheck="false" />
+      <p class="hint">Логин он найдёт у себя на вкладке «Друзья» → «Пригласить друга».
+        Дружба сразу взаимная: вы увидите серии друг друга.</p>
+      <p class="auth-error" id="fr-error" hidden></p>
 
       <div class="sheet-actions">
         <button class="btn-ghost" id="fr-cancel">Отмена</button>
@@ -743,6 +899,141 @@
       <button class="proof-skip" id="proof-skip">
         Пропустить · осталось <b id="proof-skip-left">5</b>
       </button>
+    </div>
+  </div>
+
+  <!-- ===== «НАЧАЛО»: интро-воронка при самом первом входе (фон как у приложения) ===== -->
+  <div class="intro" id="intro" hidden>
+    <div class="aura" aria-hidden="true">
+      <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
+    </div>
+    <div class="intro-progress"><span class="intro-progress-fill" id="intro-progress"></span></div>
+
+    <div class="intro-inner">
+      <!-- 1: сколько часов в телефоне -->
+      <section class="intro-step" data-step="hours">
+        <p class="intro-kicker">Честно про телефон</p>
+        <h2 class="intro-q">Сколько часов в день ты в телефоне?</h2>
+        <div class="intro-hours"><b id="intro-h">4</b><span>ч / день</span></div>
+        <input type="range" class="slider intro-slider" id="intro-hours-range"
+          min="1" max="12" step="1" value="4" aria-label="Часов в день" />
+        <button class="btn-primary intro-cta" data-next>Дальше</button>
+      </section>
+
+      <!-- 2: сколько потеряешь -->
+      <section class="intro-step" data-step="lose" hidden>
+        <p class="intro-kicker">При таком темпе</p>
+        <div class="intro-big" id="intro-lose-num">0</div>
+        <p class="intro-big-sub">жизни уйдёт в экран телефона</p>
+        <button class="btn-primary intro-cta" data-next>Это жесть 😳</button>
+      </section>
+
+      <!-- 3: сколько вернёт disbit -->
+      <section class="intro-step" data-step="gain" hidden>
+        <p class="intro-kicker">disbit может вернуть</p>
+        <div class="intro-big intro-gain" id="intro-gain-num">0</div>
+        <p class="intro-big-sub">можно вернуть — если жить, а не скроллить</p>
+        <button class="btn-primary intro-cta" data-next>Хочу так 🔥</button>
+      </section>
+
+      <!-- 4: что хочешь улучшить -->
+      <section class="intro-step" data-step="improve" hidden>
+        <h2 class="intro-q">Что хочешь улучшить?</h2>
+        <p class="intro-hint">Можно выбрать несколько</p>
+        <div class="intro-chips" data-multi id="chips-improve">
+          <button class="intro-chip" data-v="Здоровье">💪 Здоровье</button>
+          <button class="intro-chip" data-v="Учёба и развитие">📚 Учёба</button>
+          <button class="intro-chip" data-v="Спорт">🏃 Спорт</button>
+          <button class="intro-chip" data-v="Продуктивность">⚡ Продуктивность</button>
+          <button class="intro-chip" data-v="Сон и режим">😴 Сон</button>
+          <button class="intro-chip" data-v="Меньше телефона">📵 Меньше телефона</button>
+          <button class="intro-chip" data-v="Финансы">💰 Финансы</button>
+          <button class="intro-chip" data-v="Спокойствие">🧘 Спокойствие</button>
+        </div>
+        <button class="btn-primary intro-cta" data-next>Дальше</button>
+      </section>
+
+      <!-- 5: что мешает -->
+      <section class="intro-step" data-step="blockers" hidden>
+        <h2 class="intro-q">Что сейчас мешает?</h2>
+        <div class="intro-chips" data-multi id="chips-blockers">
+          <button class="intro-chip" data-v="Нет силы воли">Нет силы воли</button>
+          <button class="intro-chip" data-v="Прокрастинация">Прокрастинация</button>
+          <button class="intro-chip" data-v="Залипаю в телефоне">Залипаю в телефоне</button>
+          <button class="intro-chip" data-v="Быстро бросаю">Быстро бросаю</button>
+          <button class="intro-chip" data-v="Нет мотивации">Нет мотивации</button>
+          <button class="intro-chip" data-v="Нет времени">Нет времени</button>
+        </div>
+        <button class="btn-primary intro-cta" data-next>Дальше</button>
+      </section>
+
+      <!-- 6: какие привычки -->
+      <section class="intro-step" data-step="habits" hidden>
+        <h2 class="intro-q">С каких привычек начнёшь?</h2>
+        <p class="intro-hint">Потом добавишь их в приложении</p>
+        <div class="intro-chips" data-multi id="chips-habits">
+          <button class="intro-chip" data-v="Учиться">📖 Учиться</button>
+          <button class="intro-chip" data-v="Спорт">🏋️ Спорт</button>
+          <button class="intro-chip" data-v="Чтение">📕 Чтение</button>
+          <button class="intro-chip" data-v="Вода">💧 Вода</button>
+          <button class="intro-chip" data-v="Ранний подъём">🌅 Ранний подъём</button>
+          <button class="intro-chip" data-v="Медитация">🧘 Медитация</button>
+          <button class="intro-chip" data-v="Английский">🗣️ Английский</button>
+          <button class="intro-chip" data-v="Без соцсетей">🚫 Без соцсетей</button>
+        </div>
+        <button class="btn-primary intro-cta" data-next>Дальше</button>
+      </section>
+
+      <!-- 7: откуда узнал -->
+      <section class="intro-step" data-step="source" hidden>
+        <h2 class="intro-q">Откуда узнал про disbit?</h2>
+        <div class="intro-chips" id="chips-source">
+          <button class="intro-chip" data-v="TikTok">TikTok</button>
+          <button class="intro-chip" data-v="Instagram">Instagram</button>
+          <button class="intro-chip" data-v="YouTube">YouTube</button>
+          <button class="intro-chip" data-v="Друзья">От друзей</button>
+          <button class="intro-chip" data-v="Поиск">Поиск / стор</button>
+          <button class="intro-chip" data-v="Другое">Другое</button>
+        </div>
+        <button class="btn-primary intro-cta" data-next>Дальше</button>
+      </section>
+
+      <!-- 8: главные плюсы -->
+      <section class="intro-step intro-step-wide" data-step="perks" hidden>
+        <h2 class="intro-q">Почему с disbit получится</h2>
+        <ul class="intro-perks">
+          <li><span class="ip-ic">🎯</span><div><b>Штраф на кону</b><span>Не хватает дисциплины? На кону деньги или блокировка. Деньги — на благотворительность или разработчикам.</span></div></li>
+          <li><span class="ip-ic">⚡</span><div><b>Минимум</b><span>Нет сил на полное — сделай маленький шаг. Серия жива.</span></div></li>
+          <li><span class="ip-ic">🛟</span><div><b>Грейс-день</b><span>Один пропуск не рвёт серию.</span></div></li>
+          <li><span class="ip-ic">🏔️</span><div><b>Марафон</b><span>Путник идёт к твоей большой цели — 1 привычка = 1 шаг.</span></div></li>
+          <li><span class="ip-ic">🎁</span><div><b>Награда себе</b><span>Сам выбираешь бонус за серию.</span></div></li>
+          <li><span class="ip-ic">📊</span><div><b>Статистика</b><span>Весь прогресс и стрики на виду.</span></div></li>
+          <li><span class="ip-ic">👥</span><div><b>Друзья</b><span>Соревнуйтесь или проходите марафоны и привычки вместе.</span></div></li>
+        </ul>
+        <button class="btn-primary intro-cta" data-next>Готов начать</button>
+      </section>
+
+      <!-- 9: отпечаток-обещание -->
+      <section class="intro-step" data-step="commit" hidden>
+        <p class="intro-kicker">Дай слово себе</p>
+        <h2 class="intro-q">Приложи палец и пообещай стать лучше</h2>
+        <button class="fp" id="intro-fp" aria-label="Приложить палец и дать обещание">
+          <span class="fp-fill" id="intro-fp-fill"></span>
+          <svg class="fp-svg" viewBox="0 0 100 100" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+              <path d="M50 22 C33 22 24 38 26 58"/>
+              <path d="M50 30 C39 30 32 41 33 58 34 68 33 74 30 80"/>
+              <path d="M50 38 C43 38 39 45 40 58 41 70 39 76 36 82"/>
+              <path d="M50 46 C46 46 45 51 46 60 47 72 46 78 44 84"/>
+              <path d="M50 46 C54 46 55 51 54 60 53 72 55 78 58 84"/>
+              <path d="M50 38 C57 38 61 45 60 58 59 70 61 78 65 82"/>
+              <path d="M50 30 C61 30 68 41 67 58 66 68 68 76 71 80"/>
+              <path d="M50 22 C67 22 76 38 74 58"/>
+            </g>
+          </svg>
+        </button>
+        <p class="intro-hint" id="intro-fp-hint">Держи палец пару секунд</p>
+      </section>
     </div>
   </div>
 
@@ -861,6 +1152,8 @@
     </div>
   </div>
 
+  <!-- генератор QR (qrcode-generator, MIT, Kazuhiko Arase) — локально, чтобы работало офлайн -->
+  <script src="vendor/qrcode.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
