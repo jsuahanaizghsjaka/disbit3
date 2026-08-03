@@ -2411,6 +2411,7 @@ function openGoalSheet(id = null) {
   buildIconPicker('goal-icon-picker', g?.icon || 'svg:i-h-run');
   buildScenePicker('goal-scene-picker', g?.scene || SCENES[0].id);
   buildMarathonHabits(g);
+  updateStepsHint();
   openSheet('goal-overlay');
   document.getElementById('g-name').focus();
 }
@@ -2447,11 +2448,52 @@ function buildMarathonHabits(g) {
         toast(`В марафоне не больше ${MARATHON_MAX_HABITS} обещаний`);
       }
       updateMarathonCount();
+      updateStepsHint();          // состав марафона поменялся — пересчитываем шаги
     }));
   updateMarathonCount();
 }
 function checkedMarathonHabits() {
   return [...document.querySelectorAll('#goal-habit-list .mh-check:checked')].map(c => c.value);
+}
+
+/* Сколько шагов реально успеть до срока.
+   Шаг = одно выполненное обещание, поэтому считаем не дни, а СЛУЧАИ выполнения:
+   у обещания по дням недели это подходящие даты, у гибкого («N раз в неделю») —
+   норма, размазанная по неделям. Иначе марафон из трёх обещаний на месяц
+   выглядел бы как 30 шагов вместо примерно 90. */
+function stepsFor(h, from, to) {
+  const days = Math.floor((to - from) / 86400000) + 1;
+  if (days <= 0) return 0;
+  if (isFlexible(h)) return Math.min(days, Math.round(days / 7 * Number(h.weekTarget)));
+  let n = 0;
+  let d = new Date(from);
+  for (let i = 0; i < days; i++, d = addDays(d, 1)) {
+    if (h.schedule.includes(dayIdx(d))) n++;
+  }
+  return n;
+}
+function suggestedSteps() {
+  const dl = document.getElementById('g-deadline').value;
+  if (!dl) return null;
+  const from = new Date(); from.setHours(0, 0, 0, 0);
+  const to = keyToDate(dl);
+  if (to < from) return null;
+  const list = checkedMarathonHabits().map(id => habits.find(h => h.id === id)).filter(Boolean);
+  // у нового марафона обещание под саму цель создастся автоматически, и оно
+  // ежедневное — в расчёт его надо включить, иначе занизим на весь срок
+  const g = editingGoalId ? goals.find(x => x.id === editingGoalId) : null;
+  if (!g?.habitIds?.length) list.push({ schedule: [0, 1, 2, 3, 4, 5, 6], weekTarget: 0 });
+  const n = list.reduce((s, h) => s + stepsFor(h, from, to), 0);
+  return Math.min(999, n);          // столько же, сколько принимает поле
+}
+// подсказка у поля шагов: без срока — что такое шаг, со сроком — готовое число
+function updateStepsHint() {
+  const el = document.getElementById('g-steps-hint');
+  if (!el) return;
+  const n = suggestedSteps();
+  el.dataset.suggest = n ?? '';
+  el.disabled = !n;
+  el.textContent = n ? `≈ ${n} — подставить` : '1 шаг = 1 обещание';
 }
 function updateMarathonCount() {
   const el = document.getElementById('g-habits-count');
@@ -4617,6 +4659,12 @@ function init() {
   });
   document.getElementById('btn-open-stats').addEventListener('click', () => switchScreen('stats'));
   document.getElementById('btn-open-calendar').addEventListener('click', () => switchScreen('calendar'));
+  // срок задаёт, сколько шагов реально успеть — пересчитываем и даём подставить
+  document.getElementById('g-deadline').addEventListener('change', updateStepsHint);
+  document.getElementById('g-steps-hint').addEventListener('click', () => {
+    const n = document.getElementById('g-steps-hint').dataset.suggest;
+    if (n) document.getElementById('g-steps').value = n;
+  });
   document.getElementById('btn-buy-grace').addEventListener('click', buyGrace);
   const achCard = document.getElementById('ach-card');
   achCard.addEventListener('click', () => switchScreen('medals'));
