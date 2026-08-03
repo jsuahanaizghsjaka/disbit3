@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0C1422" />
-  <title>disbit — привычки со штрафом</title>
+  <title>disbit — обещания себе</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
@@ -53,7 +53,7 @@
       <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 5 5l-9 9a2.1 2.1 0 0 1-3-3l9-9Z"/><path d="M15 4a5 5 0 0 1 5 5"/></symbol>
       <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
       <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
-      <!-- иконки привычек (монохромные) -->
+      <!-- иконки обещаний (монохромные) -->
       <symbol id="i-h-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13M8 7h7"/></symbol>
       <symbol id="i-h-water" viewBox="0 0 24 24"><path d="M12 3c3.5 4.3 6 7.6 6 10.8A6 6 0 0 1 6 13.8C6 10.6 8.5 7.3 12 3Z"/><path d="M9.5 14a2.6 2.6 0 0 0 2.4 2.6"/></symbol>
       <symbol id="i-h-run" viewBox="0 0 24 24"><circle cx="15" cy="5" r="2"/><path d="M4 20.5 8.5 16l2-4.5L8 13l-3.5-.5M10.5 11.5 13 9l3 2.5 4 .5M13 15l1.5 5.5"/></symbol>
@@ -118,7 +118,7 @@
         <div class="habit-list" id="pinned-list"></div>
       </div>
 
-      <h3 class="section-title" id="mine-title">Мои привычки</h3>
+      <h3 class="section-title" id="mine-title">Мои обещания</h3>
       <div class="habit-list" id="habit-list"></div>
 
       <div id="offday-block" hidden>
@@ -128,18 +128,18 @@
 
       <div class="empty" id="empty-state" hidden>
         <div class="empty-art"><svg class="ic ic-xl"><use href="#i-target"/></svg></div>
-        <p>Пока нет ни одной привычки.<br/>Добавь первую и назначь себе штраф за пропуск.</p>
-        <button class="btn-primary empty-cta" id="btn-empty-add">Создать привычку</button>
+        <p>Пока нет ни одного обещания.<br/>Дай первое и назначь себе штраф за нарушение.</p>
+        <button class="btn-primary empty-cta" id="btn-empty-add">Дать обещание</button>
       </div>
 
-      <!-- марафон: путник идёт к цели, 1 привычка = 1 шаг. Стоит сразу под
-           привычками, чтобы прогресс двигался на глазах при отметке -->
+      <!-- марафон: путник идёт к цели, 1 обещание = 1 шаг. Стоит сразу под
+           обещаниями, чтобы прогресс двигался на глазах при отметке -->
       <div id="walker" hidden></div>
 
       <!-- большие цели (переехали из календаря) -->
       <section class="card" id="goals-card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
-        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные привычки.</p>
+        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные обещания.</p>
         <div id="goal-list"></div>
         <button class="row-btn" id="btn-goal-add">
           <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
@@ -179,9 +179,9 @@
 
       <section class="card" id="cal-month-stats"></section>
 
-      <!-- привычки на будущее (переехали из профиля) -->
+      <!-- обещания на будущее (переехали из профиля) -->
       <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-bookmark"/></svg> Привычки на будущее</h3>
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-bookmark"/></svg> Обещания на будущее</h3>
         <div id="backlog-list"></div>
         <button class="row-btn" id="btn-backlog-add">
           <svg class="ic"><use href="#i-plus"/></svg><span>Записать идею</span>
@@ -196,7 +196,7 @@
 
       <section class="card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-users"/></svg> Мои друзья</h3>
-        <p class="hint" style="margin:0 0 8px">Вместе привычки заходят легче: видно, кто на серии, и не хочется отставать.</p>
+        <p class="hint" style="margin:0 0 8px">Вместе обещания заходят легче: видно, кто на серии, и не хочется отставать.</p>
         <div id="friend-list"></div>
         <button class="row-btn" id="btn-friend-add">
           <svg class="ic"><use href="#i-plus"/></svg><span>Добавить друга</span>
@@ -247,7 +247,7 @@
       </div>
     </main>
 
-    <!-- ================= ЭКРАН: СТАТИСТИКА (общая; личная — в карточке привычки) ================= -->
+    <!-- ================= ЭКРАН: СТАТИСТИКА (общая; личная — в карточке обещания) ================= -->
     <main class="screen" id="screen-stats">
 
       <h1 class="screen-title">Статистика</h1>
@@ -257,7 +257,7 @@
         <div class="week-chart-head">
           <span class="wc-pct" id="wc-pct">0%</span>
           <span class="wc-delta" id="wc-delta"></span>
-          <span class="wc-label">выполнено привычек за неделю</span>
+          <span class="wc-label">выполнено обещаний за неделю</span>
         </div>
         <div id="week-chart-box"></div>
       </section>
@@ -386,10 +386,10 @@
         <div id="wallet-history"></div>
       </section>
 
-      <!-- общая статистика: личная по каждой привычке — в её карточке -->
+      <!-- общая статистика: личная по каждому обещанию — в его карточке -->
       <section class="card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-chart"/></svg> Статистика</h3>
-        <p class="hint" style="margin:0 0 8px">Статистика по отдельной привычке — тапни её карточку на главной.</p>
+        <p class="hint" style="margin:0 0 8px">Статистика по отдельному обещанию — тапни его карточку на главной.</p>
         <button class="row-btn" id="btn-open-stats">
           <svg class="ic"><use href="#i-chart"/></svg><span>Общая статистика</span>
         </button>
@@ -397,7 +397,7 @@
 
       <!-- тема -->
       <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-palette"/></svg> Цвет приложения</h3>
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-palette"/></svg> Цвет приложения<span class="bit-chip" title="Копится за выполненные обещания">0</span></h3>
         <div class="theme-grid" id="theme-grid"></div>
       </section>
 
@@ -464,7 +464,7 @@
         <span class="di-icon"><svg class="ic"><use href="#i-calendar"/></svg></span>
         <span class="di-label">Календарь</span>
       </button>
-      <button class="dock-item fab" id="btn-add" aria-label="Новая привычка">
+      <button class="dock-item fab" id="btn-add" aria-label="Новое обещание">
         <span class="di-icon"><svg class="ic"><use href="#i-plus"/></svg></span>
         <span class="di-label">Новая</span>
       </button>
@@ -479,11 +479,11 @@
     </nav>
   </div>
 
-  <!-- ===== ШТОРКА: ДОБАВИТЬ / РЕДАКТИРОВАТЬ ПРИВЫЧКУ ===== -->
+  <!-- ===== ШТОРКА: ДОБАВИТЬ / РЕДАКТИРОВАТЬ ОБЕЩАНИЕ ===== -->
   <div class="sheet-overlay" id="add-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="add-title">
       <div class="sheet-handle"></div>
-      <h2 class="sheet-title" id="add-title">Новая привычка</h2>
+      <h2 class="sheet-title" id="add-title">Новое обещание</h2>
 
       <label class="field-label" for="f-name">Название</label>
       <input class="field-input" id="f-name" type="text" placeholder="Например: Читать 20 страниц" maxlength="40" autocomplete="off" />
@@ -559,7 +559,7 @@
 
       <div class="sheet-actions">
         <button class="btn-ghost" id="btn-cancel">Отмена</button>
-        <button class="btn-primary" id="btn-save">Создать привычку</button>
+        <button class="btn-primary" id="btn-save">Дать обещание</button>
       </div>
     </div>
   </div>
@@ -625,7 +625,7 @@
         <h2 class="sheet-title" id="join-title">Зовут делать вместе</h2>
         <p class="join-who" id="join-who"></p>
       </div>
-      <p class="hint" style="text-align:center">У тебя появится такая же привычка,
+      <p class="hint" style="text-align:center">У тебя появится такое же обещание,
         и вы будете видеть, кто её сегодня закрыл.</p>
       <div class="sheet-actions">
         <button class="btn-ghost" id="join-no">Не сейчас</button>
@@ -634,7 +634,7 @@
     </div>
   </div>
 
-  <!-- ===== ШТОРКА: ПРИГЛАШЕНИЕ ДЕЛАТЬ ПРИВЫЧКУ ВМЕСТЕ (QR + ссылка) ===== -->
+  <!-- ===== ШТОРКА: ПРИГЛАШЕНИЕ ДЕЛАТЬ ОБЕЩАНИЕ ВМЕСТЕ (QR + ссылка) ===== -->
   <div class="sheet-overlay" id="invite-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="invite-title">
       <div class="sheet-handle"></div>
@@ -642,7 +642,7 @@
       <p class="hint" id="invite-habit"></p>
 
       <div class="qr-box" id="invite-qr"><span class="qr-wait">Готовлю код…</span></div>
-      <p class="hint" style="text-align:center">Друг наводит камеру — и у него появится такая же привычка.</p>
+      <p class="hint" style="text-align:center">Друг наводит камеру — и у него появится такое же обещание.</p>
 
       <div class="sheet-actions">
         <button class="btn-ghost" id="invite-close">Закрыть</button>
@@ -651,12 +651,12 @@
     </div>
   </div>
 
-  <!-- ===== ШТОРКА: ВЫБОР ДРУГА ДЛЯ СОВМЕСТНОЙ ПРИВЫЧКИ ===== -->
+  <!-- ===== ШТОРКА: ВЫБОР ДРУГА ДЛЯ СОВМЕСТНОГО ОБЕЩАНИЯ ===== -->
   <div class="sheet-overlay" id="buddy-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="buddy-title">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="buddy-title">Делать вместе</h2>
-      <p class="hint" id="buddy-hint">Выбери друга — вы увидите, кто уже закрыл привычку сегодня.</p>
+      <p class="hint" id="buddy-hint">Выбери друга — вы увидите, кто уже выполнил обещание сегодня.</p>
       <div id="buddy-list"></div>
       <div class="sheet-actions">
         <button class="btn-ghost" id="buddy-cancel">Отмена</button>
@@ -681,14 +681,14 @@
     </div>
   </div>
 
-  <!-- ===== ШТОРКА: СТАТИСТИКА ПРИВЫЧКИ / МАРАФОНА ===== -->
+  <!-- ===== ШТОРКА: СТАТИСТИКА ОБЕЩАНИЯ / МАРАФОНА ===== -->
   <div class="sheet-overlay" id="hstat-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hstat-title">
       <div class="sheet-handle"></div>
 
       <div class="hstat-head">
         <div class="hstat-menu-wrap">
-          <button class="icon-btn" id="hstat-menu-btn" aria-label="Меню привычки"
+          <button class="icon-btn" id="hstat-menu-btn" aria-label="Меню обещания"
             aria-haspopup="true" aria-expanded="false">
             <svg class="ic" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
               <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
@@ -712,7 +712,7 @@
             </button>
           </div>
         </div>
-        <h2 class="sheet-title" id="hstat-title">Привычка</h2>
+        <h2 class="sheet-title" id="hstat-title">Обещание</h2>
       </div>
 
       <div id="hstat-body"></div>
@@ -784,23 +784,23 @@
 
       <label class="field-label" for="g-steps">
         Шагов до финиша
-        <span class="days-count" id="g-steps-hint">1 шаг = 1 привычка</span>
+        <span class="days-count" id="g-steps-hint">1 шаг = 1 обещание</span>
       </label>
       <input class="field-input small" id="g-steps" type="number" min="0" max="999" step="1" placeholder="30" />
-      <p class="hint">Путник идёт к цели: каждая выполненная привычка — шаг вперёд.
+      <p class="hint">Путник идёт к цели: каждое выполненное обещание — шаг вперёд.
         Поставь 0, чтобы вести прогресс вручную, без путника.</p>
 
-      <span class="field-label">Сцена</span>
+      <span class="field-label">Сцена<span class="bit-chip" title="Копится за выполненные обещания">0</span></span>
       <div class="scene-picker" id="goal-scene-picker"></div>
 
       <span class="field-label">
-        Привычки марафона
+        Обещания марафона
         <span class="days-count" id="g-habits-count">0 / 5</span>
       </span>
       <div id="goal-habit-list"></div>
       <p class="hint" id="g-habits-hint">
-        Привычка с названием цели создастся сама. Можно добавить ещё — до 5 всего.
-        Одна привычка участвует только в одном марафоне.
+        Обещание с названием цели создастся сама. Можно добавить ещё — до 5 всего.
+        Одно обещание участвует только в одном марафоне.
       </p>
 
       <div class="sheet-actions">
@@ -854,7 +854,7 @@
   <div class="sheet-overlay" id="idea-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="idea-sheet-title">
       <div class="sheet-handle"></div>
-      <h2 class="sheet-title" id="idea-sheet-title">Привычка на будущее</h2>
+      <h2 class="sheet-title" id="idea-sheet-title">Обещание на будущее</h2>
 
       <label class="field-label" for="idea-name">Идея</label>
       <input class="field-input" id="idea-name" type="text" placeholder="Например: холодный душ по утрам" maxlength="40" />
@@ -967,9 +967,9 @@
         <button class="btn-primary intro-cta" data-next>Дальше</button>
       </section>
 
-      <!-- 6: какие привычки -->
+      <!-- 6: какие обещания -->
       <section class="intro-step" data-step="habits" hidden>
-        <h2 class="intro-q">С каких привычек начнёшь?</h2>
+        <h2 class="intro-q">С каких обещаний начнёшь?</h2>
         <p class="intro-hint">Потом добавишь их в приложении</p>
         <div class="intro-chips" data-multi id="chips-habits">
           <button class="intro-chip" data-v="Учиться">📖 Учиться</button>
@@ -1005,10 +1005,10 @@
           <li><span class="ip-ic">🎯</span><div><b>Штраф на кону</b><span>Не хватает дисциплины? На кону деньги или блокировка. Деньги — на благотворительность или разработчикам.</span></div></li>
           <li><span class="ip-ic">⚡</span><div><b>Минимум</b><span>Нет сил на полное — сделай маленький шаг. Серия жива.</span></div></li>
           <li><span class="ip-ic">🛟</span><div><b>Грейс-день</b><span>Один пропуск не рвёт серию.</span></div></li>
-          <li><span class="ip-ic">🏔️</span><div><b>Марафон</b><span>Путник идёт к твоей большой цели — 1 привычка = 1 шаг.</span></div></li>
+          <li><span class="ip-ic">🏔️</span><div><b>Марафон</b><span>Путник идёт к твоей большой цели — 1 обещание = 1 шаг.</span></div></li>
           <li><span class="ip-ic">🎁</span><div><b>Награда себе</b><span>Сам выбираешь бонус за серию.</span></div></li>
           <li><span class="ip-ic">📊</span><div><b>Статистика</b><span>Весь прогресс и стрики на виду.</span></div></li>
-          <li><span class="ip-ic">👥</span><div><b>Друзья</b><span>Соревнуйтесь или проходите марафоны и привычки вместе.</span></div></li>
+          <li><span class="ip-ic">👥</span><div><b>Друзья</b><span>Соревнуйтесь или проходите марафоны и обещания вместе.</span></div></li>
         </ul>
         <button class="btn-primary intro-cta" data-next>Готов начать</button>
       </section>
@@ -1043,7 +1043,7 @@
       <section class="ob-slide">
         <div class="ob-art ob-art-1"><svg class="ic"><use href="#i-coins"/></svg></div>
         <h2 class="ob-title">Не ставки, а штраф</h2>
-        <p class="ob-text">Пропустил привычку — теряешь то, что назначил себе сам заранее:
+        <p class="ob-text">Нарушил обещание — теряешь то, что назначил себе сам заранее:
           деньги на благотворительность или блокировку приложений. Дисциплина через ответственность.</p>
       </section>
       <section class="ob-slide">
@@ -1056,7 +1056,7 @@
         <div class="ob-art ob-art-3"><svg class="ic"><use href="#i-award"/></svg></div>
         <h2 class="ob-title">Награды и цели</h2>
         <p class="ob-text">Сам выбираешь награды за серии, копишь достижения и ведёшь путника
-          к большой цели-марафону. Каждая привычка — шаг вперёд.</p>
+          к большой цели-марафону. Каждое обещание — шаг вперёд.</p>
       </section>
     </div>
 
@@ -1104,7 +1104,7 @@
           <label class="ff-label" for="rg-pass">Пароль (мин. 6 символов)</label>
           <button type="button" class="ff-eye" data-eye="rg-pass" aria-label="Показать пароль">👁</button>
         </div>
-        <p class="hint">При регистрации привычки с этого устройства привяжутся к аккаунту.</p>
+        <p class="hint">При регистрации обещания с этого устройства привяжутся к аккаунту.</p>
       </div>
 
       <p class="auth-error" id="auth-error" hidden></p>
@@ -1117,7 +1117,7 @@
         <span>Продолжить локально, без аккаунта</span>
       </button>
       <p class="hint" style="text-align:center;margin-top:10px" id="auth-note">
-        Аккаунт хранит привычки на сервере и синхронизирует устройства.
+        Аккаунт хранит обещания на сервере и синхронизирует устройства.
       </p>
       <p class="hint" style="text-align:center;margin-top:8px">
         Регистрируясь, ты соглашаешься с

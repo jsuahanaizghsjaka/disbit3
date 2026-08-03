@@ -471,7 +471,7 @@ button:disabled { cursor: default; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- СПИСОК ПРИВЫЧЕК ---------- */
+/* ---------- СПИСОК ОБЕЩАНИЙ ---------- */
 .section-title {
   font-size: 14px;
   color: var(--text-2);
@@ -1130,6 +1130,47 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   border-radius: var(--r-full);
 }
 
+/* ---------- BIT: баланс и замки на косметике ----------
+   Баланс — чип в заголовке витрины, цена — прямо на закрытом свотче/сцене.
+   Без этого копилка не читается: пользователь видел «+1 бит» в тосте, но
+   нигде не мог посмотреть, сколько накопил и сколько стоит закрытое. */
+.bit-chip, .card-title .bit-chip {
+  float: right;
+  font-size: 11px; font-weight: 800;
+  color: var(--primary);
+  background: rgba(var(--tint), 0.12);
+  padding: 2px 10px;
+  border-radius: var(--r-full);
+}
+.bit-chip::before { content: '◆'; margin-right: 4px; opacity: 0.75; }
+
+/* закрытая тема: гасим цвет и затемняем, иначе белая цена на светлом свотче
+   (жёлтый, белый) не читается */
+.theme-swatch.locked { opacity: 0.75; }
+.theme-swatch.locked::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: var(--r-full);
+  background: rgba(0, 0, 0, 0.5);
+}
+.theme-swatch .lock-price {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; color: #FFF;
+}
+
+.scene-pick { position: relative; }              /* якорь для ценника */
+.scene-pick.locked .sp-art { opacity: 0.3; }
+.scene-pick.locked .sp-name { color: var(--text-3); }
+.scene-pick .lock-price {
+  position: absolute; top: 6px; right: 6px;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: var(--r-full);
+  font-size: 10px; font-weight: 800; color: #FFF;
+  background: rgba(0, 0, 0, 0.55);
+}
+.scene-pick .lock-price::before { content: '◆'; opacity: 0.8; }
+
 /* аватар-шторка: каталог эмодзи */
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .emoji-grid .pick { font-size: 22px; }
@@ -1463,7 +1504,7 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 /* ---------- НИЖНЕЕ МЕНЮ ---------- */
 /* ============================================================
    ПУТНИК — сцена прогресса большой цели
-   1 выполненная привычка = 1 шаг. Ходьба играет только в момент
+   1 выполненное обещание = 1 шаг. Ходьба играет только в момент
    шага, дальше фигурка «дышит» стоя. Всё на CSS-трансформах —
    дёшево для WebView на слабом Android.
    ============================================================ */
@@ -1693,11 +1734,11 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   100% { opacity: 0; transform: translateY(30px); }
 }
 
-/* воздух между списком привычек и блоком больших целей — это разные смысловые
+/* воздух между списком обещаний и блоком больших целей — это разные смысловые
    секции, граница должна читаться сразу (шаг сетки 8).
    У .habit-list нижнего margin нет (flex + gap), поэтому весь зазор задаётся здесь. */
 #goals-card { margin-top: 40px; }
-/* воздух между секцией привычек (в т.ч. «Не сегодня») и марафоном — чтобы
+/* воздух между секцией обещаний (в т.ч. «Не сегодня») и марафоном — чтобы
    карточки не липли друг к другу */
 #walker { display: block; margin-top: 28px; }
 
@@ -1780,7 +1821,7 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 .promo-text { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 10px; }
 .promo-cta { padding: 9px 16px; font-size: 13px; }
 
-/* выбор привычек марафона в шторке цели */
+/* выбор обещаний марафона в шторке цели */
 .mh-row {
   display: flex; align-items: center; gap: 10px;
   min-height: 44px;                       /* тач-таргет */
@@ -2061,7 +2102,7 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   border-radius: var(--r-full);
 }
 
-/* ---------- СТАТИСТИКА ПРИВЫЧКИ (шторка) ---------- */
+/* ---------- СТАТИСТИКА ОБЕЩАНИЯ (шторка) ---------- */
 .hstat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .hstat-head .sheet-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hstat-menu-wrap { position: relative; flex: none; }
@@ -2094,7 +2135,7 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 .ht-num { font-size: 22px; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
 .ht-lbl { font-size: 12px; color: var(--text-3); }
 
-/* мини-heatmap привычки: 12 недель по 7 дней */
+/* мини-heatmap обещания: 12 недель по 7 дней */
 .hstat-hm {
   display: grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column;
   gap: 3px; margin-bottom: 16px;
@@ -2208,7 +2249,7 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 .m-art + .m-fallback { display: none; }
 .medal.locked .m-art { filter: grayscale(1); opacity: 0.55; }
 
-/* ---------- СОВМЕСТНАЯ ПРИВЫЧКА: пара аватарок ---------- */
+/* ---------- СОВМЕСТНОЕ ОБЕЩАНИЕ: пара аватарок ---------- */
 .buddy-pair { display: inline-flex; align-items: center; }
 .pair-ava {
   width: 26px; height: 26px;
@@ -2293,7 +2334,7 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   color: var(--text);
 }
 
-/* ---------- СОВМЕСТНАЯ ПРИВЫЧКА ---------- */
+/* ---------- СОВМЕСТНОЕ ОБЕЩАНИЕ ---------- */
 .buddy-badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 9px;

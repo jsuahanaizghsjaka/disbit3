@@ -37,7 +37,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/charges — записать пачку штрафов (автоитог за прошедшие дни)
-// Дубликаты (та же привычка + день) тихо пропускаются.
+// Дубликаты (та же обещание + день) тихо пропускаются.
 router.post('/', (req, res) => {
   const entries = Array.isArray(req.body) ? req.body : [req.body];
   const ins = db.prepare(`

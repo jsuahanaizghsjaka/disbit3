@@ -97,7 +97,7 @@
           : `<span class="badge b-${p.status}">${p.status === 'approved' ? 'одобрен' : 'отклонён'}</span>`;
         el.innerHTML = `
           <div class="p-top">
-            <span class="p-habit">${escapeHtml(p.habit_name || 'Привычка')}</span>
+            <span class="p-habit">${escapeHtml(p.habit_name || 'Обещание')}</span>
             <span class="p-meta">${escapeHtml(p.user_login || 'гость')} · ${p.day}</span>
           </div>
           ${media}

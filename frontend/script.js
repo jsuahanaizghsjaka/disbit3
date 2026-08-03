@@ -1,6 +1,6 @@
 /* ============================================================
    disbit — логика приложения (v0.4)
-   Главная идея: не ставки, а ШТРАФЫ за пропуск привычки.
+   Главная идея: не ставки, а ШТРАФЫ за пропуск обещания.
    Грейс-день: один пропуск серию не рвёт, два подряд — рвёт.
    «Минимум» — запасной вариант, продлевающий дисциплину.
    Данные: localStorage; при работе через бэкенд (http) —
@@ -57,9 +57,9 @@ function setAuth(token, user) {
   }
 }
 
-// иконки привычек — монохромные SVG из спрайта (старые эмодзи-привычки поддерживаются)
+// иконки обещаний — монохромные SVG из спрайта (старые эмодзи-иконки поддерживаются)
 const HABIT_ICONS = ['svg:i-h-book','svg:i-h-water','svg:i-h-run','svg:i-h-sleep','svg:i-h-food','svg:i-h-gym','svg:i-h-music','svg:i-h-lang','svg:i-h-mind','svg:i-h-clean','svg:i-h-code','svg:i-h-health'];
-// рендер иконки привычки/записи: svg-ссылка или старое эмодзи
+// рендер иконки обещания/записи: svg-ссылка или старое эмодзи
 function iconOf(v) {
   return String(v || '').startsWith('svg:') ? icon(v.slice(4)) : escapeHtml(v || '');
 }
@@ -74,9 +74,9 @@ const MEDALS = [
   { id: 'fr5', kind: 'friends', at: 5, cls: 'blue', art: 'bubble-2.png',
     name: 'Полный сквад', desc: 'Пятеро в отряде. Теперь вас так просто не сбить.' },
 
-  // СЕРИЯ ОГОНЬКА (metric = лучшая серия среди привычек)
+  // СЕРИЯ ОГОНЬКА (metric = лучшая серия среди обещаний)
   { id: 's100', kind: 'streak', at: 100, cls: 'gold', art: 'fire-100.png',
-    name: 'Век Дисциплины', desc: '100 дней подряд. Привычка стала частью тебя.' },
+    name: 'Век Дисциплины', desc: '100 дней подряд. Обещание стало частью тебя.' },
   { id: 's250', kind: 'streak', at: 250, cls: 'gold', art: 'fire-100.png',
     name: 'Железный Рубеж', desc: '250 дней. Дисциплина закалилась до железа.' },
   { id: 's500', kind: 'streak', at: 500, cls: 'gold', art: 'fire-500.png',
@@ -94,7 +94,7 @@ const MEDALS = [
 
   // БЛОКИРОВКИ ТЕЛЕФОНА (metric = число блокировок-штрафов)
   { id: 'l10', kind: 'locks', at: 10, cls: 'violet', art: 'lock.png',
-    name: 'Быстрый фокус', desc: 'Зашёл, отметил привычку, заблокировал. Никаких отвлечений.' },
+    name: 'Быстрый фокус', desc: 'Зашёл, отметил обещание, заблокировал. Никаких отвлечений.' },
   { id: 'l25', kind: 'locks', at: 25, cls: 'violet', art: 'lock.png',
     name: 'Без лишних слов', desc: 'Ты не тратишь время на лишний скроллинг. Сделал дело — экран погас.' },
   { id: 'l50', kind: 'locks', at: 50, cls: 'violet', art: 'lock.png',
@@ -117,20 +117,20 @@ const MEDAL_FALLBACK = { friends: 'i-users', streak: 'i-flame', marathons: 'i-aw
 const COLORS = ['#5B8DFF','#4ADE80','#38BDF8','#F472B6','#A78BFA','#F87171','#FBBF24','#E8722A'];
 const AVA_EMOJIS = ['😀','😎','🦊','🐻','🐼','🦁','🐯','🐸','🦉','🐨','🦄','🐢','🚀','🔥','⚡','🌟','🍀','🌊','🎧','🎮','🏔️','🌙','🍕','☕'];
 const DAY_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-// вкладка «Статистика» уехала в карточку привычки, её слот занял экран друзей;
+// вкладка «Статистика» уехала в карточку обещания, её слот занял экран друзей;
 // общая статистика осталась отдельным экраном — вход из профиля
 const SCREENS = ['today','calendar','friends','stats','medals','profile'];
 
-// темы приложения: id → цвет свотча
+// темы приложения: id → цвет свотча (name — для витрины бит)
 const THEMES = [
-  { id: 'blue',   c: '#5B8DFF' },
-  { id: 'red',    c: '#E06060' },
-  { id: 'black',  c: '#2A2C31' },
-  { id: 'white',  c: '#E9EDF3' },
-  { id: 'yellow', c: '#D4A528' },
-  { id: 'orange', c: '#E8722A' },
-  { id: 'green',  c: '#3EBE7D' },
-  { id: 'purple', c: '#9D7BFA' }
+  { id: 'blue',   c: '#5B8DFF', name: 'Синий' },
+  { id: 'red',    c: '#E06060', name: 'Красный' },
+  { id: 'black',  c: '#2A2C31', name: 'Чёрный' },
+  { id: 'white',  c: '#E9EDF3', name: 'Белый' },
+  { id: 'yellow', c: '#D4A528', name: 'Жёлтый' },
+  { id: 'orange', c: '#E8722A', name: 'Оранжевый' },
+  { id: 'green',  c: '#3EBE7D', name: 'Зелёный' },
+  { id: 'purple', c: '#9D7BFA', name: 'Фиолетовый' }
 ];
 
 const HEATMAP_WEEKS = 16;
@@ -140,17 +140,31 @@ let ledger   = loadLedger();
 let profile  = loadJson(PROFILE_KEY, {
   name: '', color: COLORS[0], createdAt: null,
   photo: null, emoji: null,
-  motivation: { level: 50, text: '' }
+  motivation: { level: 50, text: '' },
+  bit: 0, owned: []
 });
+// Валюта раньше называлась knut: переносим накопленное, иначе у тех, кто уже
+// успел накопить, баланс молча обнулился бы. Ловим именно СТАРОЕ поле: loadJson
+// подмешивает fallback, поэтому profile.bit всегда число и миграцию по нему не поймать.
+// Записывать тут НЕЛЬЗЯ: saveJson дёргает SYNC_KEYS и applyingRemote, а они
+// объявлены ниже — на этой строке они ещё в мёртвой зоне, и весь скрипт упадёт.
+// Хватает переноса в памяти: на первом же сохранении профиль уедет уже с bit.
+if (typeof profile.knut === 'number') {
+  profile.bit = profile.knut;
+  delete profile.knut;
+}
+// у старых профилей полей bit/owned нет — заводим, иначе витрина падает
+if (typeof profile.bit !== 'number') profile.bit = 0;
+if (!Array.isArray(profile.owned)) profile.owned = [];
 let settings = loadJson(SETTINGS_KEY, { showOffday: true, theme: 'blue' });
 let friends  = loadArr(FRIENDS_KEY);
 let goals    = loadArr(GOALS_KEY);
 let rewards  = loadArr(REWARDS_KEY);
 let backlog  = loadArr(BACKLOG_KEY);
 
-let editingId = null;        // привычка в редактировании
+let editingId = null;        // обещание в редактировании
 let editingGoalId = null;    // цель в редактировании
-let pendingBacklogId = null; // идея, превращаемая в привычку
+let pendingBacklogId = null; // идея, превращаемая в обещание
 let hmFilter  = 'all';
 let calCursor = null;
 let daySheetKey = null;
@@ -188,7 +202,7 @@ function stateBlob() {
   return {
     profile, settings, goals, rewards, friends, backlog, skips,
     // «визитка» — то, что видят друзья (сервер сам стрики не считает).
-    // shared: статусы ТОЛЬКО совместных привычек — остальные друзьям не видны
+    // shared: статусы ТОЛЬКО совместных обещаний — остальные друзьям не видны
     card: {
       streak: bestCurrentStreak(),
       weekPct: weekCompletion(weekStartOf(new Date())),
@@ -267,7 +281,9 @@ function migrate(h) {
   if (typeof h.min !== 'string') h.min = '';
   h.weekTarget = Math.max(0, Math.min(7, Number(h.weekTarget) || 0));  // 0 = строго по дням
   h.pinned = !!h.pinned;                                               // закреплена наверху
-  if (typeof h.buddy !== 'string') h.buddy = '';                       // логин друга, если привычка совместная
+  if (typeof h.buddy !== 'string') h.buddy = '';                       // логин друга, если обещание совместное
+  if (typeof h.knut === 'number') { h.bit = h.knut; delete h.knut; }   // старое имя валюты
+  if (typeof h.bit !== 'number') h.bit = 0;
   h.history = h.history || {};
   h.counts  = h.counts  || {};
 }
@@ -416,12 +432,12 @@ function saveSkips() {
   if (!applyingRemote) { touchStateTs(); scheduleStatePush(); }
 }
 
-/* ---------- ЛОГИКА ПРИВЫЧЕК ---------- */
+/* ---------- ЛОГИКА ОБЕЩАНИЙ ---------- */
 /* ---------- ГИБКИЙ РЕЖИМ: N дней в неделю ----------
    Для тех, кто не может делать день в день. Конкретные дни недели тогда не
    важны — важно набрать норму за неделю.
    Два разных вопроса, поэтому две функции:
-   • isScheduledOn — ПОКАЗЫВАТЬ ли привычку в этот день (пока норма не закрыта);
+   • isScheduledOn — ПОКАЗЫВАТЬ ли обещание в этот день (пока норма не закрыта);
    • isRequiredOn  — СПРАШИВАТЬ ли за неё (штраф/разрыв серии). Обязательным
      день становится, только когда запаса не осталось: до конца недели ровно
      столько дней, сколько ещё нужно сделать. Пропуск «с запасом» не наказывается. */
@@ -554,7 +570,7 @@ function todayPct() {
 }
 
 const PRAISES = [
-  'Красавчик! Все привычки дня закрыты 🎉',
+  'Красавчик! Все обещания дня выполнены 🎉',
   'Идеальный день! Так и куётся дисциплина 🔥',
   '100%! Штрафам сегодня ничего не светит 💪',
   'День закрыт полностью. Гордись собой ⭐'
@@ -574,21 +590,38 @@ function toggleHabit(id) {
   // Если сейчас откроется баннер пруфа — путника ЗАМОРАЖИВАЕМ: иначе он шагнёт
   // под перекрывшим экран баннером, и пользователь не увидит свой прогресс.
   // Шаг проиграется после закрытия баннера (см. closeProofBanner).
-  const willAskProof = !wasDone && isDoneToday(h);
+  // биты начисляем ровно на переходе «не выполнено → выполнено» и снимаем на обратном
+  const nowDone = isDoneToday(h);
+  const dBit = nowDone === wasDone ? 0 : (nowDone ? 1 : -1);
+  // помним, сколько принесло КОНКРЕТНОЕ обещание: при удалении спишем ровно
+  // столько, иначе баланс фармится циклом «создал → отметил → удалил → повторил»
+  h.bit = Math.max(0, (h.bit || 0) + dBit);
+  save();
+  addBit(dBit);
+
+  const willAskProof = !wasDone && nowDone;
   walkerFrozen = willAskProof;
   render();
   if (willAskProof) {
     openProofBanner(h);
   } else if (!wasFull && todayPct() === 100) {
     toast(PRAISES[Math.floor(Math.random() * PRAISES.length)]);
+  } else if (nowDone && !wasDone) {
+    toast('+1 бит');
   }
 }
 
 function deleteHabit(id) {
-  if (!confirm('Удалить привычку?')) return;
+  const h = habits.find(x => x.id === id);
+  const earned = h?.bit || 0;
+  // про списание предупреждаем заранее: молча забрать накопленное — неприятный сюрприз
+  if (!confirm(earned
+    ? `Удалить обещание? Начисленные за него ${earned} бит спишутся.`
+    : 'Удалить обещание?')) return;
   habits = habits.filter(x => x.id !== id);
   save();
-  // привычка могла быть в марафоне — отвязываем, иначе марафон считал бы мёртвый id
+  addBit(-earned);
+  // обещание могло быть в марафоне — отвязываем, иначе марафон считал бы мёртвый id
   let touched = false;
   goals.forEach(g => {
     if ((g.habitIds || []).includes(id)) {
@@ -640,7 +673,7 @@ function settlePastDays() {
     habits.forEach(h => {
       if (h.createdAt > key) return;
       if (isSkipOn(h, key)) return;          // явный пропуск — штрафа нет, серия сохранена
-      // штраф только за ОБЯЗАТЕЛЬНЫЙ день: у гибкой привычки пропуск,
+      // штраф только за ОБЯЗАТЕЛЬНЫЙ день: у гибкого обещания пропуск,
       // пока норму недели ещё можно добрать, наказывать не за что
       if (!isRequiredOn(h, d)) return;
       if (doneOn(h, key)) return;
@@ -681,7 +714,7 @@ function showSettleModal(entries) {
   entries.forEach(e => e.apps.forEach(a => apps.add(a)));
 
   let html = `<p style="color:var(--text-2);font-size:14px;margin-bottom:14px">
-    Пропущено привычек: <b style="color:var(--text)">${entries.length}</b></p>`;
+    Нарушено обещаний: <b style="color:var(--text)">${entries.length}</b></p>`;
   if (money) {
     html += `<div class="summary-total"><div class="amount">−${money}₽</div>
       <div class="label">штрафов за пропуски</div></div>`;
@@ -768,7 +801,7 @@ function renderMarathonPromo() {
       <div class="promo-main">
         <h3 class="promo-title">Запусти марафон</h3>
         <p class="promo-text">Выбери большую цель и сколько до неё шагов.
-          Каждая выполненная привычка — шаг путника вперёд. Дойдёшь — финиш и медаль.</p>
+          Каждое выполненное обещание — шаг путника вперёд. Дойдёшь — финиш и медаль.</p>
         <button class="btn-primary promo-cta" id="promo-start">Создать марафон</button>
       </div>
     </section>`;
@@ -776,7 +809,7 @@ function renderMarathonPromo() {
 }
 
 /* ---------- ПУТНИК: сцена прогресса большой цели ---------- */
-/* 1 выполненная привычка = 1 шаг. Позицию считаем из истории отметок, а не
+/* 1 выполненное обещание = 1 шаг. Позицию считаем из истории отметок, а не
    инкрементом по нажатию: снял отметку — путник честно отступает назад,
    рассинхрон невозможен. Финал зависит от сцены: лента или пьедестал. */
 /* КОНТРАКТ СЦЕНЫ — по нему добавляются остальные фоны (марафон, джунгли,
@@ -865,8 +898,8 @@ function walkerPath(sc, t) {
 }
 function sceneOf(g) { return SCENES.find(s => s.id === g?.scene) || SCENES[0]; }
 
-/* Марафон считает ТОЛЬКО свои привычки (g.habitIds), а не все подряд.
-   Правило: одна привычка живёт максимум в одном марафоне, в марафоне — до 5 привычек. */
+/* Марафон считает ТОЛЬКО свои обещания (g.habitIds), а не все подряд.
+   Правило: одно обещание живёт максимум в одном марафоне, в марафоне — до 5 обещаний. */
 const MARATHON_MAX_HABITS = 5;
 
 function isMarathon(g) { return g?.steps > 0; }
@@ -874,17 +907,17 @@ function marathonHabits(g) {
   const ids = new Set(g?.habitIds || []);
   return habits.filter(h => ids.has(h.id));
 }
-// привычка занята другим марафоном? (кроме текущего — его привычки свободны для него же)
+// обещание занято другим марафоном? (кроме текущего — его обещания свободны для него же)
 function habitTakenBy(habitId, exceptGoalId = null) {
   return goals.find(g => isMarathon(g) && g.id !== exceptGoalId && (g.habitIds || []).includes(habitId));
 }
-// огонёк марафона: лучшая текущая серия среди его привычек
+// огонёк марафона: лучшая текущая серия среди его обещаний
 function marathonStreak(g) {
   const hs = marathonHabits(g);
   return hs.length ? Math.max(...hs.map(computeStreak)) : 0;
 }
 
-// пройдено шагов = выполненные отметки привычек ЭТОГО марафона с момента старта
+// пройдено шагов = выполненные отметки обещаний ЭТОГО марафона с момента старта
 function stepsDone(g) {
   const from = g.startedAt || '0000-00-00';
   let n = 0;
@@ -1221,7 +1254,7 @@ function walkerSceneHtml(g, sc) {
 
 /* ---------- ИТОГИ МАРАФОНА ----------
    Показываем один раз, когда путник дошёл до финиша: за сколько дней, сколько
-   шагов, лучшая серия, какие привычки тащили и во что обошлись пропуски. */
+   шагов, лучшая серия, какие обещания тащили и во что обошлись пропуски. */
 function showMarathonDone(g) {
   const box = document.getElementById('mdone-overlay');
   if (!box) return;
@@ -1252,7 +1285,7 @@ function showMarathonDone(g) {
     </div>`).join('');
   document.getElementById('mdone-habits').innerHTML = `
     <span class="field-label">Кто тащил (${hs.length})</span>
-    ${rows || '<p class="hint" style="margin:0">Привычки марафона удалены</p>'}
+    ${rows || '<p class="hint" style="margin:0">Обещания марафона удалены</p>'}
     ${mine.length ? `<p class="hint" style="margin-top:10px">Пропусков за марафон: ${mine.length}${
       money ? ' · ' + money + '₽ штрафов' : ''}</p>` : ''}`;
 
@@ -1423,7 +1456,7 @@ function habitCard(h, off) {
     ? 'каждый день'
     : h.schedule.map(i => DAY_NAMES[i]).join(' · ');
 
-  // совместная привычка: две аватарки — моя и друга. Кто сделал сегодня —
+  // совместное обещание: две аватарки — моя и друга. Кто сделал сегодня —
   // та горит цветом, кто нет — серая. Видно с одного взгляда, кто тянет.
   let buddyHtml = '';
   if (h.buddy) {
@@ -1476,9 +1509,9 @@ function habitCard(h, off) {
   return card;
 }
 
-/* ---------- СТАТИСТИКА ОТДЕЛЬНОЙ ПРИВЫЧКИ ----------
+/* ---------- СТАТИСТИКА ОТДЕЛЬНОГО ОБЕЩАНИЯ ----------
    Раньше статистика жила отдельной вкладкой и была общей на всё. Теперь она
-   привязана к конкретной привычке: тап по карточке — и видно именно её путь.
+   привязана к конкретному обещанию: тап по карточке — и виден именно его путь.
    Редактирование и удаление уехали в меню-три-точки, чтобы тап по карточке
    не открывал сразу форму. */
 let hstatId = null;
@@ -1524,12 +1557,12 @@ function renderHabitStats() {
   const pct30 = s30.required ? Math.round(((s30.required - s30.missed) / s30.required) * 100) : 100;
   const totalDone = Object.keys(h.history || {}).filter(k => doneOn(h, k)).length;
 
-  // штрафы именно этой привычки
+  // штрафы именно этого обещания
   const mine = ledger.filter(e => e.habitId === h.id);
   const money = mine.filter(e => e.mode === 'money').reduce((s, e) => s + (e.amount || 0), 0);
   const locks = mine.filter(e => e.mode === 'lock').length;
 
-  // мини-heatmap по этой привычке за 12 недель
+  // мини-heatmap по этом обещании за 12 недель
   const weeks = 12;
   const today = new Date();
   const start = addDays(weekStartOf(today), -7 * (weeks - 1));
@@ -1628,7 +1661,7 @@ function wireHabitStats() {
     const h = habits.find(x => x.id === hstatId);
     closeHabitMenu();
     if (!h) return;
-    if (!h.min) { toast('У этой привычки не задан минимум'); return; }
+    if (!h.min) { toast('У этого обещания не задан минимум'); return; }
     toggleMinMark(h, TODAY);
     render();
     renderHabitStats();
@@ -1723,7 +1756,7 @@ function renderHabits() {
     }));
   document.querySelectorAll('#screen-today [data-pin]').forEach(b =>
     b.addEventListener('click', () => togglePin(b.dataset.pin)));
-  // тап по карточке — статистика этой привычки (редактирование — в меню внутри)
+  // тап по карточке — статистика этого обещания (редактирование — в меню внутри)
   document.querySelectorAll('#screen-today [data-stats]').forEach(b => {
     b.addEventListener('click', () => openHabitStats(b.dataset.stats));
     b.addEventListener('keydown', e => {
@@ -1768,7 +1801,7 @@ function dayState(d) {
   const done = sched.filter(h => doneOn(h, key)).length;
   if (done === sched.length) return 'done';
   if (done > 0) return 'part';
-  // провал засчитываем, только если день был обязателен хоть для одной привычки
+  // провал засчитываем, только если день был обязателен хоть для одного обещания
   const wasRequired = sched.some(h => isRequiredOn(h, d));
   return (key < TODAY && wasRequired) ? 'fail' : 'plain';
 }
@@ -2016,7 +2049,7 @@ function renderWeekChart() {
   }
   document.getElementById('week-chart-box').innerHTML =
     `<svg class="week-chart" viewBox="0 0 ${W} ${H}" role="img"
-       aria-label="Диаграмма выполнения привычек по дням недели">${bars}</svg>`;
+       aria-label="Диаграмма выполнения обещаний по дням недели">${bars}</svg>`;
 }
 
 function renderStats() {
@@ -2100,7 +2133,7 @@ function renderHeatmap() {
 function renderStreakList() {
   const box = document.getElementById('streak-list');
   if (!habits.length) {
-    box.innerHTML = `<p class="hint">Добавь привычки — здесь появятся серии.</p>`;
+    box.innerHTML = `<p class="hint">Добавь обещания — здесь появятся серии.</p>`;
     return;
   }
   const rows = habits
@@ -2166,7 +2199,7 @@ function renderProfile() {
   renderMedals();
 
   // мотивация: пока пользователь редактирует — поля НЕ трогаем, иначе render()
-  // (от отметки привычки или ответа сервера) затирал бы недописанный текст
+  // (от отметки обещания или ответа сервера) затирал бы недописанный текст
   if (!motEditing) {
     const lvl = profile.motivation?.level ?? 50;
     const motSlider = document.getElementById('mot-level');
@@ -2187,6 +2220,7 @@ function renderProfile() {
   renderRewards();
   renderFriends();
   renderThemeGrid();
+  renderBit();
   renderAccount();
 }
 
@@ -2297,7 +2331,7 @@ function renderGoals() {
   box.innerHTML = goals.map(g => {
     const pct = goalPct(g);
     const deadline = g.deadline ? `до ${formatDay(g.deadline)}` : '';
-    // с путником прогресс считается сам из выполненных привычек — крутилки ±5 не нужны
+    // с путником прогресс считается сам из выполненных обещаний — крутилки ±5 не нужны
     const walking = g.steps > 0;
     const manual = `
       <button class="mini-btn" data-gminus="${g.id}" aria-label="Минус 5%">−5</button>
@@ -2362,14 +2396,14 @@ function openGoalSheet(id = null) {
   document.getElementById('g-name').focus();
 }
 
-/* Привычки марафона: свои — отмечены, занятые другим марафоном — заблокированы
-   (правило «1 привычка = 1 марафон»). Лимит — MARATHON_MAX_HABITS. */
+/* Обещания марафона: свои — отмечены, занятые другим марафоном — заблокированы
+   (правило «1 обещание = 1 марафон»). Лимит — MARATHON_MAX_HABITS. */
 function buildMarathonHabits(g) {
   const box = document.getElementById('goal-habit-list');
   const mine = new Set(g?.habitIds || []);
 
   if (!habits.length) {
-    box.innerHTML = `<p class="hint" style="margin:0">Привычек пока нет — та, что нужна цели, создастся сама.</p>`;
+    box.innerHTML = `<p class="hint" style="margin:0">Обещаний пока нет — то, что нужно цели, создастся само.</p>`;
     updateMarathonCount();
     return;
   }
@@ -2391,7 +2425,7 @@ function buildMarathonHabits(g) {
     c.addEventListener('change', () => {
       if (checkedMarathonHabits().length > MARATHON_MAX_HABITS) {
         c.checked = false;
-        toast(`В марафоне не больше ${MARATHON_MAX_HABITS} привычек`);
+        toast(`В марафоне не больше ${MARATHON_MAX_HABITS} обещаний`);
       }
       updateMarathonCount();
     }));
@@ -2405,7 +2439,7 @@ function updateMarathonCount() {
   if (el) el.textContent = `${checkedMarathonHabits().length} / ${MARATHON_MAX_HABITS}`;
 }
 
-// привычка «под цель» — создаётся вместе с марафоном, чтобы было что выполнять
+// обещание «под цель» — создаётся вместе с марафоном, чтобы было что выполнять
 function createGoalHabit(name, iconSel) {
   const h = {
     id: 'h' + Date.now(),
@@ -2439,7 +2473,7 @@ function saveGoal() {
     const g = goals.find(x => x.id === editingGoalId);
     if (!g) return;
     let ids = picked.slice(0, MARATHON_MAX_HABITS);
-    // марафон включили у старой цели — заводим ей привычку, если своих ещё нет
+    // марафон включили у старой цели — заводим ей обещание, если своих ещё нет
     if (steps > 0 && !ids.length) {
       ids = [createGoalHabit(name, iconSel).id];
     }
@@ -2455,7 +2489,7 @@ function saveGoal() {
       steps, scene: sceneSel, habitIds: [], startedAt: steps > 0 ? TODAY : null
     };
     if (steps > 0) {
-      // привычка под саму цель + вручную добавленные, но не больше лимита
+      // обещание под саму цель + вручную добавленные, но не больше лимита
       const own = createGoalHabit(name, iconSel);
       g.habitIds = [own.id, ...picked].slice(0, MARATHON_MAX_HABITS);
     }
@@ -2466,7 +2500,7 @@ function saveGoal() {
   closeSheet('goal-overlay');
   render();
   if (steps > 0 && !editingGoalId) {
-    toast(`Марафон запущен: ${name}. Привычка создана — вперёд! 🏃`);
+    toast(`Марафон запущен: ${name}. Обещание создано — вперёд! 🏃`);
   }
 }
 
@@ -2661,14 +2695,14 @@ async function doTopup() {
   toast(r.simulated ? `Зачислено ${rub(kop)} (тестовый режим)` : `Депозит пополнен на ${rub(kop)}`);
 }
 
-/* ---------- СОВМЕСТНЫЕ ПРИВЫЧКИ ----------
-   Привычку можно делать вместе с другом: помечаешь её его логином, и на карточке
-   видно, закрыл ли он сегодня свою такую же (сверяем по названию — он публикует
-   статусы совместных привычек в своей визитке). */
+/* ---------- СОВМЕСТНЫЕ ОБЕЩАНИЯ ----------
+   Обещание можно держать вместе с другом: помечаешь его логином друга, и на карточке
+   видно, выполнил ли он сегодня своё такое же (сверяем по названию — он публикует
+   статусы совместных обещаний в своей визитке). */
 function friendByLogin(login) {
   return serverFriends.find(f => f.login === login) || null;
 }
-// выполнил ли друг сегодня свою одноимённую привычку: true/false/null (нет данных)
+// выполнил ли друг сегодня своё одноимённое обещание: true/false/null (нет данных)
 function buddyDoneToday(h) {
   const f = friendByLogin(h.buddy);
   if (!f || !f.shared) return null;
@@ -2677,8 +2711,8 @@ function buddyDoneToday(h) {
 }
 
 /* ---------- ПРИГЛАШЕНИЕ ДЕЛАТЬ ВМЕСТЕ (QR + ссылка) ----------
-   Владелец получает короткий код своей привычки; друг открывает ссылку или
-   сканирует QR — и у него создаётся такая же привычка, а карточки связываются. */
+   Владелец получает короткий код своего обещания; друг открывает ссылку или
+   сканирует QR — и у него создаётся такое же обещание, а карточки связываются. */
 let inviteUrl = '';
 
 async function openInviteSheet(habitId) {
@@ -2751,15 +2785,15 @@ async function acceptJoin() {
   const r = await apiCallStrict('POST', `/invites/${encodeURIComponent(code)}/accept`);
   if (r?.error) { toast(r.error); return; }
 
-  // подтягиваем свежие привычки и друзей — привычка уже создана на сервере
+  // подтягиваем свежие обещания и друзей — обещание уже создано на сервере
   const remote = await apiCall('GET', '/habits');
   if (Array.isArray(remote)) { habits = remote; habits.forEach(migrate); save(); }
   await loadFriends();
   render();
   switchScreen('today');
-  const nm = r.habit?.name || 'привычку';
+  const nm = r.habit?.name || 'обещание';
   toast(r.created
-    ? `Привычка «${nm}» добавлена — делаете вместе с @${r.owner} 👥`
+    ? `Обещание «${nm}» добавлена — делаете вместе с @${r.owner} 👥`
     : `«${nm}» у тебя уже была — теперь делаете её вместе с @${r.owner} 👥`);
 }
 
@@ -2770,14 +2804,14 @@ function openBuddySheet(habitId) {
   const hint = document.getElementById('buddy-hint');
 
   if (!API || !authToken) {
-    hint.textContent = 'Совместные привычки работают с аккаунтом — войди сначала.';
+    hint.textContent = 'Совместные обещания работают с аккаунтом — войди сначала.';
     box.innerHTML = '';
   } else if (!serverFriends.length) {
     hint.textContent = 'Сначала добавь друга на вкладке «Друзья» — по логину или ссылке.';
     box.innerHTML = '';
   } else {
-    hint.textContent = 'Выбери друга — вы увидите, кто уже закрыл привычку сегодня. ' +
-      'Важно: у друга привычка должна называться так же.';
+    hint.textContent = 'Выбери друга — вы увидите, кто уже выполнил обещание сегодня. ' +
+      'Важно: у друга обещание должна называться так же.';
     box.innerHTML = serverFriends.map(f => `
       <button class="row-btn buddy-pick${h.buddy === f.login ? ' on' : ''}" data-buddy="${escapeHtml(f.login)}">
         <span class="friend-ava" style="background:${f.color || 'var(--surface-2)'}">${
@@ -2838,7 +2872,7 @@ async function handleInviteLink() {
 function renderBacklog() {
   const box = document.getElementById('backlog-list');
   if (!backlog.length) {
-    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Идеи привычек, до которых дойдут руки позже.</p>`;
+    box.innerHTML = `<p class="hint" style="margin-bottom:8px">Идеи обещаний, до которых дойдут руки позже.</p>`;
     return;
   }
   box.innerHTML = backlog.map(b => `
@@ -2903,7 +2937,7 @@ function renderAccount() {
     box.querySelector('#btn-logout').addEventListener('click', logout);
   } else {
     box.innerHTML = `
-      <p class="hint" style="margin:0 0 10px">Войди, чтобы привычки и штрафы
+      <p class="hint" style="margin:0 0 10px">Войди, чтобы обещания и штрафы
         синхронизировались с сервером и не потерялись.</p>
       <div class="sheet-actions" style="margin-top:0">
         <button class="btn-ghost" id="btn-open-register">Регистрация</button>
@@ -2933,7 +2967,7 @@ function openAuthGate() {
   document.getElementById('auth-cancel').hidden = true;      // «Позже» нет
   document.getElementById('auth-local').hidden = !!API;      // локальный режим — только без сервера
   document.getElementById('auth-note').textContent = API
-    ? 'Для работы с disbit нужен аккаунт: привычки хранятся на сервере и не потеряются.'
+    ? 'Для работы с disbit нужен аккаунт: обещания хранятся на сервере и не потеряются.'
     : 'Сервер недоступен — можно продолжить локально, данные останутся на этом устройстве.';
   setAuthMode('register');
   document.getElementById('auth-error').hidden = true;
@@ -3071,6 +3105,45 @@ function initDock() {
   });
 }
 
+/* ---------- BIT — внутренняя валюта ----------
+   Копится за выполненные обещания, тратится на косметику. Купить за деньги
+   НЕЛЬЗЯ и продать нельзя: это просто счётчик прогресса, поэтому он не
+   попадает ни под требования сторов к платежам, ни под финансовое право.
+   Живёт в profile — значит уезжает на сервер вместе с остальным стейтом. */
+const BIT_PRICE = { theme: 40, scene: 120 };
+const BIT_FREE  = { theme: ['blue'], scene: ['desert', 'ocean'] };
+
+function isOwned(kind, id) {
+  return BIT_FREE[kind].includes(id) || profile.owned.includes(`${kind}:${id}`);
+}
+// +1 за выполненное обещание, −1 если отметку сняли: иначе баланс фармится
+// переключением галочки туда-обратно
+function addBit(n) {
+  if (!n) return;
+  profile.bit = Math.max(0, profile.bit + n);
+  saveJson(PROFILE_KEY, profile);
+  renderBit();
+}
+// баланс показываем везде, где он нужен для решения: витрина цветов и пикер сцен
+function renderBit() {
+  document.querySelectorAll('.bit-chip').forEach(el => { el.textContent = profile.bit; });
+}
+// покупка косметики: true — открыли, false — не хватило или передумал
+function buyCosmetic(kind, id, title) {
+  const price = BIT_PRICE[kind];
+  if (profile.bit < price) {
+    toast(`Нужно ${price} бит, у тебя ${profile.bit}. Выполняй обещания 💪`);
+    return false;
+  }
+  if (!confirm(`Открыть ${title} за ${price} бит?`)) return false;
+  profile.bit -= price;
+  profile.owned.push(`${kind}:${id}`);
+  saveJson(PROFILE_KEY, profile);
+  renderBit();
+  toast(`Открыто: ${title}`);
+  return true;
+}
+
 function applyTheme() {
   const t = THEMES.find(x => x.id === settings.theme) ? settings.theme : 'blue';
   if (t === 'blue') delete document.documentElement.dataset.theme;
@@ -3080,16 +3153,21 @@ function renderThemeGrid() {
   const box = document.getElementById('theme-grid');
   box.innerHTML = '';
   THEMES.forEach(t => {
+    const locked = !isOwned('theme', t.id);
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'theme-swatch' + (settings.theme === t.id ? ' active' : '');
+    b.className = 'theme-swatch' + (settings.theme === t.id ? ' active' : '') +
+                  (locked ? ' locked' : '');
     b.style.background = t.c;
-    b.setAttribute('aria-label', 'Тема ' + t.id);
+    b.setAttribute('aria-label',
+      locked ? `Цвет ${t.name} — ${BIT_PRICE.theme} бит` : 'Цвет ' + t.name);
+    if (locked) b.innerHTML = `<span class="lock-price">${BIT_PRICE.theme}</span>`;
     b.addEventListener('click', () => {
+      if (locked && !buyCosmetic('theme', t.id, `цвет «${t.name}»`)) return;
       settings.theme = t.id;
       saveJson(SETTINGS_KEY, settings);
       applyTheme();
-      renderThemeGrid();
+      renderProfile();          // перерисовать и баланс, и сетку без замка
     });
     box.appendChild(b);
   });
@@ -3218,7 +3296,7 @@ function importData(file) {
     try {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.habits)) throw new Error('нет массива habits');
-      if (!confirm(`Импортировать ${data.habits.length} привычек? Текущие данные будут заменены.`)) return;
+      if (!confirm(`Импортировать ${data.habits.length} обещаний? Текущие данные будут заменены.`)) return;
 
       habits = data.habits;
       habits.forEach(migrate);
@@ -3250,7 +3328,7 @@ function importData(file) {
 
 function wipeData() {
   if (!confirm('Стереть ВСЕ данные disbit? Это действие необратимо.')) return;
-  if (!confirm('Точно? Привычки, история, цели, друзья и журнал штрафов будут удалены.')) return;
+  if (!confirm('Точно? Обещания, история, цели, друзья и журнал штрафов будут удалены.')) return;
   [STORAGE_KEY, LEDGER_KEY, SETTLED_KEY, PROFILE_KEY, SETTINGS_KEY,
    FRIENDS_KEY, GOALS_KEY, REWARDS_KEY, BACKLOG_KEY]
     .forEach(k => localStorage.removeItem(k));
@@ -3375,7 +3453,7 @@ function wireDockDrag() {
     if (target?.dataset.screen) {
       switchScreen(target.dataset.screen);             // сам вернёт каплю на место
     } else {
-      // отпустили над «+» — открываем создание привычки, капля едет назад
+      // отпустили над «+» — открываем создание обещания, капля едет назад
       moveDockLens();
       if (target?.id === 'btn-add') openAddSheet();
     }
@@ -3417,9 +3495,11 @@ function buildScenePicker(containerId, selectedScene) {
   const sp = document.getElementById(containerId);
   sp.innerHTML = '';
   SCENES.forEach(sc => {
+    const locked = !isOwned('scene', sc.id);
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'scene-pick' + (sc.id === selectedScene ? ' selected' : '');
+    b.className = 'scene-pick' + (sc.id === selectedScene ? ' selected' : '') +
+                  (locked ? ' locked' : '');
     b.dataset.scene = sc.id;
     b.setAttribute('aria-label', 'Сцена: ' + sc.name);
     // цвет фигурки задаёт сцена (на снегу — тёмная), как и в самой карточке
@@ -3445,10 +3525,20 @@ function buildScenePicker(containerId, selectedScene) {
           ${walkerForeground(sc)}
         </svg>
       </span>
-      <span class="sp-name">${escapeHtml(sc.name)}</span>`;
-    b.addEventListener('click', () => selectIn(sp, b));
+      <span class="sp-name">${escapeHtml(sc.name)}</span>
+      ${locked ? `<span class="lock-price">${BIT_PRICE.scene}</span>` : ''}`;
+    b.addEventListener('click', () => {
+      // закрытая сцена: сначала покупка, и только потом выбор
+      if (b.classList.contains('locked')) {
+        if (!buyCosmetic('scene', sc.id, `сцену «${sc.name}»`)) return;
+        b.classList.remove('locked');
+        b.querySelector('.lock-price')?.remove();
+      }
+      selectIn(sp, b);
+    });
     sp.appendChild(b);
   });
+  renderBit();          // шторка марафона открывается — баланс должен быть свежим
 }
 function buildColorPicker(containerId, selectedColor, onPick) {
   const cp = document.getElementById(containerId);
@@ -3523,7 +3613,7 @@ function selectedDays() {
 }
 
 /* ---------- ПРУФ ВЫПОЛНЕНИЯ (живое фото/видео) ----------
-   Открывается сразу после отметки привычки. Камера — только живая (getUserMedia),
+   Открывается сразу после отметки обещания. Камера — только живая (getUserMedia),
    из галереи грузить нельзя. Пруф уходит на сервер в статус pending, дальше его
    вручную проверяет админ на /review. Пропуск тратит один из 5 месячных.
    Камеру нельзя протестировать без устройства — всё обёрнуто в try/guard, чтобы
@@ -3535,7 +3625,7 @@ function openProofBanner(h) {
   proofHabit = h;
   proofBlob = null;
   proofType = 'photo';
-  document.getElementById('proof-habit-name').textContent = h.name || 'Привычка';
+  document.getElementById('proof-habit-name').textContent = h.name || 'Обещание';
   document.getElementById('proof-skip-left').textContent = skipsLeft();
   document.getElementById('proof-skip').disabled = skipsLeft() <= 0;
   proofShowCapture();
@@ -4005,6 +4095,15 @@ function formatLock(mins) {
   if (!h) return `${rest} мин`;
   return rest ? `${h} ч ${rest} мин` : `${h} ч`;
 }
+/* Склонение существительного при числе: plural(3, 'шаг','шага','шагов') → 'шага'.
+   Раньше писали `n === 1 ? 'шаг' : 'шага'` — на 5 получалось «5 шага». */
+function plural(n, one, few, many) {
+  const abs = Math.abs(n) % 100, last = abs % 10;
+  if (abs > 10 && abs < 20) return many;   // 11–19 всегда «шагов»
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
+}
 // подпись рядом с полем показывает человекочитаемую длительность
 function updateLockSuffix() {
   const el = document.getElementById('f-lock-suffix');
@@ -4056,11 +4155,11 @@ function segValue(segId, attr) {
   return document.querySelector(`#${segId} .seg-btn.active`).dataset[attr];
 }
 
-/* ---------- ФОРМА ПРИВЫЧКИ ---------- */
+/* ---------- ФОРМА ОБЕЩАНИЯ ---------- */
 function openAddSheet() {
   editingId = null;
-  document.getElementById('add-title').textContent = 'Новая привычка';
-  document.getElementById('btn-save').textContent = 'Создать привычку';
+  document.getElementById('add-title').textContent = 'Новое обещание';
+  document.getElementById('btn-save').textContent = 'Дать обещание';
   resetAddForm();
   openSheet('add-overlay');
   document.getElementById('f-name').focus();
@@ -4070,7 +4169,7 @@ function openEditSheet(id) {
   const h = habits.find(x => x.id === id);
   if (!h) return;
   editingId = id;
-  document.getElementById('add-title').textContent = 'Редактировать привычку';
+  document.getElementById('add-title').textContent = 'Редактировать обещание';
   document.getElementById('btn-save').textContent = 'Сохранить';
 
   buildPickers();
@@ -4135,9 +4234,9 @@ function resetAddForm() {
 
 function submitHabit() {
   const name = document.getElementById('f-name').value.trim();
-  if (!name) { alert('Введите название привычки'); return; }
+  if (!name) { alert('Введите название обещания'); return; }
 
-  // в гибком режиме конкретные дни не важны — привычка доступна в любой день
+  // в гибком режиме конкретные дни не важны — обещание доступно в любой день
   const weekTarget = wtValue;
   const schedule = weekTarget > 0 ? [0,1,2,3,4,5,6] : selectedDays();
   if (!weekTarget && !schedule.length) {
@@ -4184,7 +4283,7 @@ function submitHabit() {
     const h = { id: 'h' + Date.now(), ...data, createdAt: TODAY, counts: {}, history: {} };
     habits.push(h);
     apiCall('POST', '/habits', h);
-    // идея из бэклога стала привычкой — убираем её из списка
+    // идея из бэклога стала обещанием — убираем её из списка
     if (pendingBacklogId) {
       backlog = backlog.filter(x => x.id !== pendingBacklogId);
       saveJson(BACKLOG_KEY, backlog);
@@ -4216,8 +4315,8 @@ function marathonSummaryHtml() {
     const status = goalPct(g) >= 100
       ? `<b style="color:var(--primary)">финиш пройден — путник дошёл 🎉</b>`
       : pending > 0
-        ? `<b style="color:var(--danger)">путник стоит: ${pending} ${pending === 1 ? 'привычка' : 'привычки'} не закрыта</b>`
-        : `<b style="color:var(--primary)">+${madeToday} ${madeToday === 1 ? 'шаг' : 'шага'} сегодня</b>`;
+        ? `<b style="color:var(--danger)">путник стоит: не выполнено ${pending} ${plural(pending, 'обещание', 'обещания', 'обещаний')}</b>`
+        : `<b style="color:var(--primary)">+${madeToday} ${plural(madeToday, 'шаг', 'шага', 'шагов')} сегодня</b>`;
 
     return `
       <div class="summary-row">
@@ -4239,9 +4338,9 @@ function showDaySummary() {
   const body = document.getElementById('summary-body');
 
   if (habits.length === 0) {
-    body.innerHTML = `<div class="summary-ok">Сначала добавь привычки 🌱</div>` + marathonSummaryHtml();
+    body.innerHTML = `<div class="summary-ok">Сначала добавь обещания 🌱</div>` + marathonSummaryHtml();
   } else if (notDone.length === 0) {
-    body.innerHTML = `<div class="summary-ok">Все привычки выполнены!<br/>Никаких штрафов. 🎉</div>`
+    body.innerHTML = `<div class="summary-ok">Все обещания выполнены!<br/>Никаких штрафов. 🎉</div>`
       + marathonSummaryHtml();
   } else {
     let charity = 0, creators = 0;
@@ -4257,7 +4356,7 @@ function showDaySummary() {
     const total = charity + creators;
 
     let html = `<p style="color:var(--text-2);font-size:14px;margin-bottom:14px">
-      Не выполнено привычек: <b style="color:var(--text)">${notDone.length}</b></p>`;
+      Не выполнено обещаний: <b style="color:var(--text)">${notDone.length}</b></p>`;
 
     if (total > 0) {
       html += `<div class="summary-total"><div class="amount">${total}₽</div>
@@ -4331,7 +4430,7 @@ function init() {
   });
   document.getElementById('invite-share').addEventListener('click', async () => {
     if (!inviteUrl) { toast('Код ещё готовится'); return; }
-    const data = { title: 'disbit', text: 'Погнали делать эту привычку вместе', url: inviteUrl };
+    const data = { title: 'disbit', text: 'Погнали держать это обещание вместе', url: inviteUrl };
     if (navigator.share) { try { await navigator.share(data); return; } catch {} }
     try { await navigator.clipboard.writeText(inviteUrl); toast('Ссылка скопирована 🔗'); }
     catch { prompt('Скопируй ссылку:', inviteUrl); }
@@ -4474,7 +4573,7 @@ function init() {
   });
   document.getElementById('btn-share-invite').addEventListener('click', async () => {
     if (!myLogin) { toast('Сначала войди в аккаунт'); return; }
-    const data = { title: 'disbit', text: `Погнали держать привычки вместе — мой логин ${myLogin}`, url: inviteLink() };
+    const data = { title: 'disbit', text: `Погнали держать обещания вместе — мой логин ${myLogin}`, url: inviteLink() };
     if (navigator.share) { try { await navigator.share(data); } catch {} }
     else {
       try { await navigator.clipboard.writeText(inviteLink()); toast('Ссылка скопирована 🔗'); }

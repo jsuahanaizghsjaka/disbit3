@@ -1,10 +1,10 @@
 /* ============================================================
-   Приглашения «делать привычку вместе»: короткий код → ссылка и QR.
-   • Владелец получает код для своей привычки (один и тот же при повторных
+   Приглашения «делать обещание вместе»: короткий код → ссылка и QR.
+   • Владелец получает код для своего обещания (один и тот же при повторных
      запросах — ссылку можно переслать хоть когда).
-   • Друг открывает ссылку → видит, что за привычка и кто зовёт → принимает.
+   • Друг открывает ссылку → видит, что за обещание и кто зовёт → принимает.
      При принятии: заводится взаимная дружба, у друга создаётся ТАКАЯ ЖЕ
-     привычка, и у обоих проставляется buddy — карточки связываются.
+     обещание, и у обоих проставляется buddy — карточки связываются.
    ============================================================ */
 
 import { Router } from 'express';
@@ -13,7 +13,7 @@ import { db, habitToParams, rowToHabit } from '../db/db.js';
 
 const router = Router();
 
-// снимок привычки, который переносим другу (прогресс НЕ переносим)
+// снимок обещания, который переносим другу (прогресс НЕ переносим)
 function snapshot(h) {
   return {
     name: h.name, icon: h.icon, color: h.color,
@@ -24,18 +24,18 @@ function snapshot(h) {
   };
 }
 
-// POST /api/invites { habitId } — получить код приглашения для своей привычки
+// POST /api/invites { habitId } — получить код приглашения для своего обещания
 router.post('/', (req, res) => {
   if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
   const habitId = String(req.body?.habitId || '');
   const h = db.prepare('SELECT * FROM habits WHERE id = ? AND user_id = ?').get(habitId, req.userId);
-  if (!h) return res.status(404).json({ error: 'Привычка не найдена' });
+  if (!h) return res.status(404).json({ error: 'Обещание не найдена' });
 
   const existing = db.prepare(
     'SELECT code FROM habit_invites WHERE owner_id = ? AND habit_id = ?'
   ).get(req.userId, habitId);
   if (existing) {
-    // обновляем снимок — вдруг привычку переименовали после прошлой ссылки
+    // обновляем снимок — вдруг обещание переименовали после прошлой ссылки
     db.prepare('UPDATE habit_invites SET payload = ? WHERE code = ?')
       .run(JSON.stringify(snapshot(h)), existing.code);
     return res.json({ code: existing.code, name: h.name });
@@ -55,10 +55,10 @@ router.get('/:code', (req, res) => {
   const owner = db.prepare('SELECT login FROM users WHERE id = ?').get(inv.owner_id);
   let p = {};
   try { p = JSON.parse(inv.payload); } catch {}
-  res.json({ code: inv.code, owner: owner?.login || null, name: p.name || 'Привычка', icon: p.icon || null });
+  res.json({ code: inv.code, owner: owner?.login || null, name: p.name || 'Обещание', icon: p.icon || null });
 });
 
-// POST /api/invites/:code/accept — принять: дружба + такая же привычка + связка buddy
+// POST /api/invites/:code/accept — принять: дружба + такое же обещание + связка buddy
 router.post('/:code/accept', (req, res) => {
   if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
   const inv = db.prepare('SELECT * FROM habit_invites WHERE code = ?').get(req.params.code);
@@ -74,7 +74,7 @@ router.post('/:code/accept', (req, res) => {
   addF.run(me.id, owner.id);
   addF.run(owner.id, me.id);
 
-  // 2. такая же привычка у принявшего (если такой ещё нет — сверяем по названию)
+  // 2. такое же обещание у принявшего (если такой ещё нет — сверяем по названию)
   let p = {};
   try { p = JSON.parse(inv.payload); } catch {}
   const already = db.prepare(
@@ -108,7 +108,7 @@ router.post('/:code/accept', (req, res) => {
     db.prepare('UPDATE habits SET buddy = ? WHERE id = ?').run(owner.login, myHabitId);
   }
 
-  // 3. у владельца привычка тоже становится совместной — со мной
+  // 3. у владельца обещание тоже становится совместной — со мной
   db.prepare('UPDATE habits SET buddy = ? WHERE id = ? AND user_id = ?')
     .run(me.login, inv.habit_id, owner.id);
 
@@ -116,7 +116,7 @@ router.post('/:code/accept', (req, res) => {
   res.json({
     ok: true,
     owner: owner.login,
-    created: !already,                  // false — привычка была, просто связали
+    created: !already,                  // false — обещание было, просто связали
     habit: row ? rowToHabit(row, []) : null
   });
 });

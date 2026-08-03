@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Привычки (поля совпадают с объектом на фронтенде)
+-- Обещания (поля совпадают с объектом на фронтенде)
 -- id — TEXT, потому что фронтенд генерирует свои id ('h' + timestamp)
 CREATE TABLE IF NOT EXISTS habits (
   id              TEXT PRIMARY KEY,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS habits (
   color           TEXT,
   schedule        TEXT NOT NULL DEFAULT '[0,1,2,3,4,5,6]', -- JSON: дни недели, 0=Пн
   week_target     INTEGER NOT NULL DEFAULT 0,              -- 0 = строго по дням, N = «N дней в неделю»
-  buddy           TEXT DEFAULT '',                        -- логин друга, если привычка совместная
+  buddy           TEXT DEFAULT '',                        -- логин друга, если обещание совместное
   pinned          INTEGER NOT NULL DEFAULT 0,              -- закреплена наверху списка
   goal_type       TEXT NOT NULL DEFAULT 'check',   -- 'check' | 'count'
   goal_target     INTEGER DEFAULT 1,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS charges (
   user_id    INTEGER NOT NULL DEFAULT 0,
   habit_id   TEXT NOT NULL,
   day        TEXT NOT NULL,
-  name       TEXT,                                 -- имя привычки на момент списания
+  name       TEXT,                                 -- имя обещания на момент списания
   icon       TEXT,
   mode       TEXT NOT NULL DEFAULT 'money',        -- 'money' | 'lock'
   amount     INTEGER NOT NULL DEFAULT 0,
@@ -146,9 +146,9 @@ CREATE TABLE IF NOT EXISTS friendships (
 );
 CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
 
--- Приглашения «делать привычку вместе»: короткий код → ссылка/QR.
--- payload — снимок привычки (название, иконка, расписание…), чтобы у друга
--- создалась ТАКАЯ ЖЕ. Код постоянный для пары (владелец + привычка).
+-- Приглашения «делать обещание вместе»: короткий код → ссылка/QR.
+-- payload — снимок обещания (название, иконка, расписание…), чтобы у друга
+-- создалась ТАКАЯ ЖЕ. Код постоянный для пары (владелец + обещание).
 CREATE TABLE IF NOT EXISTS habit_invites (
   code       TEXT PRIMARY KEY,
   owner_id   INTEGER NOT NULL,

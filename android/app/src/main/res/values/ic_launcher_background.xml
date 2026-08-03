@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- тон нижней части плитки иконки: подложка адаптивной иконки должна
+         сливаться с ней, иначе вокруг знака видно светлую рамку -->
+    <color name="ic_launcher_background">#1C2733</color>
 </resources>

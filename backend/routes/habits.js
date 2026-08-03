@@ -1,5 +1,5 @@
 /* ============================================================
-   Эндпоинты привычек — SQLite (db/db.js), данные привязаны
+   Эндпоинты обещаний — SQLite (db/db.js), данные привязаны
    к пользователю. Без токена работаешь в гостевом пространстве
    (user_id = 0), с Bearer-токеном — в своём.
    ============================================================ */
@@ -19,7 +19,7 @@ function getHabit(id, userId) {
   return rowToHabit(row, completions);
 }
 
-// GET /api/habits — список привычек пользователя с историей
+// GET /api/habits — список обещаний пользователя с историей
 router.get('/', (req, res) => {
   const rows = db.prepare(
     'SELECT * FROM habits WHERE user_id = ? AND archived = 0 ORDER BY created_at'
@@ -28,7 +28,7 @@ router.get('/', (req, res) => {
   res.json(rows.map(r => rowToHabit(r, stmt.all(r.id))));
 });
 
-// POST /api/habits — создать привычку (id может прислать фронтенд)
+// POST /api/habits — создать обещание (id может прислать фронтенд)
 router.post('/', (req, res) => {
   const p = habitToParams({ id: 'h' + Date.now(), ...req.body });
   try {
@@ -58,12 +58,12 @@ router.post('/', (req, res) => {
   res.status(201).json(getHabit(p.id, uid(req)));
 });
 
-// PUT /api/habits/:id — обновить привычку (прогресс не трогаем)
+// PUT /api/habits/:id — обновить обещание (прогресс не трогаем)
 router.put('/:id', (req, res) => {
   const exists = db.prepare(
     'SELECT id FROM habits WHERE id = ? AND user_id = ?'
   ).get(req.params.id, uid(req));
-  if (!exists) return res.status(404).json({ error: 'Привычка не найдена' });
+  if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
 
   const p = habitToParams({ ...req.body, id: req.params.id });
   db.prepare(`
@@ -84,7 +84,7 @@ router.put('/:id/day/:day', (req, res) => {
   const exists = db.prepare(
     'SELECT id FROM habits WHERE id = ? AND user_id = ?'
   ).get(req.params.id, uid(req));
-  if (!exists) return res.status(404).json({ error: 'Привычка не найдена' });
+  if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.day)) {
     return res.status(400).json({ error: 'Неверный формат дня, нужен YYYY-MM-DD' });
   }
@@ -100,7 +100,7 @@ router.put('/:id/day/:day', (req, res) => {
   res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count });
 });
 
-// DELETE /api/habits/:id — удалить привычку (отметки — каскадом)
+// DELETE /api/habits/:id — удалить обещание (отметки — каскадом)
 router.delete('/:id', (req, res) => {
   db.prepare('DELETE FROM habits WHERE id = ? AND user_id = ?')
     .run(req.params.id, uid(req));
