@@ -1232,6 +1232,35 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 .ib-owned { position: absolute; right: -3px; bottom: -3px; color: var(--primary); }
 .ib-owned .ic { width: 14px; height: 14px; stroke-width: 3; }
 
+/* знаки-аватары (шторка профиля) */
+.mark-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.mark-pick {
+  position: relative;
+  width: 72px; padding: 0 0 5px;
+  background: none;
+  border: 2px solid transparent; border-radius: var(--r-md);
+  transition: border-color var(--t-fast), transform var(--t-fast);
+}
+.mark-pick:active { transform: scale(0.94); }
+.mark-pick img {
+  display: block;
+  width: 68px; height: 68px;
+  border-radius: var(--r-full);        /* в интерфейсе аватар круглый — превью тоже */
+  object-fit: cover;
+}
+.mark-pick.selected { border-color: var(--primary); }
+.mark-pick.selected .mp-name { color: var(--primary); }
+.mark-pick.locked img { opacity: 0.35; }
+.mp-name { display: block; margin-top: 4px; font-size: 11px; font-weight: 700; color: var(--text-2); }
+.mark-pick.locked .mp-name { color: var(--text-3); }
+.mark-pick .lock-price {
+  position: absolute; top: 2px; right: 2px;
+  padding: 2px 7px; border-radius: var(--r-full);
+  font-size: 10px; font-weight: 800; color: #FFF;
+  background: rgba(0, 0, 0, 0.6);
+}
+.mark-pick .lock-price::before { content: '◆'; opacity: 0.8; margin-right: 3px; }
+
 /* грэйс-дни */
 .grace-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
 .grace-left { font-size: 30px; font-weight: 900; line-height: 1; }

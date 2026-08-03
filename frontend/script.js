@@ -143,7 +143,7 @@ let habits   = load();
 let ledger   = loadLedger();
 let profile  = loadJson(PROFILE_KEY, {
   name: '', color: COLORS[0], createdAt: null,
-  photo: null, emoji: null,
+  photo: null, emoji: null, mark: null,
   motivation: { level: 50, text: '' },
   bit: 0, owned: [], gear: ''
 });
@@ -2191,15 +2191,17 @@ function renderLedger() {
 /* ---------- ЭКРАН «ПРОФИЛЬ» ---------- */
 function avatarHtml(p) {
   if (p.photo) return `<img src="${p.photo}" alt="" />`;
+  if (p.mark) return `<img src="${markSrc(p.mark)}" alt="" />`;
   if (p.emoji) return escapeHtml(p.emoji);
   const name = (p.name || '').trim();
   return name ? escapeHtml(name[0]) : '?';
 }
 function applyAvatar(el, p) {
-  el.classList.toggle('emoji', !p.photo && !!p.emoji);
+  el.classList.toggle('emoji', !p.photo && !p.mark && !!p.emoji);
   // выбранный цвет — фон и под эмодзи, и под монограммой (раньше для эмодзи
-  // ставилась пустая строка, и побеждал серый фон из класса .avatar.emoji)
-  el.style.background = p.photo ? 'transparent' : (p.color || COLORS[0]);
+  // ставилась пустая строка, и побеждал серый фон из класса .avatar.emoji).
+  // У фото и знака свой фон — подложка не нужна.
+  el.style.background = (p.photo || p.mark) ? 'transparent' : (p.color || COLORS[0]);
   el.innerHTML = avatarHtml(p);
 }
 
@@ -3127,8 +3129,23 @@ function initDock() {
    НЕЛЬЗЯ и продать нельзя: это просто счётчик прогресса, поэтому он не
    попадает ни под требования сторов к платежам, ни под финансовое право.
    Живёт в profile — значит уезжает на сервер вместе с остальным стейтом. */
-const BIT_PRICE = { theme: 40, scene: 120, gear: 60, icon: 25, grace: 30 };
-const BIT_FREE  = { theme: ['blue'], scene: ['desert', 'ocean'], gear: ['', 'hat', 'goggles'], icon: [] };
+const BIT_PRICE = { theme: 40, scene: 120, gear: 60, icon: 25, grace: 30, mark: 80 };
+const BIT_FREE  = { theme: ['blue'], scene: ['desert', 'ocean'], gear: ['', 'hat', 'goggles'], icon: [], mark: [] };
+
+/* Знаки — картинки-аватары вместо фото/эмодзи/монограммы. Это НЕ иконка
+   приложения: сменить её из веба нельзя (у PWA иконка запекается при установке,
+   на Android/iOS для этого нужен нативный плагин). Вернуться к этому — на
+   нативном этапе, там знаки уже будут нарисованы. */
+const MARKS = [
+  { id: 'knot-glass', name: 'Узел' },
+  { id: 'knot-steel', name: 'Сталь' },
+  { id: 'ring',       name: 'Кольцо' },
+  { id: 'spiral',     name: 'Спираль' },
+  { id: 'cross',      name: 'Крест' },
+  { id: 'layers',     name: 'Слои' },
+  { id: 'orbs',       name: 'Сферы' }
+];
+function markSrc(id) { return `icons/marks/${id}.png`; }
 
 /* Снаряжение путника. Берём ровно те предметы, которые walkFigure уже умеет
    рисовать: пеший путник (пустыня, Луна, джунгли). У заплыва, восхождения и
@@ -3310,8 +3327,10 @@ function openProfileSheet() {
     name: profile.name || '',
     color: profile.color || COLORS[0],
     photo: profile.photo || null,
-    emoji: profile.emoji || null
+    emoji: profile.emoji || null,
+    mark: profile.mark || null
   };
+  buildMarkPicker();
   document.getElementById('pf-name-input').value = avaDraft.name;
   buildColorPicker('pf-color-picker', avaDraft.color, col => {
     avaDraft.color = col;          // цвет виден в превью сразу, а не после сохранения
@@ -3320,6 +3339,7 @@ function openProfileSheet() {
   buildEmojiGrid('ava-emoji-grid', avaDraft.emoji, em => {
     avaDraft.emoji = em;
     avaDraft.photo = null;
+    avaDraft.mark = null;        // знак и эмодзи — взаимоисключающие
     updateAvaPreview();
   });
   updateAvaPreview();
@@ -3329,6 +3349,31 @@ function openProfileSheet() {
 function updateAvaPreview() {
   avaDraft.name = document.getElementById('pf-name-input').value;
   applyAvatar(document.getElementById('ava-preview'), avaDraft);
+}
+// знаки: закрытые открываются за биты прямо отсюда, выбор виден в превью сразу
+function buildMarkPicker() {
+  const box = document.getElementById('ava-mark-grid');
+  if (!box) return;
+  box.innerHTML = '';
+  MARKS.forEach(m => {
+    const locked = !isOwned('mark', m.id);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mark-pick' + (avaDraft.mark === m.id ? ' selected' : '') + (locked ? ' locked' : '');
+    b.innerHTML = `<img src="${markSrc(m.id)}" alt="" loading="lazy" />
+      <span class="mp-name">${escapeHtml(m.name)}</span>
+      ${locked ? `<span class="lock-price">${BIT_PRICE.mark}</span>` : ''}`;
+    b.setAttribute('aria-label', locked ? `Знак ${m.name} — ${BIT_PRICE.mark} бит` : 'Знак ' + m.name);
+    b.addEventListener('click', () => {
+      if (locked && !buyCosmetic('mark', m.id, `знак «${m.name}»`)) return;
+      avaDraft.mark = m.id;
+      avaDraft.photo = null;
+      avaDraft.emoji = null;     // знак заменяет собой фото и эмодзи
+      buildMarkPicker();
+      updateAvaPreview();
+    });
+    box.appendChild(b);
+  });
 }
 // уменьшаем фото до 256px и сохраняем как JPEG dataURL
 function processPhoto(file) {
@@ -3345,6 +3390,7 @@ function processPhoto(file) {
       0, 0, size, size);
     avaDraft.photo = canvas.toDataURL('image/jpeg', 0.82);
     avaDraft.emoji = null;
+    avaDraft.mark = null;
     URL.revokeObjectURL(url);
     updateAvaPreview();
   };
@@ -3360,6 +3406,7 @@ function saveProfile() {
   if (sel) profile.color = sel.dataset.color;
   profile.photo = avaDraft.photo;
   profile.emoji = avaDraft.emoji;
+  profile.mark = avaDraft.mark;
   if (!profile.createdAt) profile.createdAt = TODAY;
   try {
     saveJson(PROFILE_KEY, profile);
@@ -4656,8 +4703,10 @@ function init() {
   // без эмодзи аватар возвращается к монограмме (первая буква имени в выбранном цвете)
   document.getElementById('btn-emoji-remove').addEventListener('click', () => {
     avaDraft.emoji = null;
+    avaDraft.mark = null;
     document.querySelectorAll('#ava-emoji-grid .pick.selected')
       .forEach(b => b.classList.remove('selected'));
+    buildMarkPicker();
     updateAvaPreview();
   });
 
