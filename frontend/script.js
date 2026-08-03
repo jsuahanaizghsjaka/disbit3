@@ -59,6 +59,8 @@ function setAuth(token, user) {
 
 // иконки обещаний — монохромные SVG из спрайта (старые эмодзи-иконки поддерживаются)
 const HABIT_ICONS = ['svg:i-h-book','svg:i-h-water','svg:i-h-run','svg:i-h-sleep','svg:i-h-food','svg:i-h-gym','svg:i-h-music','svg:i-h-lang','svg:i-h-mind','svg:i-h-clean','svg:i-h-code','svg:i-h-health'];
+// открываются за биты на экране «Аватар»; в пикере обещания появляются после покупки
+const HABIT_ICONS_PAID = ['svg:i-h-money','svg:i-h-pen','svg:i-h-plant','svg:i-h-paw','svg:i-h-sun','svg:i-h-moon','svg:i-h-bike','svg:i-h-nophone'];
 // рендер иконки обещания/записи: svg-ссылка или старое эмодзи
 function iconOf(v) {
   return String(v || '').startsWith('svg:') ? icon(v.slice(4)) : escapeHtml(v || '');
@@ -119,7 +121,9 @@ const AVA_EMOJIS = ['😀','😎','🦊','🐻','🐼','🦁','🐯','🐸','�
 const DAY_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 // вкладка «Статистика» уехала в карточку обещания, её слот занял экран друзей;
 // общая статистика осталась отдельным экраном — вход из профиля
-const SCREENS = ['today','calendar','friends','stats','medals','profile'];
+// calendar остался экраном, но ушёл из дока — его слот занял «Аватар»,
+// вход в календарь теперь из профиля (как раньше сделали со статистикой)
+const SCREENS = ['today','calendar','avatar','friends','stats','medals','profile'];
 
 // темы приложения: id → цвет свотча (name — для витрины бит)
 const THEMES = [
@@ -141,7 +145,7 @@ let profile  = loadJson(PROFILE_KEY, {
   name: '', color: COLORS[0], createdAt: null,
   photo: null, emoji: null,
   motivation: { level: 50, text: '' },
-  bit: 0, owned: []
+  bit: 0, owned: [], gear: ''
 });
 // Валюта раньше называлась knut: переносим накопленное, иначе у тех, кто уже
 // успел накопить, баланс молча обнулился бы. Ловим именно СТАРОЕ поле: loadJson
@@ -238,9 +242,16 @@ function applyRemoteState(data, ts) {
     rewards = Array.isArray(data.rewards) ? data.rewards : rewards;
     friends = Array.isArray(data.friends) ? data.friends : friends;
     backlog = Array.isArray(data.backlog) ? data.backlog : backlog;
-    // пропуски: берём серверные только для текущего месяца, иначе оставляем свежие 5
+    // пропуски: берём серверные только для текущего месяца, иначе оставляем свежие 5.
+    // Потолок считаем с учётом докупленных за биты, иначе купленные грэйс-дни
+    // срезало бы обратно до пяти на первом же синке с сервера.
     if (data.skips && data.skips.month === monthKey()) {
-      skips = { month: monthKey(), left: Math.max(0, Math.min(SKIPS_PER_MONTH, Number(data.skips.left) || 0)) };
+      const bought = Math.max(0, Math.min(GRACE_MAX_BOUGHT, Number(data.skips.bought) || 0));
+      skips = {
+        month: monthKey(),
+        left: Math.max(0, Math.min(SKIPS_PER_MONTH + bought, Number(data.skips.left) || 0)),
+        bought
+      };
       localStorage.setItem(SKIPS_KEY, JSON.stringify(skips));
     }
     if (data.settled && data.settled > (localStorage.getItem(SETTLED_KEY) || '')) {
@@ -419,12 +430,19 @@ const TODAY = dateKey();
 const SKIPS_KEY = 'disbit_skips_v1';
 const SKIPS_PER_MONTH = 5;
 function monthKey() { return TODAY.slice(0, 7); }   // 'YYYY-MM'
+// bought — сколько грэйс-дней докуплено за биты в этом месяце. Потолок нужен,
+// чтобы от штрафов нельзя было откупиться совсем: иначе вся механика теряет смысл.
+const GRACE_MAX_BOUGHT = 3;
+function freshSkips() { return { month: monthKey(), left: SKIPS_PER_MONTH, bought: 0 }; }
 let skips = (() => {
-  try { const s = JSON.parse(localStorage.getItem(SKIPS_KEY)); if (s && s.month === monthKey()) return s; } catch {}
-  return { month: monthKey(), left: SKIPS_PER_MONTH };
+  try {
+    const s = JSON.parse(localStorage.getItem(SKIPS_KEY));
+    if (s && s.month === monthKey()) return { bought: 0, ...s };
+  } catch {}
+  return freshSkips();
 })();
 function skipsLeft() {
-  if (skips.month !== monthKey()) { skips = { month: monthKey(), left: SKIPS_PER_MONTH }; saveSkips(); }
+  if (skips.month !== monthKey()) { skips = freshSkips(); saveSkips(); }
   return skips.left;
 }
 function saveSkips() {
@@ -955,8 +973,8 @@ function walkerFigure(sc) {
 }
 
 // идёт прямо: пустыня (шляпа), Луна (шлем), джунгли (трость)
-function walkFigure(sc) {
-  const g = sc.gear;
+function walkFigure(sc, gearForce) {
+  const g = gearForce !== undefined ? gearForce : gearOf(sc);
   const helmet = g === 'helmet';
   const head = helmet
     ? `<circle class="w-helmet" cx="0" cy="-25" r="6" />
@@ -2219,7 +2237,6 @@ function renderProfile() {
 
   renderRewards();
   renderFriends();
-  renderThemeGrid();
   renderBit();
   renderAccount();
 }
@@ -3110,8 +3127,24 @@ function initDock() {
    НЕЛЬЗЯ и продать нельзя: это просто счётчик прогресса, поэтому он не
    попадает ни под требования сторов к платежам, ни под финансовое право.
    Живёт в profile — значит уезжает на сервер вместе с остальным стейтом. */
-const BIT_PRICE = { theme: 40, scene: 120 };
-const BIT_FREE  = { theme: ['blue'], scene: ['desert', 'ocean'] };
+const BIT_PRICE = { theme: 40, scene: 120, gear: 60, icon: 25, grace: 30 };
+const BIT_FREE  = { theme: ['blue'], scene: ['desert', 'ocean'], gear: ['', 'hat', 'goggles'], icon: [] };
+
+/* Снаряжение путника. Берём ровно те предметы, которые walkFigure уже умеет
+   рисовать: пеший путник (пустыня, Луна, джунгли). У заплыва, восхождения и
+   метели экипировка вшита в позу — там выбор не применяется, и об этом честно
+   написано в интерфейсе. Новые предметы = новые пути в фигуре, отдельная работа. */
+const GEAR = [
+  { id: '',        name: 'По сцене' },
+  { id: 'hat',     name: 'Шляпа'    },
+  { id: 'goggles', name: 'Очки'     },
+  { id: 'helmet',  name: 'Шлем'     },
+  { id: 'cane',    name: 'Трость'   }
+];
+// выбранное снаряжение перекрывает сценовое; не выбрано или не открыто — по сцене
+function gearOf(sc) {
+  return profile.gear && isOwned('gear', profile.gear) ? profile.gear : sc.gear;
+}
 
 function isOwned(kind, id) {
   return BIT_FREE[kind].includes(id) || profile.owned.includes(`${kind}:${id}`);
@@ -3124,9 +3157,11 @@ function addBit(n) {
   saveJson(PROFILE_KEY, profile);
   renderBit();
 }
-// баланс показываем везде, где он нужен для решения: витрина цветов и пикер сцен
+// баланс показываем везде, где он нужен для решения: витрины и пикер сцен
 function renderBit() {
   document.querySelectorAll('.bit-chip').forEach(el => { el.textContent = profile.bit; });
+  const hero = document.getElementById('bit-balance');
+  if (hero) hero.textContent = profile.bit;
 }
 // покупка косметики: true — открыли, false — не хватило или передумал
 function buyCosmetic(kind, id, title) {
@@ -3142,6 +3177,102 @@ function buyCosmetic(kind, id, title) {
   renderBit();
   toast(`Открыто: ${title}`);
   return true;
+}
+
+/* ---------- ЭКРАН «АВАТАР»: всё, что открывается за биты ---------- */
+function renderAvatar() {
+  document.getElementById('bit-balance').textContent = profile.bit;
+  renderBit();
+  renderThemeGrid();
+  renderGearPicker();
+  renderIconShop();
+  renderGrace();
+}
+
+// превью снаряжения — та же фигурка, что в марафоне, только голова крупным планом
+function gearPreview(id) {
+  return `<svg class="gp-svg" viewBox="-11 -34 22 26" aria-hidden="true">
+    ${walkFigure({}, id || 'hat')}</svg>`;
+}
+function renderGearPicker() {
+  const box = document.getElementById('gear-picker');
+  if (!box) return;
+  box.innerHTML = '';
+  GEAR.forEach(g => {
+    const locked = !isOwned('gear', g.id);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'gear-pick' + (profile.gear === g.id ? ' selected' : '') + (locked ? ' locked' : '');
+    b.innerHTML = `<span class="gp-art">${gearPreview(g.id)}</span>
+      <span class="gp-name">${escapeHtml(g.name)}</span>
+      ${locked ? `<span class="lock-price">${BIT_PRICE.gear}</span>` : ''}`;
+    b.addEventListener('click', () => {
+      if (locked && !buyCosmetic('gear', g.id, `снаряжение «${g.name}»`)) return;
+      profile.gear = g.id;
+      saveJson(PROFILE_KEY, profile);
+      renderGearPicker();
+      render();               // путник на главной должен переодеться сразу
+    });
+    box.appendChild(b);
+  });
+}
+
+function renderIconShop() {
+  const box = document.getElementById('icon-shop');
+  if (!box) return;
+  box.innerHTML = '';
+  HABIT_ICONS_PAID.forEach(ic => {
+    const locked = !isOwned('icon', ic);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'icon-buy' + (locked ? ' locked' : ' owned');
+    b.innerHTML = iconOf(ic) +
+      (locked ? `<span class="lock-price">${BIT_PRICE.icon}</span>`
+              : `<span class="ib-owned">${icon('i-check')}</span>`);
+    b.setAttribute('aria-label', locked ? `Открыть иконку за ${BIT_PRICE.icon} бит` : 'Иконка открыта');
+    b.disabled = !locked;
+    b.addEventListener('click', () => {
+      if (buyCosmetic('icon', ic, 'иконку')) renderIconShop();
+    });
+    box.appendChild(b);
+  });
+}
+
+/* Грэйс-дни: покупка ДОБАВЛЯЕТ пропуск в тот же счётчик, которым пользуется
+   баннер пруфа (skips). Потолок GRACE_MAX_BOUGHT не даёт откупиться от штрафов
+   совсем — иначе смысл приложения ломается. */
+function renderGrace() {
+  const left = document.getElementById('grace-left');
+  const sub = document.getElementById('grace-sub');
+  const btn = document.getElementById('btn-buy-grace');
+  if (!left) return;
+  const canBuy = (skips.bought || 0) < GRACE_MAX_BOUGHT;
+  left.textContent = skipsLeft();
+  sub.textContent = canBuy
+    ? `осталось в этом месяце · открыто ${skips.bought || 0} из ${GRACE_MAX_BOUGHT}`
+    : 'осталось в этом месяце · больше в этом месяце не открыть';
+  btn.disabled = !canBuy;
+  btn.textContent = canBuy ? `Открыть за ${BIT_PRICE.grace}` : 'Лимит месяца';
+}
+function buyGrace() {
+  if ((skips.bought || 0) >= GRACE_MAX_BOUGHT) {
+    toast('В этом месяце больше грэйс-дней не открыть');
+    return;
+  }
+  if (profile.bit < BIT_PRICE.grace) {
+    toast(`Нужно ${BIT_PRICE.grace} бит, у тебя ${profile.bit}. Выполняй обещания 💪`);
+    return;
+  }
+  if (!confirm(`Открыть грэйс-день за ${BIT_PRICE.grace} бит?`)) return;
+  profile.bit -= BIT_PRICE.grace;
+  saveJson(PROFILE_KEY, profile);
+  skipsLeft();                       // на случай смены месяца — сбросит счётчик
+  skips.left++;
+  skips.bought = (skips.bought || 0) + 1;
+  saveSkips();
+  renderBit();
+  renderGrace();
+  toast('Грэйс-день открыт');
 }
 
 function applyTheme() {
@@ -3348,6 +3479,7 @@ function switchScreen(name, updateHash = true) {
   }
   if (name === 'stats') renderStats();
   if (name === 'calendar') renderCalendar();
+  if (name === 'avatar') renderAvatar();
   if (name === 'friends') {
     renderFriends(); renderFriendsBoard();
     // подтягиваем свежие серии друзей при каждом заходе на вкладку
@@ -3479,7 +3611,8 @@ function anyOpenSheet() {
 function buildIconPicker(containerId, selectedIcon) {
   const ip = document.getElementById(containerId);
   ip.innerHTML = '';
-  HABIT_ICONS.forEach(ic => {
+  // базовые + только те платные, что уже открыты на экране «Аватар»
+  HABIT_ICONS.concat(HABIT_ICONS_PAID.filter(i => isOwned('icon', i))).forEach(ic => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'pick' + (ic === selectedIcon ? ' selected' : '');
@@ -4436,6 +4569,8 @@ function init() {
     catch { prompt('Скопируй ссылку:', inviteUrl); }
   });
   document.getElementById('btn-open-stats').addEventListener('click', () => switchScreen('stats'));
+  document.getElementById('btn-open-calendar').addEventListener('click', () => switchScreen('calendar'));
+  document.getElementById('btn-buy-grace').addEventListener('click', buyGrace);
   const achCard = document.getElementById('ach-card');
   achCard.addEventListener('click', () => switchScreen('medals'));
   achCard.addEventListener('keydown', e => {

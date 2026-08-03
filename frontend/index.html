@@ -66,6 +66,15 @@
       <symbol id="i-h-clean" viewBox="0 0 24 24"><path d="m14 4 6 6M9 9l6 6-7.5 5.5a2 2 0 0 1-2.8-2.8L9 9ZM12 12 4 20"/></symbol>
       <symbol id="i-h-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13 4l-2 16"/></symbol>
       <symbol id="i-h-health" viewBox="0 0 24 24"><path d="M12 20.5C7 16.5 3 13.3 3 9.2 3 6.4 5.2 4.5 7.7 4.5c1.7 0 3.3.8 4.3 2.3 1-1.5 2.6-2.3 4.3-2.3 2.5 0 4.7 1.9 4.7 4.7 0 4.1-4 7.3-9 11.3Z"/><path d="M6 12h3l1.5-2.5L13 14l1.5-2H18"/></symbol>
+      <!-- иконки, открываемые за биты: тот же язык — 24px, обводка 2, скруглённые концы -->
+      <symbol id="i-h-money" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.8 10.2h4a1.6 1.6 0 0 1 0 3.2h-3.2a1.6 1.6 0 0 0 0 3.2h4"/></symbol>
+      <symbol id="i-h-pen" viewBox="0 0 24 24"><path d="M4 20l1-4 9.5-9.5 3 3L8 19l-4 1Z"/><path d="M14.5 6.5l3 3M4 20l3-1"/></symbol>
+      <symbol id="i-h-plant" viewBox="0 0 24 24"><path d="M12 21v-8.5"/><path d="M12 12.5C12 9.5 9.8 7.3 6.5 7.3c0 3 2.2 5.2 5.5 5.2Zm0 0c0-3.4 2.2-5.6 5.5-5.6 0 3.4-2.2 5.6-5.5 5.6Z"/></symbol>
+      <symbol id="i-h-paw" viewBox="0 0 24 24"><circle cx="6.5" cy="10" r="1.9"/><circle cx="10.5" cy="6.6" r="1.9"/><circle cx="15" cy="7.4" r="1.9"/><circle cx="18.4" cy="11.4" r="1.7"/><path d="M12.2 12.6c3 0 5.3 2.4 5.3 4.5s-2.3 3.2-5.3 3.2-5.3-1.1-5.3-3.2 2.3-4.5 5.3-4.5Z"/></symbol>
+      <symbol id="i-h-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></symbol>
+      <symbol id="i-h-moon" viewBox="0 0 24 24"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></symbol>
+      <symbol id="i-h-bike" viewBox="0 0 24 24"><circle cx="5.8" cy="16.6" r="3.7"/><circle cx="18.2" cy="16.6" r="3.7"/><path d="M5.8 16.6l4.4-8h4.4l3.6 8M9 8.6h4.6"/></symbol>
+      <symbol id="i-h-nophone" viewBox="0 0 24 24"><rect x="7" y="2.8" width="10" height="18.4" rx="2.4"/><path d="M10.6 5.6h2.8"/><path d="M4 3.4l16 17.2"/></symbol>
     </defs>
   </svg>
 
@@ -186,6 +195,52 @@
         <button class="row-btn" id="btn-backlog-add">
           <svg class="ic"><use href="#i-plus"/></svg><span>Записать идею</span>
         </button>
+      </section>
+    </main>
+
+    <!-- ================= ЭКРАН: АВАТАР =================
+         Всё, что открывается за биты: оформление, снаряжение путника,
+         иконки обещаний и грэйс-дни. Биты сюда не покупаются — только
+         зарабатываются выполненными обещаниями. -->
+    <main class="screen" id="screen-avatar">
+      <h1 class="screen-title">Аватар</h1>
+
+      <section class="card bit-hero">
+        <div>
+          <div class="bh-value" id="bit-balance">0</div>
+          <div class="bh-sub">бит на счету</div>
+        </div>
+        <svg class="ic bh-ic"><use href="#i-coins"/></svg>
+      </section>
+      <p class="hint bit-hint">Бит начисляется за каждое выполненное обещание и сгорает, если снять отметку. Купить биты нельзя — только заработать.</p>
+
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-palette"/></svg> Цвет приложения<span class="bit-chip">0</span></h3>
+        <div class="theme-grid" id="theme-grid"></div>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-tool"/></svg> Снаряжение путника<span class="bit-chip">0</span></h3>
+        <p class="hint" style="margin:0 0 10px">Что путник берёт с собой в марафон. Выбранное работает на всех сценах; «по сцене» — как было раньше.</p>
+        <div class="gear-picker" id="gear-picker"></div>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-star"/></svg> Иконки обещаний<span class="bit-chip">0</span></h3>
+        <p class="hint" style="margin:0 0 10px">Открытые иконки появляются в выборе при создании обещания.</p>
+        <div class="icon-shop" id="icon-shop"></div>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-heart"/></svg> Грэйс-дни<span class="bit-chip">0</span></h3>
+        <p class="hint" style="margin:0 0 10px">Грэйс-день гасит один пропуск: серия сохраняется, штрафа нет. Пять штук даётся бесплатно каждый месяц, ещё несколько можно открыть за биты.</p>
+        <div class="grace-row">
+          <div>
+            <div class="grace-left" id="grace-left">5</div>
+            <div class="grace-sub" id="grace-sub">осталось в этом месяце</div>
+          </div>
+          <button class="btn-primary" id="btn-buy-grace">Открыть</button>
+        </div>
       </section>
     </main>
 
@@ -395,10 +450,13 @@
         </button>
       </section>
 
-      <!-- тема -->
+      <!-- календарь: из дока убран (его слот занял «Аватар»), вход отсюда -->
       <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-palette"/></svg> Цвет приложения<span class="bit-chip" title="Копится за выполненные обещания">0</span></h3>
-        <div class="theme-grid" id="theme-grid"></div>
+        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-calendar"/></svg> Календарь</h3>
+        <p class="hint" style="margin:0 0 8px">История по дням: можно доотметить или снять отметку задним числом.</p>
+        <button class="row-btn" id="btn-open-calendar">
+          <svg class="ic"><use href="#i-calendar"/></svg><span>Открыть календарь</span>
+        </button>
       </section>
 
       <!-- аккаунт -->
@@ -460,9 +518,9 @@
         <span class="di-icon"><svg class="ic"><use href="#i-home"/></svg></span>
         <span class="di-label">Главная</span>
       </button>
-      <button class="dock-item nav-item" data-screen="calendar">
-        <span class="di-icon"><svg class="ic"><use href="#i-calendar"/></svg></span>
-        <span class="di-label">Календарь</span>
+      <button class="dock-item nav-item" data-screen="avatar">
+        <span class="di-icon"><svg class="ic"><use href="#i-palette"/></svg></span>
+        <span class="di-label">Аватар</span>
       </button>
       <button class="dock-item fab" id="btn-add" aria-label="Новое обещание">
         <span class="di-icon"><svg class="ic"><use href="#i-plus"/></svg></span>

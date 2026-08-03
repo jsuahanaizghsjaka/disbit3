@@ -1171,6 +1171,73 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 }
 .scene-pick .lock-price::before { content: '◆'; opacity: 0.8; }
 
+/* ---------- ЭКРАН «АВАТАР» ---------- */
+.bit-hero {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+}
+.bh-value { font-size: 40px; font-weight: 900; line-height: 1; color: var(--primary); }
+.bh-sub { margin-top: 4px; font-size: 13px; color: var(--text-2); font-weight: 700; }
+.bh-ic { width: 40px; height: 40px; color: var(--primary); opacity: 0.35; }
+.bit-hint { margin: -4px 0 var(--sp-4); }
+
+/* снаряжение путника */
+.gear-picker { display: flex; flex-wrap: wrap; gap: 10px; }
+.gear-pick {
+  position: relative;
+  width: 84px; padding: 6px 0 7px;
+  background: var(--neutral);
+  border: 2px solid transparent; border-radius: var(--r-md);
+  transition: border-color var(--t-fast), transform var(--t-fast);
+}
+.gear-pick:active { transform: scale(0.95); }
+.gear-pick.selected { border-color: var(--primary); background: var(--surface-2); }
+.gp-art { display: block; height: 46px; }
+.gp-svg { display: block; width: 100%; height: 100%; }
+.gp-art * { animation: none !important; transition: none !important; }   /* превью — стоп-кадр */
+.gp-name { display: block; font-size: 11px; font-weight: 700; color: var(--text-2); }
+.gear-pick.selected .gp-name { color: var(--primary); }
+.gear-pick.locked .gp-art { opacity: 0.25; }
+.gear-pick.locked .gp-name { color: var(--text-3); }
+.gear-pick .lock-price {
+  position: absolute; top: 4px; right: 4px;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: var(--r-full);
+  font-size: 10px; font-weight: 800; color: #FFF;
+  background: rgba(0, 0, 0, 0.55);
+}
+.gear-pick .lock-price::before { content: '◆'; opacity: 0.8; }
+
+/* иконки обещаний */
+.icon-shop { display: flex; flex-wrap: wrap; gap: 10px; }
+.icon-buy {
+  position: relative;
+  width: 52px; height: 52px;
+  display: grid; place-items: center;
+  background: var(--neutral);
+  border: 1px solid var(--neutral-line);
+  border-radius: var(--r-md);
+  color: var(--text);
+  transition: transform var(--t-fast), border-color var(--t-fast);
+}
+.icon-buy:active { transform: scale(0.92); }
+.icon-buy.locked { color: var(--text-3); }
+.icon-buy.owned { border-color: rgba(var(--tint), 0.4); color: var(--primary); }
+.icon-buy .lock-price {
+  position: absolute; right: -2px; bottom: -4px;
+  padding: 1px 6px; border-radius: var(--r-full);
+  font-size: 10px; font-weight: 800;
+  color: var(--on-primary); background: var(--primary);
+}
+.ib-owned { position: absolute; right: -3px; bottom: -3px; color: var(--primary); }
+.ib-owned .ic { width: 14px; height: 14px; stroke-width: 3; }
+
+/* грэйс-дни */
+.grace-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.grace-left { font-size: 30px; font-weight: 900; line-height: 1; }
+.grace-sub { margin-top: 4px; font-size: 12px; color: var(--text-3); font-weight: 700; }
+.grace-row .btn-primary:disabled { opacity: 0.45; }
+
 /* аватар-шторка: каталог эмодзи */
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .emoji-grid .pick { font-size: 22px; }
