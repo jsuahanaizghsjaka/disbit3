@@ -2629,6 +2629,17 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 .stake-money, .stake-lock { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
 
 .sheet-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-4); }
+/* В шторке кнопки держим на виду. Содержимое бывает вдвое выше самой шторки
+   (у «Большой цели» — 1180px против 650px), и «Сохранить» уезжал под низ:
+   до него надо было пролистать пикер иконок, пикер сцен и список обещаний.
+   Только внутри .sheet — на экране профиля этот же класс используется в карточке. */
+.sheet .sheet-actions {
+  position: sticky;
+  bottom: 0;
+  padding: var(--sp-2) 0;
+  background: var(--sheet-bg);
+  z-index: 2;
+}
 .btn-ghost, .btn-primary {
   flex: 1;
   min-height: 50px;

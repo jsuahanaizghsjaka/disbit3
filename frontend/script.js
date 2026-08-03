@@ -1228,7 +1228,7 @@ function walkerForeground(sc) {
 // будет телепортироваться вместо шага
 function walkerSceneHtml(g, sc) {
   return `
-    <section class="walker-card" data-goal="${g.id}" data-scene="${sc.id}" style="--w-ink:${sc.ink || '#F3EDE4'}">
+    <section class="walker-card" data-goal="${g.id}" data-scene="${sc.id}" data-gear="${gearOf(sc)}" style="--w-ink:${sc.ink || '#F3EDE4'}">
       <header class="w-head">
         <h3 class="w-goal"></h3>
         <span class="w-flame" title="Серия — не рви её"></span>
@@ -1328,9 +1328,12 @@ function renderWalker() {
   const done = Math.min(stepsDone(g), total);
   const finished = goalPct(g) >= 100;
 
-  // сцена пересобирается, только если сменилась цель или фон
+  // сцена пересобирается, только если сменилась цель, фон ИЛИ снаряжение:
+  // экипировка нарисована прямо в фигурке, без неё в проверке путник оставался
+  // бы в старой шляпе до смены сцены
   let card = box.querySelector('.walker-card');
-  const stale = !card || card.dataset.goal !== g.id || card.dataset.scene !== sc.id;
+  const stale = !card || card.dataset.goal !== g.id || card.dataset.scene !== sc.id
+             || card.dataset.gear !== gearOf(sc);
   if (stale) {
     box.innerHTML = walkerSceneHtml(g, sc);
     card = box.querySelector('.walker-card');
