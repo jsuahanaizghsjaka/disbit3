@@ -17,6 +17,9 @@ const GOALS_KEY    = 'disbit_goals_v1';
 const REWARDS_KEY  = 'disbit_rewards_v1';
 const BACKLOG_KEY  = 'disbit_backlog_v1';
 const TOKEN_KEY    = 'disbit_token_v1';
+// чьи данные лежат в этом браузере: логин владельца. Нужен, чтобы второй
+// человек на том же телефоне не открыл чужие обещания и не залил их себе
+const OWNER_KEY    = 'disbit_owner_v1';
 const AUTH_USER_KEY = 'disbit_auth_user_v1';
 
 // Куда ходить за API:
@@ -365,6 +368,8 @@ async function apiBootstrap() {
     if (me?.user) {
       authUser = me.user;
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(me.user));
+      // страховка: токен мог приехать мимо формы входа (импорт, восстановление)
+      if (claimDeviceFor(me.user)) return;
     } else {
       setAuth(null, null);
     }
@@ -3075,6 +3080,8 @@ async function submitAuth() {
     if (res.error) { showAuthError(res.error); return; }
 
     setAuth(res.token, res.user);
+    // вошёл другой человек — стираем данные прежнего владельца и перезагружаемся
+    if (claimDeviceFor(res.user)) return;
     passGate();
     closeSheet('auth-overlay');
     toast(authMode === 'login'
@@ -3128,12 +3135,20 @@ async function resendVerify() {
     : 'Код отправлен ещё раз ✉️');
 }
 
+/* Выход ЧИСТИТ устройство. Раньше данные оставались, и следующий вошедший
+   видел чужие обещания. Перед чисткой досылаем состояние на сервер, чтобы
+   выход не стоил несинхронизированных изменений. */
 async function logout() {
+  if (API && authToken) {
+    const pushed = await apiCall('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+    if (pushed?.error && !confirm(
+      'Не удалось отправить последние изменения на сервер. Выйти всё равно? Несохранённое будет потеряно.')) return;
+  }
   await apiCall('POST', '/auth/logout');
   setAuth(null, null);
-  renderAccount();
-  toast('Вышел из аккаунта. Данные остались на устройстве.');
-  if (API) openAuthGate();   // регистрация обязательна — гейт снова
+  clearUserData();
+  localStorage.removeItem(OWNER_KEY);
+  location.reload();         // гейт откроется сам: токена больше нет
 }
 
 /* ---------- ДОК: гауссова магнификация (по dock.tsx) ---------- */
@@ -3549,12 +3564,36 @@ function importData(file) {
   reader.readAsText(file);
 }
 
+// всё содержимое аккаунта в этом браузере; токен, гейт и владелец — отдельно
+function clearUserData() {
+  [STORAGE_KEY, LEDGER_KEY, SETTLED_KEY, PROFILE_KEY, SETTINGS_KEY,
+   FRIENDS_KEY, GOALS_KEY, REWARDS_KEY, BACKLOG_KEY, SKIPS_KEY, STATE_TS_KEY]
+    .forEach(k => localStorage.removeItem(k));
+}
+
+/* Локальные данные не привязаны к аккаунту — они просто лежат в localStorage.
+   Если на устройстве входит ДРУГОЙ человек, их надо стереть до загрузки: иначе
+   он увидит чужие обещания, а apiBootstrap ещё и отправит их на сервер его
+   аккаунта (ветка «на сервере пусто → заливаем локальные»).
+   Возвращает true, если ящик был чужой и мы уходим на перезагрузку. */
+function claimDeviceFor(user) {
+  const login = user?.login;
+  if (!login) return false;
+  const prev = localStorage.getItem(OWNER_KEY);
+  localStorage.setItem(OWNER_KEY, login);
+  if (prev && prev !== login) {
+    clearUserData();
+    location.reload();
+    return true;
+  }
+  return false;
+}
+
 function wipeData() {
   if (!confirm('Стереть ВСЕ данные disbit? Это действие необратимо.')) return;
   if (!confirm('Точно? Обещания, история, цели, друзья и журнал штрафов будут удалены.')) return;
-  [STORAGE_KEY, LEDGER_KEY, SETTLED_KEY, PROFILE_KEY, SETTINGS_KEY,
-   FRIENDS_KEY, GOALS_KEY, REWARDS_KEY, BACKLOG_KEY]
-    .forEach(k => localStorage.removeItem(k));
+  clearUserData();
+  localStorage.removeItem(OWNER_KEY);
   location.reload();
 }
 
