@@ -1307,6 +1307,20 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   cursor: pointer;
 }
 .setting-row:last-of-type { border-bottom: none; }
+/* время напоминания: тач-таргет ≥44px, как у остальных полей */
+.time-inp {
+  background: var(--surface-2);
+  border: 1px solid var(--neutral-line);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  padding: 10px 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.time-inp:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.setting-row.notif-sub { padding-left: var(--sp-3); color: var(--text-2); }
 
 /* ---------- БАННЕР ПРУФА (живое фото/видео) ---------- */
 .proof-overlay {

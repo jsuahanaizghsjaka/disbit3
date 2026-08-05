@@ -1,0 +1,12 @@
+# Что НЕ уезжает в Railway при `railway up`.
+# Dockerfile копирует только backend/ и frontend/ — всё остальное просто
+# раздувало снапшот загрузки (было ~40 МБ лишнего) и роняло деплой по таймауту.
+.git
+node_modules
+**/node_modules
+android
+ios
+store-assets
+backend/db/*.db
+*.md
+.vscode

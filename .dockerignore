@@ -2,6 +2,8 @@
 node_modules
 **/node_modules
 backend/db/*.db
-react
+android
+ios
+store-assets
 *.md
 .vscode

@@ -324,7 +324,13 @@ function animateCount(el, value) {
     if (el.dataset.acValue === next) el.innerHTML = still;
   }, AC_MS + 60);
 }
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(habits)); }
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+  // Через save() проходит ЛЮБОЕ изменение обещаний и отметок — и добавление, и
+  // правка расписания, и галочка. Вешаем пересборку напоминаний сюда, чтобы её
+  // не забыли на каком-нибудь из путей. Внутри отложено и в вебе бесплатно.
+  scheduleNotifSync();
+}
 function loadLedger() {
   try { return JSON.parse(localStorage.getItem(LEDGER_KEY)) || []; }
   catch { return []; }
@@ -602,7 +608,6 @@ const PRAISES = [
 function toggleHabit(id) {
   const h = habits.find(x => x.id === id);
   if (!h) return;
-  const wasFull = todayPct() === 100;
   const wasDone = isDoneToday(h);
   if (h.goal.type === 'count') {
     const cur = h.counts[TODAY] || 0;
@@ -625,10 +630,12 @@ function toggleHabit(id) {
   const willAskProof = !wasDone && nowDone;
   walkerFrozen = willAskProof;
   render();
+  if (nowDone && !wasDone) hapticTap();          // отметил — короткий отклик
+  // Похвала за 100% дня живёт в closeProofBanner(): здесь она была недостижима,
+  // потому что willAskProof — это ровно «отметил невыполненное», а закрыть день
+  // иначе нельзя, и первая ветка забирала управление всегда.
   if (willAskProof) {
     openProofBanner(h);
-  } else if (!wasFull && todayPct() === 100) {
-    toast(PRAISES[Math.floor(Math.random() * PRAISES.length)]);
   } else if (nowDone && !wasDone) {
     toast('+1 бит');
   }
@@ -731,6 +738,7 @@ function settlePastDays() {
 }
 
 function showSettleModal(entries) {
+  hapticWarn();                 // пропуски за прошедшие дни — это не радостное окно
   const body = document.getElementById('settle-body');
   const money = entries.reduce((s, e) => s + e.amount, 0);
   const apps = new Set();
@@ -1320,6 +1328,7 @@ let walkerWalkTimer = null;
 // путник заморожен, пока пользователь в баннере пруфа: его шаг должен быть виден,
 // а не проиграться под перекрывшим экран баннером
 let walkerFrozen = false;
+let praisedDay = null;      // за какой день уже похвалили — чтобы не повторяться
 function renderWalker() {
   if (walkerFrozen) return;
   const box = document.getElementById('walker');
@@ -3386,6 +3395,7 @@ function applyTheme() {
   // единственном месте смены темы, иначе цвет приложения менялся, а кружок
   // оставался на прежнем цвете (так же после импорта и синка с сервером).
   renderThemeGrid();
+  applyStatusBar();      // в приложении статус-бар едет за цветом темы
 }
 function renderThemeGrid() {
   const box = document.getElementById('theme-grid');
@@ -4095,6 +4105,18 @@ function closeProofBanner() {
     revealWalker();
     setTimeout(renderWalker, 420);
   }
+
+  /* Похвала за полностью закрытый день. Раньше она стояла в toggleHabit веткой
+     `else if (!wasFull && todayPct() === 100)` — и была недостижима: условие
+     первой ветки (`willAskProof`) в точности совпадает с «отметил невыполненное»,
+     а закрыть день можно только так. Баннер пруфа всегда перехватывал управление,
+     и тост за 100% не показывался ни разу. Показываем здесь — когда экран уже
+     освободился и похвалу видно. */
+  if (todayPct() === 100 && praisedDay !== TODAY) {
+    praisedDay = TODAY;                   // один раз за день, а не на каждую переотметку
+    hapticSuccess();
+    setTimeout(() => toast(PRAISES[Math.floor(Math.random() * PRAISES.length)]), 500);
+  }
 }
 
 // подводим путника в кадр, если он за пределами экрана — иначе шаг снова не увидят
@@ -4691,6 +4713,264 @@ function formatDay(key) {
     { weekday: 'short', day: 'numeric', month: 'long' });
 }
 
+/* ---------- НАТИВНАЯ ОБОЛОЧКА (Capacitor) ----------
+   Всё через window.Capacitor.Plugins: в браузере плагинов нет, каждая функция
+   молча выходит, и веб-версия работает ровно как раньше. */
+
+function nativePlugin(name) {
+  return isNativeApp ? (window.Capacitor?.Plugins?.[name] || null) : null;
+}
+
+/* Статус-бар красим в фон текущей темы. Цвет берём из вычисленного --bg, а не
+   из таблицы в коде: тем восемь, и любая новая подхватится сама. */
+function isLightBg(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.55;   // яркость по sRGB
+}
+async function applyStatusBar() {
+  const SB = nativePlugin('StatusBar');
+  if (!SB) return;
+  const bg = getComputedStyle(document.documentElement)
+    .getPropertyValue('--bg').trim() || '#0C1422';
+  try {
+    await SB.setBackgroundColor({ color: bg });
+    // У плагина 'DARK' означает СВЕТЛЫЙ текст (для тёмного фона), 'LIGHT' —
+    // тёмный. Названия от фона, а не от текста: легко перепутать наоборот.
+    await SB.setStyle({ style: isLightBg(bg) ? 'LIGHT' : 'DARK' });
+  } catch (e) { console.warn('[statusbar]', e?.message); }
+}
+
+/* Вибрация. Отметка — лёгкий тычок, закрытый день — «успех», штрафы — «внимание».
+   Ошибки глотаем: на устройстве без вибромотора вызов бросает, и из-за этого не
+   должна падать отметка обещания. */
+function hapticTap()     { nativePlugin('Haptics')?.impact({ style: 'LIGHT' })?.catch?.(() => {}); }
+function hapticSuccess() { nativePlugin('Haptics')?.notification({ type: 'SUCCESS' })?.catch?.(() => {}); }
+function hapticWarn()    { nativePlugin('Haptics')?.notification({ type: 'WARNING' })?.catch?.(() => {}); }
+
+/* Кнопка «назад» на Android. По умолчанию Capacitor закрывает приложение на
+   первом же нажатии — а у нас поверх экрана бывает шторка или баннер пруфа, и
+   выход из них ожидается раньше выхода из приложения. */
+function onBackButton() {
+  if (!document.getElementById('intro')?.hidden) return;   // интро не пропускаем
+  if (authGateActive) return;                              // гейт обязателен
+
+  const proof = document.getElementById('proof-overlay');
+  if (proof && !proof.hidden) { closeProofBanner(); return; }
+
+  const sheet = anyOpenSheet();
+  if (sheet) { closeSheet(sheet.id); return; }
+
+  const screen = document.querySelector('.screen.active')?.id;
+  if (screen && screen !== 'screen-today') { switchScreen('today'); return; }
+
+  nativePlugin('App')?.minimizeApp();
+}
+
+/* Вернулись в приложение. Если за это время наступили новые сутки, экран считает
+   по старой дате: TODAY вычисляется один раз при загрузке, и на нём висят
+   отметки, автоитог и штрафы. Латать по кусочкам ненадёжно — перезагружаем
+   страницу, и день пересчитывается с нуля вместе с settlePastDays(). */
+function onAppResume() {
+  if (dateKey() !== TODAY) { location.reload(); return; }
+  scheduleNotifSync();          // расписание тоже могло протухнуть
+}
+
+function wireNativeShell() {
+  applyStatusBar();
+  const App = nativePlugin('App');
+  if (App) {
+    App.addListener('backButton', onBackButton);
+    App.addListener('resume', onAppResume);
+  }
+  // Сплэш держится до этого момента (launchAutoHide выключен в конфиге):
+  // прячем его, только когда экран уже отрисован, иначе видна белая вспышка.
+  nativePlugin('SplashScreen')?.hide()?.catch?.(() => {});
+}
+
+/* ---------- НАПОМИНАНИЯ (локальные уведомления) ----------
+   Живут только в приложении: в браузере плагина нет, и модуль молча выключается,
+   а блок настроек остаётся скрытым.
+
+   Расписание раскладываем на NOTIF_DAYS вперёд ОТДЕЛЬНЫМИ датами, а не одним
+   «повторять каждый день»: у каждого дня свой текст («сегодня 3 обещания, под
+   штрафом 250 ₽»), а повторяющееся уведомление запекает текст один раз — и он
+   протухает на второй же день. Каждое открытие приложения пересобирает
+   расписание, а заходят сюда ежедневно, так что оно само себя чинит.
+
+   Точные будильники (SCHEDULE_EXACT_ALARM) намеренно НЕ просим: напоминанию о
+   привычке хватает неточного, а разрешение тянет отдельный экран доступа в
+   системе и лишние вопросы при ревью в Play. */
+
+const NOTIF_DAYS = 14;
+const NOTIF_MORNING_BASE = 1000;      // id = база + номер дня вперёд
+const NOTIF_EVENING_BASE = 2000;
+
+function notifPlugin() { return nativePlugin('LocalNotifications'); }
+function notifCfg() {
+  const base = { on: false, morning: '09:00', evening: '21:00', eveningOn: true };
+  const n = (settings.notif && typeof settings.notif === 'object') ? settings.notif : {};
+  return { ...base, ...n };
+}
+// 'ЧЧ:ММ' → {h, m}; мусор и невозможное время откатываем к запасному
+function parseHM(s, fallback) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || ''));
+  if (!m) return fallback;
+  const h = Number(m[1]), mi = Number(m[2]);
+  return (h > 23 || mi > 59) ? fallback : { h, m: mi };
+}
+function pluralPromise(n) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return 'обещаний';
+  if (b === 1) return 'обещание';
+  if (b > 1 && b < 5) return 'обещания';
+  return 'обещаний';
+}
+// что стоит на дне: сколько обещаний запланировано и на какую сумму штрафа
+function dayLoad(d) {
+  const key = dateKey(d);
+  const list = habits.filter(h => h.createdAt <= key && isScheduledOn(h, d));
+  const money = list.reduce((s, h) =>
+    s + (h.stake?.mode === 'money' ? Number(h.stake.amount) || 0 : 0), 0);
+  return { key, list, count: list.length, money };
+}
+
+async function syncNotifications() {
+  const LN = notifPlugin();
+  if (!LN) return;
+  // Снимаем СВОИ прошлые: без этого после смены времени в очереди остаются и
+  // старые, и новые — телефон звонит дважды.
+  try {
+    const pending = await LN.getPending();
+    const mine = (pending?.notifications || [])
+      .filter(n => n.id >= NOTIF_MORNING_BASE && n.id < NOTIF_EVENING_BASE + NOTIF_DAYS);
+    if (mine.length) await LN.cancel({ notifications: mine.map(n => ({ id: n.id })) });
+  } catch { /* очередь пуста или плагин не готов */ }
+
+  const cfg = notifCfg();
+  if (!cfg.on) return;
+
+  const mt = parseHM(cfg.morning, { h: 9, m: 0 });
+  const et = parseHM(cfg.evening, { h: 21, m: 0 });
+  const now = Date.now();
+  const items = [];
+
+  for (let i = 0; i < NOTIF_DAYS; i++) {
+    const d = addDays(new Date(), i);
+    const { key, list, count, money } = dayLoad(d);
+    if (!count) continue;                       // в этот день ничего не запланировано
+
+    const at = t => { const x = new Date(d); x.setHours(t.h, t.m, 0, 0); return x; };
+
+    const morning = at(mt);
+    if (morning.getTime() > now) {
+      items.push({
+        id: NOTIF_MORNING_BASE + i,
+        title: 'disbit',
+        body: money > 0
+          ? `Сегодня ${count} ${pluralPromise(count)}, под штрафом ${money} ₽`
+          : `Сегодня ${count} ${pluralPromise(count)}`,
+        schedule: { at: morning, allowWhileIdle: true }
+      });
+    }
+
+    // Вечернее — только если день ещё не закрыт. Для сегодняшнего это видно
+    // сразу; отметил всё — на ближайшей пересборке уведомление снимется.
+    const evening = at(et);
+    if (cfg.eveningOn && evening.getTime() > now && !list.every(h => doneOn(h, key))) {
+      items.push({
+        id: NOTIF_EVENING_BASE + i,
+        title: 'disbit',
+        body: 'День ещё не закрыт — успей до полуночи',
+        schedule: { at: evening, allowWhileIdle: true }
+      });
+    }
+  }
+
+  if (!items.length) return;
+  try { await LN.schedule({ notifications: items }); }
+  catch (e) { console.warn('[notif] не удалось запланировать:', e?.message); }
+}
+
+// Пересборка дёргается из отметок и правки обещаний — там она может случиться
+// пачкой, поэтому копим и делаем один раз, как со стейтом профиля.
+let notifTimer = null;
+function scheduleNotifSync() {
+  if (!notifPlugin()) return;
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(syncNotifications, 700);
+}
+
+function renderNotifSettings() {
+  const block = document.getElementById('notif-block');
+  if (!block) return;
+  const LN = notifPlugin();
+  block.hidden = !LN;                 // в вебе напоминаний нет — не дразним
+  if (!LN) return;
+
+  const cfg = notifCfg();
+  const sw = document.getElementById('set-notif');
+  sw.setAttribute('aria-checked', String(!!cfg.on));
+  sw.style.setProperty('--as-x', (cfg.on ? SWITCH_TRAVEL : 0) + 'px');
+
+  const evSw = document.getElementById('set-notif-evening-on');
+  evSw.setAttribute('aria-checked', String(!!cfg.eveningOn));
+  evSw.style.setProperty('--as-x', (cfg.eveningOn ? SWITCH_TRAVEL : 0) + 'px');
+
+  document.getElementById('set-notif-morning').value = cfg.morning;
+  document.getElementById('set-notif-evening').value = cfg.evening;
+
+  block.querySelectorAll('.notif-sub').forEach(r => { r.hidden = !cfg.on; });
+  document.getElementById('notif-evening-time').hidden = !cfg.on || !cfg.eveningOn;
+
+  const hint = document.getElementById('notif-hint');
+  const planned = habits.length;
+  hint.hidden = !cfg.on;
+  hint.textContent = planned
+    ? 'Напоминание приходит, только если на день есть обещания.'
+    : 'Пока обещаний нет — напоминать не о чем.';
+}
+
+function saveNotifCfg(patch) {
+  settings.notif = { ...notifCfg(), ...patch };
+  saveJson(SETTINGS_KEY, settings);
+  renderNotifSettings();
+  syncNotifications();
+}
+
+async function setNotifEnabled(on) {
+  const LN = notifPlugin();
+  if (on && LN) {
+    // Android 13+ спрашивает разрешение отдельно; отказ — не ошибка, просто
+    // не включаем тумблер, иначе он врал бы, что напоминания работают.
+    let perm = await LN.checkPermissions().catch(() => null);
+    if (perm?.display !== 'granted') perm = await LN.requestPermissions().catch(() => null);
+    if (perm?.display !== 'granted') {
+      toast('Уведомления запрещены — включи их для disbit в настройках телефона');
+      renderNotifSettings();
+      return;
+    }
+  }
+  saveNotifCfg({ on: !!on });
+  if (on) toast('Напоминания включены');
+}
+
+function wireNotifications() {
+  if (!document.getElementById('notif-block')) return;
+  initSwitch(document.getElementById('set-notif'), on => setNotifEnabled(on));
+  initSwitch(document.getElementById('set-notif-evening-on'), on => saveNotifCfg({ eveningOn: on }));
+  // поле времени можно очистить — тогда возвращаем значение по умолчанию,
+  // иначе в настройках осталась бы пустая строка и напоминание молча пропало бы
+  document.getElementById('set-notif-morning').addEventListener('change', e =>
+    saveNotifCfg({ morning: e.target.value || '09:00' }));
+  document.getElementById('set-notif-evening').addEventListener('change', e =>
+    saveNotifCfg({ evening: e.target.value || '21:00' }));
+  renderNotifSettings();
+  syncNotifications();
+}
+
 /* ---------- ИНИЦИАЛИЗАЦИЯ ---------- */
 function init() {
   applyTheme();
@@ -4910,6 +5190,7 @@ function init() {
   });
   // «Итог дня при запуске» — выключить нельзя, но переключатель должен выглядеть живым
   document.querySelectorAll('.aswitch[disabled]').forEach(el => initSwitch(el));
+  wireNotifications();      // напоминания: в вебе сам скроет свой блок
   document.getElementById('btn-export').addEventListener('click', exportData);
   document.getElementById('btn-import').addEventListener('click', () =>
     document.getElementById('import-file').click());
@@ -4955,6 +5236,7 @@ function init() {
   if (!localStorage.getItem(INTRO_KEY)) openIntro(afterOnboard);
   else afterOnboard();
 
+  wireNativeShell();     // статус-бар, «назад», resume; сплэш убираем последним
   apiBootstrap();
 }
 

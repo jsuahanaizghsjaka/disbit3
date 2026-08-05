@@ -6,5 +6,20 @@
   "android": {
     "backgroundColor": "#0C1422",
     "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#0C1422",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "androidSpinnerStyle": "small",
+      "splashFullScreen": false,
+      "splashImmersive": false
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_disbit",
+      "iconColor": "#5B8DFF"
+    }
   }
 }

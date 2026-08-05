@@ -487,6 +487,38 @@
           </button>
         </div>
         <p class="hint">Автоитог отключить нельзя — в этом весь смысл штрафа 😉</p>
+
+        <!-- Напоминания. Локальные уведомления есть только в приложении:
+             в браузере плагина нет и весь блок остаётся скрытым. -->
+        <div id="notif-block" hidden>
+          <div class="setting-row">
+            <span id="set-notif-label">Напоминания</span>
+            <button type="button" class="aswitch" id="set-notif" role="switch"
+              aria-checked="false" aria-labelledby="set-notif-label">
+              <span class="as-glow" aria-hidden="true"></span>
+              <span class="as-track" aria-hidden="true"><span class="as-fill"></span></span>
+              <span class="as-thumb" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="setting-row notif-sub" hidden>
+            <label for="set-notif-morning">Утром</label>
+            <input type="time" class="time-inp" id="set-notif-morning" value="09:00" />
+          </div>
+          <div class="setting-row notif-sub" hidden>
+            <span id="set-notif-eve-label">Вечером, если день не закрыт</span>
+            <button type="button" class="aswitch" id="set-notif-evening-on" role="switch"
+              aria-checked="true" aria-labelledby="set-notif-eve-label">
+              <span class="as-glow" aria-hidden="true"></span>
+              <span class="as-track" aria-hidden="true"><span class="as-fill"></span></span>
+              <span class="as-thumb" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="setting-row notif-sub" id="notif-evening-time" hidden>
+            <label for="set-notif-evening">Время вечернего</label>
+            <input type="time" class="time-inp" id="set-notif-evening" value="21:00" />
+          </div>
+          <p class="hint" id="notif-hint" hidden></p>
+        </div>
       </section>
 
       <!-- данные -->
