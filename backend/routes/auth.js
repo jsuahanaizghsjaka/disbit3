@@ -39,10 +39,23 @@ function verifyPassword(password, salt, expectedHash) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/* ---------- сессии ---------- */
+/* ---------- сессии ----------
+   Токен живёт 90 дней, но окно СКОЛЬЗЯЩЕЕ: пока человек открывает приложение,
+   срок сдвигается вперёд. Так активного пользователя не выкидывает посреди
+   серии, а забытый на чужом телефоне вход всё-таки протухает.
+   Бессрочных токенов быть не должно: украденный работал бы вечно. */
+const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const SESSION_REFRESH_MS = 24 * 60 * 60 * 1000;   // продлеваем не чаще раза в сутки
+
+// уборка при старте + срок для сессий, выданных до появления expires_at
+// (иначе бета-тестеров разлогинило бы обновлением сервера)
+db.prepare('DELETE FROM sessions WHERE expires_at > 0 AND expires_at < ?').run(Date.now());
+db.prepare('UPDATE sessions SET expires_at = ? WHERE expires_at = 0').run(Date.now() + SESSION_TTL_MS);
+
 function createSession(userId) {
   const token = randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, userId);
+  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
+    .run(token, userId, Date.now() + SESSION_TTL_MS);
   return token;
 }
 function publicUser(row) {
@@ -185,10 +198,19 @@ export function authMiddleware(req, res, next) {
   req.token = null;
   const m = /^Bearer\s+([a-f0-9]{64})$/i.exec(req.headers.authorization || '');
   if (m) {
-    const s = db.prepare('SELECT user_id FROM sessions WHERE token = ?').get(m[1]);
-    if (s) {
+    const now = Date.now();
+    const s = db.prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?').get(m[1]);
+    if (s && s.expires_at > now) {
       req.userId = s.user_id;
       req.token = m[1];
+      // сдвигаем окно, но пишем на диск не чаще раза в сутки: иначе UPDATE
+      // уходил бы на КАЖДЫЙ запрос приложения
+      if (s.expires_at - now < SESSION_TTL_MS - SESSION_REFRESH_MS) {
+        db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?')
+          .run(now + SESSION_TTL_MS, m[1]);
+      }
+    } else if (s) {
+      db.prepare('DELETE FROM sessions WHERE token = ?').run(m[1]);   // протухла — убираем
     }
   }
   next();

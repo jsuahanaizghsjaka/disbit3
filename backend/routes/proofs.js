@@ -23,19 +23,38 @@ const DATA_DIR = process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.
 const PROOFS_DIR = process.env.PROOFS_DIR || path.join(DATA_DIR, 'proofs');
 fs.mkdirSync(PROOFS_DIR, { recursive: true });
 
-const ADMIN_KEY = process.env.ADMIN_KEY || 'disbit-admin';   // задать на Railway!
+/* Ключ админа — ТОЛЬКО из окружения, без запасного значения. Раньше здесь стоял
+   `|| 'disbit-admin'`, и на сервере, где переменную забыли задать, чужие фото и
+   видео открывались по ключу, лежащему в открытом исходнике. Нет ключа — панель
+   просто выключена: это заметно сразу, в отличие от тихо открытой двери. */
+const ADMIN_KEY = process.env.ADMIN_KEY || '';
+if (!ADMIN_KEY) {
+  console.warn('[proofs] ADMIN_KEY не задан — панель проверки пруфов выключена');
+} else if (ADMIN_KEY.length < 16) {
+  console.warn('[proofs] ADMIN_KEY короче 16 символов — подбирается перебором, замени');
+}
 const MAX_BYTES = 25 * 1024 * 1024;                          // 25 МБ на пруф
 
 const router = Router();
-const uid = req => req.userId || 0;
+const uid = req => req.userId;   // загрузка под authRequired — гостя здесь не бывает
 
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
               'video/webm': 'webm', 'video/mp4': 'mp4' };
+// обратная таблица: тип файла при отдаче берём ТОЛЬКО отсюда, по расширению
+const MIME_BY_EXT = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+                      webm: 'video/webm', mp4: 'video/mp4' };
+
+// Загрузка — только для авторизованных. Без этого любой человек из интернета
+// мог класть на диск по 25 МБ сколько угодно раз: том кончится, приложение встанет.
+function authRequired(req, res, next) {
+  if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
+  next();
+}
 
 /* -------- загрузка пруфа (сырые байты) --------
    POST /api/proofs?habitId=..&day=YYYY-MM-DD&type=photo|video&name=..
    тело = байты медиа, Content-Type = image/* | video/* */
-router.post('/', express.raw({ type: () => true, limit: MAX_BYTES }), (req, res) => {
+router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES }), (req, res) => {
   const { habitId, day, name } = req.query;
   const type = req.query.type === 'video' ? 'video' : 'photo';
   const mime = req.headers['content-type'] || '';
@@ -67,10 +86,23 @@ router.post('/', express.raw({ type: () => true, limit: MAX_BYTES }), (req, res)
   res.status(201).json({ ok: true, id: info.lastInsertRowid, status: 'pending' });
 });
 
-/* -------- АДМИН: доступ по ключу -------- */
+/* -------- АДМИН: доступ по ключу --------
+   Сравниваем через timingSafeEqual по хэшам: обычное `!==` выходит из сравнения
+   на первом несовпавшем символе, и по времени ответа ключ подбирается посимвольно.
+   Хэш нужен, чтобы буферы всегда были одной длины (иначе timingSafeEqual бросает). */
+function keyMatches(given) {
+  if (!ADMIN_KEY || !given) return false;
+  const a = crypto.createHash('sha256').update(String(given)).digest();
+  const b = crypto.createHash('sha256').update(ADMIN_KEY).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 function adminOnly(req, res, next) {
+  if (!ADMIN_KEY) {
+    return res.status(503).json({ error: 'Панель выключена: на сервере не задан ADMIN_KEY' });
+  }
   const key = req.headers['x-admin-key'] || req.query.key;
-  if (key !== ADMIN_KEY) return res.status(401).json({ error: 'Нужен админ-ключ' });
+  if (!keyMatches(key)) return res.status(401).json({ error: 'Нужен админ-ключ' });
   next();
 }
 
@@ -91,7 +123,12 @@ router.get('/:id/media', adminOnly, (req, res) => {
   if (!row) return res.status(404).end();
   const fp = path.join(PROOFS_DIR, row.file);
   if (!fs.existsSync(fp)) return res.status(404).end();
-  if (row.mime) res.type(row.mime);
+  // Тип отдаём по РАСШИРЕНИЮ из белого списка, а не из mime в базе: тот пришёл
+  // заголовком от загрузившего, и text/html превратил бы «пруф» в страницу,
+  // выполняющуюся в нашем origin, если открыть ссылку на медиа напрямую.
+  const ext = path.extname(row.file).slice(1).toLowerCase();
+  res.type(MIME_BY_EXT[ext] || 'application/octet-stream');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   res.sendFile(fp);
 });
 

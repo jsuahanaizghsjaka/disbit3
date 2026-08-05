@@ -768,6 +768,14 @@ button:disabled { cursor: default; }
   color: var(--text-2);
 }
 .stepper .stp-val.ok { color: var(--good); }
+/* закрытый день: тот же размер, что у кнопки отметки, но это не кнопка */
+.day-mark {
+  width: 42px; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.day-mark.ok { color: var(--good); }
 
 /* ============================================================
    СТАТИСТИКА
@@ -932,6 +940,13 @@ button:disabled { cursor: default; }
   overflow: hidden;
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* Знак — не фотография, а рисунок 160×160 с собственным свечением по краям.
+   При cover оно срезается и знак смотрится сдвинутым; contain вписывает его
+   целиком, отступ не даёт упереться в границу круга. */
+.avatar img.mark, .friend-ava img.mark {
+  object-fit: contain;
+  padding: 6%;
+}
 .avatar.emoji { font-size: 32px; background: var(--surface-2); }
 .profile-name-box { flex: 1; min-width: 0; }
 .profile-name { font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
@@ -1108,7 +1123,12 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   display: flex; align-items: center; justify-content: center;
   font-size: 20px;
   flex-shrink: 0;
+  overflow: hidden;
 }
+/* В доске соревнования своя строка берёт аватар из avatarHtml(), а он может
+   вернуть <img> (фото или знак). Без этих размеров картинка выводилась в
+   натуральную величину — 160px наезжали на имена и на соседние строки. */
+.friend-ava img { width: 100%; height: 100%; object-fit: cover; }
 .friend-name { flex: 1; font-size: 14px; font-weight: 700; }
 
 /* темы */

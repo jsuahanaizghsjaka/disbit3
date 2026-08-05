@@ -19,14 +19,29 @@ const MAX_QUESTION = 500;
 const RATE_LIMIT = 20;                 // запросов в час на пользователя
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
+/* Спрашивать может только владелец аккаунта. Без этого эндпоинт — открытый
+   прокси к оплаченной модели: любой из интернета жжёт нашу квоту Groq, а лимит
+   по IP не помеха (за NAT и через прокси адрес общий или подставной). */
+function authRequired(req, res, next) {
+  if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
+  next();
+}
+
 // простой лимит в памяти: бесплатная квота Groq не бесконечна
 const hits = new Map();
-function rateLimited(key) {
+function rateLimited(userId) {
   const now = Date.now();
-  const arr = (hits.get(key) || []).filter(t => now - t < RATE_WINDOW_MS);
-  if (arr.length >= RATE_LIMIT) { hits.set(key, arr); return true; }
+  const arr = (hits.get(userId) || []).filter(t => now - t < RATE_WINDOW_MS);
+  if (arr.length >= RATE_LIMIT) { hits.set(userId, arr); return true; }
   arr.push(now);
-  hits.set(key, arr);
+  hits.set(userId, arr);
+  // подчищаем выдохшиеся записи, иначе Map растёт на каждого зашедшего и не
+  // отдаёт память до перезапуска процесса
+  if (hits.size > 500) {
+    for (const [k, v] of hits) {
+      if (!v.some(t => now - t < RATE_WINDOW_MS)) hits.delete(k);
+    }
+  }
   return false;
 }
 
@@ -46,12 +61,11 @@ const SYSTEM_PROMPT = `Ты — «Всевидящее око» в прилож�
 путника к большой цели), штраф за пропуск — деньги на благотворительность или
 блокировка приложений (в этой версии симуляция).`;
 
-router.post('/ask', express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/ask', authRequired, express.json({ limit: '256kb' }), async (req, res) => {
   if (!process.env.GROQ_API_KEY) {
     return res.status(503).json({ error: 'ИИ пока не подключён: нет ключа GROQ_API_KEY на сервере' });
   }
-  const key = req.userId ? 'u' + req.userId : 'ip' + (req.ip || 'x');
-  if (rateLimited(key)) {
+  if (rateLimited(req.userId)) {
     return res.status(429).json({ error: 'Слишком много вопросов подряд — попробуй через час' });
   }
 

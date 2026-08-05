@@ -1908,6 +1908,16 @@ function shiftMonth(delta) {
 }
 
 /* ---------- ШТОРКА ДНЯ (ретро-редактирование) ---------- */
+/* Отмечать можно только сегодня и вчера — дальше в прошлое ход закрыт.
+   Раньше правился любой день из полоски недели и календаря, а это обходило всю
+   механику разом: серию и статистику можно было собрать задним числом, когда
+   штраф за пропуск уже начислен. Ради «сделал, но забыл нажать» окно в один
+   день оставляем — на всё остальное есть грейс-день, «минимум» и пропуски.
+   Дату считаем каждый раз заново: приложение может провисеть открытым до утра. */
+function isEditableDay(key) {
+  return key >= dateKey(addDays(new Date(), -1));
+}
+
 function openDaySheet(key) {
   daySheetKey = key;
   document.getElementById('day-title').textContent = formatDay(key);
@@ -1920,6 +1930,7 @@ function renderDaySheet() {
   const d = keyToDate(key);
   const body = document.getElementById('day-body');
   const scheduled = habits.filter(h => h.createdAt <= key && isScheduledOn(h, d));
+  const editable = isEditableDay(key);
 
   let html = '';
 
@@ -1929,9 +1940,14 @@ function renderDaySheet() {
     html += scheduled.map(h => {
       const done = doneOn(h, key);
       const min = isMinOn(h, key);
+      const val = h.counts?.[key] || 0;
       let control;
-      if (h.goal.type === 'count') {
-        const val = h.counts?.[key] || 0;
+      if (!editable) {
+        // день закрыт: результат показываем, но менять его нечем
+        control = h.goal.type === 'count'
+          ? `<span class="stp-val ${done ? 'ok' : ''}">${min ? 'мин' : `${val}/${h.goal.target}`}</span>`
+          : `<span class="day-mark ${done ? 'ok' : ''}" aria-hidden="true">${done ? icon('i-check') : '—'}</span>`;
+      } else if (h.goal.type === 'count') {
         control = `
           <div class="stepper">
             <button data-step="-1" data-h="${h.id}" aria-label="Меньше">${icon('i-minus', 'ic ic-s')}</button>
@@ -1943,7 +1959,7 @@ function renderDaySheet() {
           <button class="habit-check ${done ? '' : ''}" style="width:42px;height:42px" data-dtoggle="${h.id}"
             aria-label="Отметить: ${escapeHtml(h.name)}">${done ? icon('i-check') : ''}</button>`;
       }
-      const minBtn = h.min && !done
+      const minBtn = editable && h.min && !done
         ? `<button class="min-btn" data-dmin="${h.id}" title="${escapeHtml(h.min)}">мин</button>` : '';
       const minBadge = min ? `<span class="min-badge">минимум</span>` : '';
       return `
@@ -1970,12 +1986,17 @@ function renderDaySheet() {
       </div>`).join('');
   }
 
-  if (key < TODAY && scheduled.length) {
-    html += `<p class="hint">Отметки задним числом влияют на стрики и календарь.
-      Уже зафиксированные штрафы не отменяются.</p>`;
+  if (scheduled.length && !editable) {
+    html += `<p class="hint">Этот день закрыт — отметить его задним числом нельзя.
+      Серию держат грейс-день, «минимум» и пропуски.</p>`;
+  } else if (key < TODAY && scheduled.length) {
+    html += `<p class="hint">Вчерашний день ещё можно отметить — на случай, если
+      сделал, но забыл нажать. Уже зафиксированный штраф не отменяется.</p>`;
   }
 
   body.innerHTML = html;
+
+  if (!editable) return;      // закрытый день: вешать обработчики не на что
 
   body.querySelectorAll('[data-dtoggle]').forEach(b =>
     b.addEventListener('click', () => {
@@ -2199,7 +2220,7 @@ function renderLedger() {
 /* ---------- ЭКРАН «ПРОФИЛЬ» ---------- */
 function avatarHtml(p) {
   if (p.photo) return `<img src="${p.photo}" alt="" />`;
-  if (p.mark) return `<img src="${markSrc(p.mark)}" alt="" />`;
+  if (p.mark) return `<img class="mark" src="${markSrc(p.mark)}" alt="" />`;   // вписывается, а не обрезается
   if (p.emoji) return escapeHtml(p.emoji);
   const name = (p.name || '').trim();
   return name ? escapeHtml(name[0]) : '?';
@@ -2654,7 +2675,7 @@ function renderFriends() {
   }
   box.innerHTML = serverFriends.map(f => `
     <div class="friend-row">
-      <span class="friend-ava" style="background:${f.color || 'var(--surface-2)'}">${
+      <span class="friend-ava" style="background:${safeColor(f.color)}">${
         escapeHtml(f.emoji || (f.name || f.login || '?')[0])}</span>
       <span class="friend-name">${escapeHtml(f.name || f.login)}
         <small class="friend-login">@${escapeHtml(f.login)}</small></span>
@@ -2696,7 +2717,7 @@ function renderFriendsBoard() {
   box.innerHTML = rows.map((r, i) => `
     <div class="friend-row${r.me ? ' me' : ''}">
       <span class="board-place">${i + 1}</span>
-      <span class="friend-ava" style="background:${r.color || 'var(--surface-2)'}">${r.ava}</span>
+      <span class="friend-ava" style="background:${safeColor(r.color)}">${r.ava}</span>
       <span class="friend-name">${escapeHtml(r.name)}${r.me ? ' <small class="friend-login">это ты</small>' : ''}</span>
       <span class="goal-text">${icon('i-flame', 'ic ic-s')} ${r.streak}${
         r.weekPct === null || r.weekPct === undefined ? '' : ' · ' + r.weekPct + '%'}</span>
@@ -2883,7 +2904,7 @@ function openBuddySheet(habitId) {
       'Важно: у друга обещание должна называться так же.';
     box.innerHTML = serverFriends.map(f => `
       <button class="row-btn buddy-pick${h.buddy === f.login ? ' on' : ''}" data-buddy="${escapeHtml(f.login)}">
-        <span class="friend-ava" style="background:${f.color || 'var(--surface-2)'}">${
+        <span class="friend-ava" style="background:${safeColor(f.color)}">${
           escapeHtml(f.emoji || (f.name || f.login)[0])}</span>
         <span>${escapeHtml(f.name || f.login)} <small class="friend-login">@${escapeHtml(f.login)}</small></span>
       </button>`).join('') +
@@ -2915,7 +2936,11 @@ async function addFriendByLogin(login, silent = false) {
   login = String(login || '').trim().toLowerCase();
   if (!login) return show('Введи логин друга');
   if (!API || !authToken) return show('Друзья работают только с аккаунтом — войди сначала');
-  if (login === myLogin) return show('Это твой собственный логин');
+  // Свой логин знаем из двух источников: ответ /friends и сам аккаунт. Раньше
+  // сверялись только с myLogin, а он пуст, пока не отработал loadFriends() —
+  // по ссылке-приглашению на себя проверка молча пропускала.
+  const mine = (myLogin || authUser?.login || '').trim().toLowerCase();
+  if (mine && login === mine) return show('Это твой собственный логин');
 
   const r = await apiCallStrict('POST', '/friends', { login });
   if (r?.error) return show(r.error);
@@ -3356,9 +3381,15 @@ function applyTheme() {
   const t = THEMES.find(x => x.id === settings.theme) ? settings.theme : 'blue';
   if (t === 'blue') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
+  // Обводка выбранного свотча живёт в сетке тем, а та — на экране «Аватар»:
+  // ни render(), ни renderProfile() её не перерисовывают. Обновляем здесь, в
+  // единственном месте смены темы, иначе цвет приложения менялся, а кружок
+  // оставался на прежнем цвете (так же после импорта и синка с сервером).
+  renderThemeGrid();
 }
 function renderThemeGrid() {
   const box = document.getElementById('theme-grid');
+  if (!box) return;              // вызов из applyTheme() возможен до отрисовки экрана
   box.innerHTML = '';
   THEMES.forEach(t => {
     const locked = !isOwned('theme', t.id);
@@ -3374,8 +3405,8 @@ function renderThemeGrid() {
       if (locked && !buyCosmetic('theme', t.id, `цвет «${t.name}»`)) return;
       settings.theme = t.id;
       saveJson(SETTINGS_KEY, settings);
-      applyTheme();
-      renderProfile();          // перерисовать и баланс, и сетку без замка
+      applyTheme();             // он же перерисует сетку и передвинет обводку
+      renderProfile();          // баланс бит и остальные витрины
     });
     box.appendChild(b);
   });
@@ -4647,6 +4678,13 @@ function showDaySummary() {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+/* Цвет приходит из ЧУЖОГО профиля (друг сам пишет свой стейт) и подставляется
+   в атрибут style. Сырым пускать нельзя: кавычка в значении закрывает атрибут,
+   дальше дописывается обработчик события — и чужой скрипт выполняется в твоём
+   origin, вместе с доступом к токену сессии. Пропускаем только настоящий цвет. */
+function safeColor(c) {
+  return /^#[0-9a-f]{3,8}$/i.test(String(c || '')) ? String(c) : 'var(--surface-2)';
 }
 function formatDay(key) {
   return keyToDate(key).toLocaleDateString('ru-RU',

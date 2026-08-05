@@ -8,7 +8,17 @@ import { Router } from 'express';
 import { db } from '../db/db.js';
 
 const router = Router();
-const uid = req => req.userId || 0;   // гость = 0
+const uid = req => req.userId;
+
+/* Гостевого пространства больше нет. Раньше здесь стояло `req.userId || 0`, и всё
+   записанное до входа падало в общую корзину user_id = 0 — а её мог прочитать
+   ЛЮБОЙ запрос без токена. Регистрация в приложении обязательна, гость писать
+   на сервер не должен вовсе. */
+function authRequired(req, res, next) {
+  if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
+  next();
+}
+router.use(authRequired);
 
 // GET /api/state — блоб пользователя (или data:null, если ещё не сохраняли)
 router.get('/', (req, res) => {

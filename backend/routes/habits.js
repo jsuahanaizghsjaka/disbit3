@@ -1,14 +1,23 @@
 /* ============================================================
    Эндпоинты обещаний — SQLite (db/db.js), данные привязаны
-   к пользователю. Без токена работаешь в гостевом пространстве
-   (user_id = 0), с Bearer-токеном — в своём.
+   к пользователю. Все маршруты требуют Bearer-токен: данные строго свои.
    ============================================================ */
 
 import { Router } from 'express';
 import { db, rowToHabit, habitToParams } from '../db/db.js';
 
 const router = Router();
-const uid = req => req.userId || 0;   // гость = 0 (id никогда не достаётся юзерам)
+const uid = req => req.userId;
+
+/* Гостевого пространства больше нет. Раньше здесь стояло `req.userId || 0`, и всё
+   записанное до входа падало в общую корзину user_id = 0 — а её мог прочитать
+   ЛЮБОЙ запрос без токена. Регистрация в приложении обязательна, гость писать
+   на сервер не должен вовсе. */
+function authRequired(req, res, next) {
+  if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
+  next();
+}
+router.use(authRequired);
 
 function getHabit(id, userId) {
   const row = db.prepare(
@@ -79,6 +88,18 @@ router.put('/:id', (req, res) => {
   res.json(getHabit(req.params.id, uid(req)));
 });
 
+/* Окно правок: сегодня и вчера, дальше в прошлое нельзя. Приложение таких
+   кнопок уже не показывает, но проверка обязана стоять и здесь — иначе запрет
+   обходится одним запросом мимо интерфейса, и серия собирается задним числом,
+   когда штрафы за пропуски давно начислены.
+
+   Запас в сутки с каждой стороны — из-за часовых поясов: у телефона в UTC+14
+   «сегодня» наступает раньше серверного UTC, у UTC−12 — позже, и его честное
+   «вчера» приходится на позавчера по UTC. */
+function dayShift(n) {
+  return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+}
+
 // PUT /api/habits/:id/day/:day — отметка за день { done, count }
 router.put('/:id/day/:day', (req, res) => {
   const exists = db.prepare(
@@ -87,6 +108,9 @@ router.put('/:id/day/:day', (req, res) => {
   if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.day)) {
     return res.status(400).json({ error: 'Неверный формат дня, нужен YYYY-MM-DD' });
+  }
+  if (req.params.day > dayShift(1) || req.params.day < dayShift(-2)) {
+    return res.status(403).json({ error: 'День закрыт: отмечать можно только сегодня и вчера' });
   }
 
   const skip = req.body?.skip ? 1 : 0;
@@ -102,8 +126,12 @@ router.put('/:id/day/:day', (req, res) => {
 
 // DELETE /api/habits/:id — удалить обещание (отметки — каскадом)
 router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM habits WHERE id = ? AND user_id = ?')
+  const info = db.prepare('DELETE FROM habits WHERE id = ? AND user_id = ?')
     .run(req.params.id, uid(req));
+  // Чужое обещание фильтр по user_id и так не тронет, но раньше ответ был 204
+  // «удалено» — клиент не отличал успех от промаха. PUT и отметка дня в этом
+  // случае отвечают 404; делаем так же.
+  if (!info.changes) return res.status(404).json({ error: 'Обещание не найдено' });
   res.status(204).end();
 });
 

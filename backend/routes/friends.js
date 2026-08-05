@@ -19,6 +19,12 @@ function authRequired(req, res, next) {
 }
 router.use(authRequired);
 
+/* Проверка «это твой собственный логин» появилась не сразу — у аккаунтов,
+   заведённых до неё, строка «сам себе друг» осталась лежать в базе и вылезала
+   в списке и в доске соревнования. Чистим при старте: запрос дешёвый, а вручную
+   такое на проде не выловишь. */
+db.exec('DELETE FROM friendships WHERE user_id = friend_id');
+
 // публичная часть чужого профиля: только то, что человек сам опубликовал
 function publicCard(userId) {
   const row = db.prepare('SELECT data FROM user_state WHERE user_id = ?').get(userId);
@@ -44,7 +50,8 @@ router.get('/', (req, res) => {
   const rows = db.prepare(`
     SELECT u.id, u.login FROM friendships f
     JOIN users u ON u.id = f.friend_id
-    WHERE f.user_id = ? ORDER BY f.created_at DESC
+    WHERE f.user_id = ? AND f.friend_id <> f.user_id
+    ORDER BY f.created_at DESC
   `).all(req.userId);
   const me = db.prepare('SELECT login FROM users WHERE id = ?').get(req.userId);
   res.json({

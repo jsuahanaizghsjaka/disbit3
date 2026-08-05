@@ -44,6 +44,13 @@ app.use('/api/invites', invitesRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/wallet', walletRouter);
 
+/* Неизвестный /api/* НЕ должен проваливаться в статику ниже: опечатка в адресе
+   отдавала index.html со статусом 200, apiCall() спотыкался на JSON.parse и
+   возвращал null — сбой выглядел как «сервер ответил, данных нет». */
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Неизвестный эндпоинт: ' + req.method + ' /api' + req.path });
+});
+
 // чистый URL для политики конфиденциальности (нужен сторам): /privacy
 app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'privacy.html'));

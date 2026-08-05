@@ -33,7 +33,9 @@ for (const sql of [
   "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE users ADD COLUMN login TEXT",
   "ALTER TABLE users ADD COLUMN pass_hash TEXT",
-  "ALTER TABLE users ADD COLUMN pass_salt TEXT"
+  "ALTER TABLE users ADD COLUMN pass_salt TEXT",
+  // сессии без срока жизни: старые строки получат его в routes/auth.js
+  "ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0"
 ]) {
   try { db.exec(sql); } catch { /* колонка уже есть */ }
 }

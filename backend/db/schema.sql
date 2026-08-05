@@ -24,10 +24,12 @@ CREATE TABLE IF NOT EXISTS email_codes (
   sent_at    INTEGER NOT NULL DEFAULT 0        -- чтобы не спамить «отправить ещё раз»
 );
 
--- Сессии (Bearer-токены)
+-- Сессии (Bearer-токены). expires_at — мс с эпохи; окно скользящее:
+-- пока пользователь заходит, срок продлевается (см. routes/auth.js).
 CREATE TABLE IF NOT EXISTS sessions (
   token      TEXT PRIMARY KEY,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
