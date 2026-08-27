@@ -4,9 +4,12 @@
 .git
 node_modules
 **/node_modules
+.claude
 android
 ios
 store-assets
 backend/db/*.db
 *.md
 .vscode
+*.apk
+*.aab

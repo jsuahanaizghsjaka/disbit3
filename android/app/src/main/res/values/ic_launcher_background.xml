@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- тон нижней части плитки иконки: подложка адаптивной иконки должна
-         сливаться с ней, иначе вокруг знака видно светлую рамку -->
-    <color name="ic_launcher_background">#1C2733</color>
+    <!-- фон приложения (переменная bg в style.css) — им же залит фон вокруг
+         пузыря в foreground-слоях, чтобы не было шва между слоями иконки -->
+    <color name="ic_launcher_background">#0C1422</color>
 </resources>

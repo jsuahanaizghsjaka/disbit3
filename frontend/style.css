@@ -15,14 +15,14 @@
   /* ТЕМА ПО УМОЛЧАНИЮ: BLUE (референс, вариант 2) */
   --tint: 91, 141, 255;            /* rgb основного цвета для стекла */
   --primary:    #5B8DFF;
-  --primary-hi: #3D6BFF;
-  --on-primary: #FFFFFF;
+  --primary-hi: #4A7BF0;
+  --on-primary: #0C1422;
   --bg:         #0C1422;
   --glow:       rgba(91, 141, 255, 0.16);
 
   --text:   #EAF2FF;
   --text-2: #9DB4E6;
-  --text-3: #5F7396;
+  --text-3: #7A8BA8;
 
   /* стекло (интерактивные/выбранные поверхности — тонированы акцентом) */
   --surface:   rgba(var(--tint), 0.07);
@@ -71,23 +71,23 @@
 /* ---------- ТЕМЫ ПРИЛОЖЕНИЯ ---------- */
 [data-theme="red"] {
   --tint: 224, 96, 96;
-  --primary: #E06060; --primary-hi: #C94848; --on-primary: #FFFFFF;
+  --primary: #E06060; --primary-hi: #D25A5A; --on-primary: #170D0E;
   --bg: #170D0E; --glow: rgba(224, 96, 96, 0.14);
-  --text: #FDEFEF; --text-2: #D6A3A6; --text-3: #8A6265;
+  --text: #FDEFEF; --text-2: #D6A3A6; --text-3: #987577;
   --sheet-bg: #120A0B;
 }
 [data-theme="black"] {
   --tint: 190, 195, 205;
   --primary: #C9CED8; --primary-hi: #A8AEBB; --on-primary: #101216;
   --bg: #0A0B0D; --glow: rgba(190, 195, 205, 0.08);
-  --text: #F2F3F5; --text-2: #A2A7B2; --text-3: #62666F;
+  --text: #F2F3F5; --text-2: #A2A7B2; --text-3: #7A7D85;
   --sheet-bg: #0D0E11;
 }
 [data-theme="white"] {
   --tint: 55, 70, 105;
-  --primary: #4A6CF7; --primary-hi: #3557E8; --on-primary: #FFFFFF;
-  --bg: #ECEFF4; --glow: rgba(74, 108, 247, 0.10);
-  --text: #1B2437; --text-2: #4C5A75; --text-3: #8A94A8;
+  --primary: #3557E8; --primary-hi: #2F4FCC; --on-primary: #FFFFFF;
+  --bg: #ECEFF4; --glow: rgba(53, 87, 232, 0.10);
+  --text: #1B2437; --text-2: #4C5A75; --text-3: #636B79;
   --surface: rgba(var(--tint), 0.06);
   --surface-2: rgba(var(--tint), 0.10);
   --elev: rgba(var(--tint), 0.14);
@@ -102,28 +102,28 @@
   --tint: 212, 165, 40;
   --primary: #D4A528; --primary-hi: #B8880F; --on-primary: #1C1503;
   --bg: #14100A; --glow: rgba(212, 165, 40, 0.13);
-  --text: #FBF4E4; --text-2: #CDB98A; --text-3: #857452;
+  --text: #FBF4E4; --text-2: #CDB98A; --text-3: #8C7C5C;
   --sheet-bg: #100D07;
 }
 [data-theme="orange"] {
   --tint: 232, 122, 60;
-  --primary: #E87A3C; --primary-hi: #D2601F; --on-primary: #FFFFFF;
+  --primary: #E87A3C; --primary-hi: #D2601F; --on-primary: #150E09;
   --bg: #150E09; --glow: rgba(232, 122, 60, 0.14);
-  --text: #FCF1EA; --text-2: #D8AC90; --text-3: #8B6B54;
+  --text: #FCF1EA; --text-2: #D8AC90; --text-3: #947762;
   --sheet-bg: #110B07;
 }
 [data-theme="green"] {
   --tint: 62, 190, 125;
   --primary: #3EBE7D; --primary-hi: #27A365; --on-primary: #05130C;
   --bg: #0A1410; --glow: rgba(62, 190, 125, 0.13);
-  --text: #EAF7F0; --text-2: #99C7AE; --text-3: #587F6A;
+  --text: #EAF7F0; --text-2: #99C7AE; --text-3: #628773;
   --sheet-bg: #08100C;
 }
 [data-theme="purple"] {
   --tint: 157, 123, 250;
-  --primary: #9D7BFA; --primary-hi: #7F55F2; --on-primary: #FFFFFF;
+  --primary: #9D7BFA; --primary-hi: #8B66F5; --on-primary: #100C1C;
   --bg: #100C1C; --glow: rgba(157, 123, 250, 0.15);
-  --text: #F2EEFD; --text-2: #B9A8E4; --text-3: #6F6295;
+  --text: #F2EEFD; --text-2: #B9A8E4; --text-3: #8276A3;
   --sheet-bg: #0C0916;
 }
 
@@ -2009,6 +2009,20 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   /* каплю водят пальцем по горизонтали, поэтому горизонтальный жест забираем себе,
      а вертикальный скролл страницы оставляем системе */
   touch-action: pan-y;
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+/* Высота клавиатуры из нативного слоя; в вебе всегда 0 и ничего не меняет. */
+:root { --kb-h: 0px; }
+/* Пока печатают, док убираем: WebView сжат под клавиатуру, и док, будучи fixed,
+   встаёт ровно над ней — перекрывает поле ввода и кнопки шторки.
+   translateX(-50%) обязателен и здесь, иначе док слетит из центра. */
+body.kb-open .dock {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(140%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock { transition: none; }
 }
 .dock-item {
   position: relative;
@@ -2436,7 +2450,7 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
   border: 1px solid var(--neutral-line);
 }
 .qr-box svg { width: 100%; max-width: 220px; height: auto; display: block; }
-.qr-wait { color: #5F7396; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+.qr-wait { color: var(--text-3); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
 
 /* ---------- ДЕПОЗИТ ---------- */
 .wallet-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
