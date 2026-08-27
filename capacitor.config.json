@@ -20,6 +20,9 @@
     "LocalNotifications": {
       "smallIcon": "ic_stat_disbit",
       "iconColor": "#5B8DFF"
+    },
+    "Keyboard": {
+      "resize": "native"
     }
   }
 }

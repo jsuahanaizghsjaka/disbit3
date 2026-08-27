@@ -23,22 +23,16 @@ const OWNER_KEY    = 'disbit_owner_v1';
 const AUTH_USER_KEY = 'disbit_auth_user_v1';
 
 // Куда ходить за API:
-//  • на самом Railway-домене — тот же origin (пусто), фронт и API вместе;
-//  • в мобильном приложении (Capacitor: хост localhost, но своего сервера нет)
-//    и с внешнего хоста (vercel и пр.) — на живой Railway-бэкенд.
+//  • в вебе (любой хост: свой домен, localhost при разработке) — бэкенд
+//    всегда раздаёт фронт сам (express.static), поэтому это тот же origin;
+//  • в мобильном приложении (Capacitor: хост localhost, но своего сервера
+//    там нет) — на живой бэкенд по фиксированному адресу.
 // Без этого аккаунты и синхронизация в приложении не работали бы: localhost
 // внутри WebView ведёт в пустоту.
-const BACKEND = 'https://zippy-ambition-production-18fd.up.railway.app';
+const BACKEND = 'https://disbit.ru';
 const isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-// same-origin (API_HOST пусто) — когда фронт и сервер это ОДИН origin:
-//  Railway-домен в проде и localhost при локальной разработке в БРАУЗЕРЕ.
-// В приложении хост тоже localhost, но своего сервера там нет — поэтому только !isNativeApp.
-const sameOrigin = !isNativeApp && (
-  location.hostname.endsWith('.up.railway.app') ||
-  location.hostname === 'localhost' ||
-  location.hostname === '127.0.0.1'
-);
-const API_HOST = sameOrigin ? '' : BACKEND;   // иначе (приложение, vercel, свой домен) — живой Railway
+const sameOrigin = !isNativeApp && location.protocol.startsWith('http');
+const API_HOST = sameOrigin ? '' : BACKEND;   // приложение — на фиксированный BACKEND
 // на file:// (без сервера) API недоступен; в приложении и по http — доступен
 const API = (isNativeApp || location.protocol.startsWith('http')) ? API_HOST + '/api' : null;
 
@@ -4778,8 +4772,41 @@ function onAppResume() {
   scheduleNotifSync();          // расписание тоже могло протухнуть
 }
 
+/* Клавиатура.
+   1. resize 'native' — WebView сжимается под клавиатуру, и поле ввода вместе с
+      липким подвалом шторки остаётся на виду. Требует adjustResize в манифесте.
+   2. setScroll(isDisabled) — гасим автопрокрутку WebView. Именно она дёргала
+      шторки при фокусе: система уводила всю страницу вверх поверх нашей вёрстки.
+   3. Док висит fixed над контентом — при сжатии он оказывается ровно над
+      клавиатурой и закрывает поле. На время ввода убираем его вниз.
+   Высоту отдаём в --kb-h: сама вёрстка ей сейчас не пользуется (сжатия хватает),
+   но она нужна на устройствах, где resize не сработал. */
+function wireKeyboard() {
+  const KB = nativePlugin('Keyboard');
+  if (!KB) return;
+  KB.setResizeMode?.({ mode: 'native' })?.catch?.(() => {});
+  KB.setScroll?.({ isDisabled: true })?.catch?.(() => {});
+
+  const root = document.documentElement;
+  const show = info => {
+    root.style.setProperty('--kb-h', (info?.keyboardHeight || 0) + 'px');
+    document.body.classList.add('kb-open');
+  };
+  const hide = () => {
+    root.style.setProperty('--kb-h', '0px');
+    document.body.classList.remove('kb-open');
+  };
+  // will* приходят до анимации — док успевает уехать вместе с клавиатурой.
+  // did* дублируем: на части прошивок will* не стреляет.
+  KB.addListener('keyboardWillShow', show);
+  KB.addListener('keyboardDidShow', show);
+  KB.addListener('keyboardWillHide', hide);
+  KB.addListener('keyboardDidHide', hide);
+}
+
 function wireNativeShell() {
   applyStatusBar();
+  wireKeyboard();
   const App = nativePlugin('App');
   if (App) {
     App.addListener('backButton', onBackButton);

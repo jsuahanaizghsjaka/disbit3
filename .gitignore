@@ -1,1 +1,9 @@
 node_modules/
+
+# release-подпись: секретный ключ, никогда не коммитить
+keystore/
+android/keystore.properties
+
+# собранные приложения — бинарники, пересобираются из кода
+*.apk
+*.aab
