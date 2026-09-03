@@ -346,18 +346,29 @@ function apiCall(method, path, body) {
 // как apiCall, но возвращает и ошибки сервера — для форм входа/регистрации
 async function apiCallStrict(method, path, body) {
   if (!API) return { error: 'Аккаунты работают при запуске с сервером disbit' };
+  // без таймаута fetch может зависнуть на плохой сети на десятки секунд, не
+  // упав в catch — тогда форма входа просто молчит, вместо честной ошибки
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (authToken) headers.Authorization = 'Bearer ' + authToken;
     const r = await fetch(API + path, {
       method, headers,
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) return { error: data.error || ('Ошибка ' + r.status) };
     return data;
-  } catch {
-    return { error: 'Сервер недоступен' };
+  } catch (e) {
+    // e.name различает: AbortError — не дождались ответа за 15с; TypeError —
+    // сеть недоступна/оборвалась (в т.ч. DNS); остальное — что-то новое, и его
+    // теперь видно в тексте, а не тонет в одном «сервер недоступен» на всё
+    if (e.name === 'AbortError') return { error: 'Сервер не отвечает — проверь связь и попробуй ещё раз' };
+    return { error: `Сервер недоступен (${e.name || 'ошибка сети'})` };
+  } finally {
+    clearTimeout(timer);
   }
 }
 async function apiBootstrap() {
@@ -3961,7 +3972,19 @@ async function startProofCam() {
     cam.classList.toggle('mirror', proofFacing === 'user');
   } catch (e) {
     err.hidden = false;
-    err.textContent = 'Нет доступа к камере. Разреши камеру — снимать нужно вживую, из галереи нельзя.';
+    // e.name различает причины, которые раньше тонули в одном тексте:
+    // NotAllowedError — отказ в разрешении (в т.ч. «залипший» отказ WebView,
+    //   который системные Настройки не сбрасывают — помогает только очистка
+    //   хранилища приложения); NotFoundError — на устройстве нет камеры/микро-
+    //   фона; NotReadableError — камера занята другим приложением.
+    const hints = {
+      NotAllowedError: 'Нет доступа к камере. Разреши её в настройках приложения — если разрешение уже стоит, а окно всё равно тут, попробуй очистить хранилище приложения (Настройки → Приложения → disbit → Хранилище) и открыть заново.',
+      NotFoundError: 'Камера или микрофон не найдены на этом устройстве.',
+      NotReadableError: 'Камера занята другим приложением — закрой его и попробуй снова.',
+      OverconstrainedError: 'Не удалось включить выбранную камеру устройства.',
+      SecurityError: 'Камера заблокирована настройками безопасности устройства.'
+    };
+    err.textContent = hints[e.name] || `Не удалось включить камеру (${e.name || 'ошибка'}). Из галереи снимать нельзя — попробуй ещё раз.`;
   }
 }
 function stopProofCam() {
