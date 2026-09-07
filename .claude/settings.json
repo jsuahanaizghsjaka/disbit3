@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "headroom-marketplace": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/headroomlabs-ai/headroom"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "headroom@headroom-marketplace": true
+  }
+}
