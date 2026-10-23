@@ -87,6 +87,8 @@ router.post('/', (req, res) => {
     // обещание должно быть своим и существовать: чужой habit_id ничего не спишет
     const h = findHabit.get(habitId, uid(req));
     if (!h || day < h.created_day) { skipped++; continue; }   // нет обещания или день до его создания
+    if (JSON.parse(h.archive_periods || '[]').some(p => day >= p.from && (!p.to || day < p.to))) { skipped++; continue; }
+    if (h.stake_mode === 'lock') { skipped++; continue; } // no native blocker: don't simulate enforcement
 
     const mode = h.stake_mode === 'lock' ? 'lock' : 'money';
     const amountRub = mode === 'money' ? Math.max(0, Number(h.stake_amount) || 0) : 0;

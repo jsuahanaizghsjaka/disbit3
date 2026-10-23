@@ -15,6 +15,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db } from '../db/db.js';
+import { accountDay, proofSatisfied, proofQuota } from '../proof-policy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -51,6 +52,32 @@ function authRequired(req, res, next) {
   next();
 }
 
+router.get('/quota', authRequired, (req, res) => {
+  const day = accountDay(req);
+  res.json({ ...proofQuota(uid(req), day), satisfied: proofSatisfied(uid(req), String(req.query.habitId || ''), day) });
+});
+
+router.post('/skip', authRequired, (req, res) => {
+  const { habitId, day } = req.body || {};
+  if (day !== accountDay(req)) return res.status(403).json({ error: 'Пропустить пруф можно только за сегодня' });
+  const habit = db.prepare('SELECT id,archived FROM habits WHERE id=? AND user_id=?').get(String(habitId || ''), uid(req));
+  if (!habit) return res.status(404).json({ error: 'Обещание не найдено' });
+  if (habit.archived) return res.status(409).json({ error: 'Обещание в архиве' });
+  // Synchronous transaction protects the last slot across concurrent requests/processes.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (!proofSatisfied(uid(req), habit.id, day)) {
+      if (!proofQuota(uid(req), day).remaining) {
+        db.exec('ROLLBACK');
+        return res.status(409).json({ error: 'Пять пропусков за месяц использованы. Отправь фото или видео.' });
+      }
+      db.prepare('INSERT INTO proof_skips (user_id,habit_id,day,month) VALUES (?,?,?,?)').run(uid(req), habit.id, day, day.slice(0,7));
+    }
+    db.exec('COMMIT');
+    res.json({ ok:true, ...proofQuota(uid(req), day) });
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
+});
+
 /* -------- загрузка пруфа (сырые байты) --------
    POST /api/proofs?habitId=..&day=YYYY-MM-DD&type=photo|video&name=..
    тело = байты медиа, Content-Type = image/* | video/* */
@@ -62,10 +89,25 @@ router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES 
   if (!habitId || !/^\d{4}-\d{2}-\d{2}$/.test(String(day || ''))) {
     return res.status(400).json({ error: 'Нужны habitId и корректный day' });
   }
+  if (day !== accountDay(req)) return res.status(403).json({ error: 'Пруф можно отправить только за сегодня' });
+  const habit = db.prepare('SELECT id,archived FROM habits WHERE id=? AND user_id=?').get(String(habitId), uid(req));
+  if (!habit) return res.status(404).json({ error: 'Обещание не найдено' });
+  if (habit.archived) return res.status(409).json({ error: 'Обещание в архиве' });
+  const mediaType = mime.split(';')[0].trim();
+  if (!EXT[mediaType] || (type === 'video') !== mediaType.startsWith('video/')) {
+    return res.status(415).json({ error: 'Нужно фото JPEG/PNG/WebP или видео MP4/WebM' });
+  }
   if (!Buffer.isBuffer(req.body) || !req.body.length) {
     return res.status(400).json({ error: 'Пустое медиа' });
   }
-  const ext = EXT[mime] || (type === 'video' ? 'webm' : 'jpg');
+  const bytes = req.body;
+  const signature = mediaType === 'image/jpeg' ? bytes.subarray(0,3).equals(Buffer.from([255,216,255])) :
+    mediaType === 'image/png' ? bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) :
+    mediaType === 'image/webp' ? bytes.toString('ascii',0,4)==='RIFF' && bytes.toString('ascii',8,12)==='WEBP' :
+    mediaType === 'video/webm' ? bytes.subarray(0,4).equals(Buffer.from([26,69,223,163])) :
+    bytes.toString('ascii',4,8)==='ftyp';
+  if (!signature) return res.status(415).json({ error: 'Файл не похож на фото или видео. Пересними пруф.' });
+  const ext = EXT[mediaType];
   const fname = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.${ext}`;
   try {
     fs.writeFileSync(path.join(PROOFS_DIR, fname), req.body);

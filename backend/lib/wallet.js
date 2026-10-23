@@ -91,7 +91,7 @@ export function debit(userId, amount, opts = {}) {
 
 export function history(userId, limit = 50) {
   return db.prepare(`
-    SELECT id, type, amount, balance_after, status, provider, meta, created_at
+    SELECT id, type, amount, balance_after, status, provider, provider_id, meta, created_at
     FROM transactions WHERE user_id = ? ORDER BY id DESC LIMIT ?
   `).all(userId, limit).map(r => ({
     ...r,

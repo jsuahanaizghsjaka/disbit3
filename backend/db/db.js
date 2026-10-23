@@ -25,13 +25,17 @@ db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 // мягкие миграции для баз, созданных до появления авторизации
 for (const sql of [
   "ALTER TABLE habits ADD COLUMN week_target INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE habits ADD COLUMN minimum_action TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE completions ADD COLUMN minimum INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN buddy TEXT DEFAULT ''",
   "ALTER TABLE habits ADD COLUMN stake_minutes INTEGER NOT NULL DEFAULT 60",
   "ALTER TABLE completions ADD COLUMN skip INTEGER DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE habits ADD COLUMN archive_periods TEXT NOT NULL DEFAULT '[]'",
   "ALTER TABLE charges ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE users ADD COLUMN login TEXT",
+  "ALTER TABLE users ADD COLUMN time_zone TEXT",
   "ALTER TABLE users ADD COLUMN pass_hash TEXT",
   "ALTER TABLE users ADD COLUMN pass_salt TEXT",
   // сессии без срока жизни: старые строки получат его в routes/auth.js
@@ -58,18 +62,21 @@ export function rowToHabit(row, completions = []) {
   const counts = {};
   for (const c of completions) {
     if (c.skip) history[c.day] = 'skip';       // пропуск — нейтрально
-    else if (c.done) history[c.day] = true;
+    else if (c.done) history[c.day] = c.minimum ? 'min' : true;
     if (c.count) counts[c.day] = c.count;
   }
   return {
     id: row.id,
     name: row.name,
+    min: row.minimum_action || '',
     icon: row.icon,
     color: row.color,
     schedule: JSON.parse(row.schedule || '[0,1,2,3,4,5,6]'),
     weekTarget: row.week_target || 0,
     buddy: row.buddy || '',
     pinned: !!row.pinned,
+    archived: !!row.archived,
+    archivePeriods: JSON.parse(row.archive_periods || '[]'),
     createdAt: row.created_day,
     goal: {
       type: row.goal_type,
@@ -89,6 +96,7 @@ export function habitToParams(h) {
   return {
     id: String(h.id),
     name: String(h.name || ''),
+    minimum_action: String(h.min || '').slice(0,60),
     icon: h.icon || '🎯',
     color: h.color || '#3B82F6',
     schedule: JSON.stringify(h.schedule?.length ? h.schedule : [0,1,2,3,4,5,6]),
@@ -100,7 +108,7 @@ export function habitToParams(h) {
     goal_unit: h.goal?.unit || '',
     stake_mode: h.stake?.mode === 'lock' ? 'lock' : 'money',
     stake_amount: Number(h.stake?.amount) || 0,
-    stake_recipient: h.stake?.recipient || null,
+    stake_recipient: h.stake?.recipient || 'creators',
     stake_apps: JSON.stringify(h.stake?.apps || []),
     stake_minutes: Math.max(15, Math.min(1440, Number(h.stake?.minutes) || 60)),
     created_day: h.createdAt || new Date().toISOString().slice(0, 10)

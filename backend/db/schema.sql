@@ -148,6 +148,16 @@ CREATE TABLE IF NOT EXISTS friendships (
 );
 CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
 
+-- Intentionally no habit FK: deletion/undo must not refund the monthly allowance.
+CREATE TABLE IF NOT EXISTS proof_skips (
+  user_id INTEGER NOT NULL,
+  habit_id TEXT NOT NULL,
+  day TEXT NOT NULL,
+  month TEXT NOT NULL,
+  PRIMARY KEY (user_id, habit_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_proof_skips_month ON proof_skips(user_id, month);
+
 -- Приглашения «делать обещание вместе»: короткий код → ссылка/QR.
 -- payload — снимок обещания (название, иконка, расписание…), чтобы у друга
 -- создалась ТАКАЯ ЖЕ. Код постоянный для пары (владелец + обещание).
