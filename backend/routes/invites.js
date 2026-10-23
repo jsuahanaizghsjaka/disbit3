@@ -16,7 +16,7 @@ const router = Router();
 // снимок обещания, который переносим другу (прогресс НЕ переносим)
 function snapshot(h) {
   return {
-    name: h.name, icon: h.icon, color: h.color,
+    name: h.name, icon: h.icon, color: h.color, minimum_action: h.minimum_action,
     schedule: h.schedule, weekTarget: h.week_target,
     goal_type: h.goal_type, goal_target: h.goal_target, goal_unit: h.goal_unit,
     stake_mode: h.stake_mode, stake_amount: h.stake_amount,
@@ -86,7 +86,7 @@ router.post('/:code/accept', (req, res) => {
     myHabitId = 'h' + Date.now();
     const params = habitToParams({
       id: myHabitId,
-      name: p.name, icon: p.icon, color: p.color,
+      name: p.name, icon: p.icon, color: p.color, min: p.minimum_action || '',
       schedule: p.schedule ? JSON.parse(p.schedule) : [0,1,2,3,4,5,6],
       weekTarget: p.weekTarget || 0,
       buddy: owner.login,
@@ -99,10 +99,10 @@ router.post('/:code/accept', (req, res) => {
     db.prepare(`
       INSERT INTO habits
         (id, user_id, name, icon, color, schedule, week_target, buddy, pinned, goal_type, goal_target, goal_unit,
-         stake_mode, stake_amount, stake_recipient, stake_apps, stake_minutes, created_day)
+         stake_mode, stake_amount, stake_recipient, stake_apps, stake_minutes, created_day, minimum_action)
       VALUES
         (:id, :user_id, :name, :icon, :color, :schedule, :week_target, :buddy, :pinned, :goal_type, :goal_target, :goal_unit,
-         :stake_mode, :stake_amount, :stake_recipient, :stake_apps, :stake_minutes, :created_day)
+         :stake_mode, :stake_amount, :stake_recipient, :stake_apps, :stake_minutes, :created_day, :minimum_action)
     `).run({ ...params, user_id: me.id });
   } else {
     db.prepare('UPDATE habits SET buddy = ? WHERE id = ?').run(owner.login, myHabitId);

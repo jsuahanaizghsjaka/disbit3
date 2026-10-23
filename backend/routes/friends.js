@@ -35,7 +35,7 @@ function publicCard(userId) {
       name: d.profile?.name || null,
       emoji: d.profile?.emoji || null,
       color: d.profile?.color || null,
-      streak: Number(d.card?.streak) || 0,
+      streak: d.card?.streak == null ? null : Number(d.card.streak),
       weekPct: d.card?.weekPct ?? null,
       habits: Number(d.card?.habits) || 0,
       // статусы совместных обещаний: { "название": true/false } — только те,
