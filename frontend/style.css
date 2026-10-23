@@ -2152,6 +2152,78 @@ body.kb-open .dock {
 .dock-item.fab .di-label { color: var(--text-3); }
 .dock-item.fab:hover .di-icon { filter: brightness(1.1); }
 
+/* Beta: stable navigation, explicit card color and accessible feedback. */
+.dock {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  width: min(440px, calc(100% - 24px));
+  max-width: none;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 22px;
+  touch-action: manipulation;
+}
+.dock-lens { display: none; }
+.dock .dock-item {
+  width: 100%; min-width: 0; min-height: 60px;
+  justify-content: center; gap: 4px; border-radius: 16px; color: var(--text-2);
+}
+.dock .dock-item.active { color: var(--primary); background: var(--surface-2); }
+.dock .dock-item .di-icon { width: 30px; height: 30px; transform: none; }
+.dock .dock-item .ic { filter: none; }
+.dock .dock-item .di-label {
+  position: static; opacity: 1; transform: none; font-size: 11px;
+  line-height: 1.2; color: inherit; white-space: nowrap;
+}
+.dock .dock-item.fab .di-icon { color: var(--on-primary); box-shadow: none; }
+.dock .dock-item:active .di-icon { transform: scale(.96); }
+.dock .dock-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.habit { border-left: 4px solid var(--habit-color, var(--primary)); }
+.habit.done, .habit.pinned { border-left-color: var(--habit-color, var(--primary)); }
+#screen-today .habit {
+  background: color-mix(in srgb, var(--habit-color, var(--primary)) 10%, var(--bg));
+}
+.habit .habit-icon { background: color-mix(in srgb, var(--habit-color, var(--primary)) 20%, var(--bg)); }
+.habit-name, .friend-name { overflow-wrap: anywhere; }
+.friend-card { display: grid; grid-template-columns: 48px minmax(0, 1fr) 44px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 12px; align-items: start; gap: 8px; }
+.friend-card .friend-ava { width: 48px; height: 48px; flex-shrink: 0; font-size: 24px; }
+.friend-name { min-width: 0; }
+.friend-card .friend-name { font-size: 16px; }
+.friend-card .friend-login, .friend-metrics, .friend-shared { display: block; margin-top: 5px; }
+.friend-card .friend-login, .friend-shared { color: var(--text-2); font-size: 12px; font-weight: 400; }
+.friend-metrics { color: var(--text); font-size: 12px; font-weight: 500; }
+.friend-card [data-fdel] { width: 44px; height: 44px; flex-shrink: 0; }
+.friend-card .friend-metrics, .friend-card .friend-shared { grid-column: 1 / -1; margin-top: 0; }
+#friends-board .friend-row { display: grid; grid-template-columns: 20px 40px minmax(0, 1fr); gap: 8px; padding: 12px 0; }
+#friends-board .board-place, #friends-board .friend-ava { grid-row: 1 / 3; }
+#friends-board .goal-text { grid-column: 3; white-space: normal; font-variant-numeric: tabular-nums; }
+.friends-state { padding: 24px 0; color: var(--text-2); line-height: 1.5; }
+.friends-state h3 { color: var(--text); margin-bottom: 8px; }
+.action-dialog, .completion-dialog { color: var(--text); background: var(--sheet-bg); border: 1px solid var(--line); overscroll-behavior: contain; }
+.action-dialog { width: min(440px, calc(100% - 32px)); border-radius: 24px; padding: 24px; margin: auto; max-height: calc(100dvh - 32px); overflow: auto; }
+.action-dialog h2 { font-size: 22px; line-height: 1.2; }
+.action-dialog p { color: var(--text-2); line-height: 1.5; margin: 16px 0 24px; overflow-wrap: anywhere; }
+dialog::backdrop { background: rgb(0 0 0 / .65); }
+.dialog-actions { display: flex; flex-direction: column; gap: 12px; }
+.dialog-actions button { min-height: 48px; white-space: normal; }
+dialog button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.completion-dialog { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); overflow-y: auto; }
+.completion-content { max-width: 600px; min-height: 100%; margin: auto; display: flex; flex-direction: column; justify-content: center; text-align: center; gap: 20px; }
+.completion-eyebrow { color: var(--primary); font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+.completion-content h2 { font-size: clamp(26px, 6vw, 40px); line-height: 1.15; text-wrap: balance; }
+#completion-name { color: var(--text-2); overflow-wrap: anywhere; }
+#completion-scenes .walker-card { margin: 12px 0; }
+#completion-scenes .w-scene { height: auto; aspect-ratio: 320 / 132; }
+#completion-scenes .w-fill { transition: none; }
+#completion-scenes .w-flame { font-size: 13px; }
+.completion-check { width: 112px; height: 112px; margin: 20px auto; border-radius: 50%; background: var(--surface-2); color: var(--good); display: grid; place-items: center; }
+.completion-check .ic { width: 56px; height: 56px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) {
+  #completion-scenes *, .dock .di-icon { animation: none !important; transition: none !important; }
+}
+
 /* ============================================================
    ШТОРКИ / МОДАЛКИ
    ============================================================ */

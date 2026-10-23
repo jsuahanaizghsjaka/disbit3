@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0B1324">
+  <title>Disbit · Путь · интерактивный макет</title>
+  <link rel="icon" href="../frontend/icons/icon-192.png">
+  <link rel="stylesheet" href="../frontend/fonts.css">
+  <link rel="stylesheet" href="path.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">Перейти к содержимому</a>
+  <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="p-home" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.5l8.5 7V20H4V10.5Z"/><path d="M9 20v-6h6v6"/></symbol>
+    <symbol id="p-map" viewBox="0 0 24 24"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Z"/><path d="M9 3v16m6-14v16"/></symbol>
+    <symbol id="p-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+    <symbol id="p-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.1 3.3-4.6 6.5-4.6s5.5 1.5 6.5 4.6M16 4.7a3.5 3.5 0 0 1 0 6.7M17.3 15.7c2.1.5 3.5 2 4.2 4.3"/></symbol>
+    <symbol id="p-user" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="4"/><path d="M4 21c1.3-3.7 4-5.5 8-5.5s6.7 1.8 8 5.5"/></symbol>
+    <symbol id="p-book" viewBox="0 0 24 24"><path d="M4 5c0-1.2.8-2 2-2h13v16H6c-1.2 0-2 .8-2 2V5Z"/><path d="M4 19c0-1.2.8-2 2-2h13M8 7h7"/></symbol>
+    <symbol id="p-run" viewBox="0 0 24 24"><circle cx="15" cy="5" r="2"/><path d="m4 20 4-4 2-5-2 2-3-.5M10 11l3-2 3 2.5 4 .5M13 15l2 5"/></symbol>
+    <symbol id="p-moon" viewBox="0 0 24 24"><path d="M20 15A8.5 8.5 0 0 1 9 4a8.5 8.5 0 1 0 11 11Z"/></symbol>
+    <symbol id="p-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="p-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="p-back" viewBox="0 0 24 24"><path d="m14 5-7 7 7 7"/></symbol>
+    <symbol id="p-fire" viewBox="0 0 24 24"><path d="M12.2 21c4.2 0 6.8-2.7 6.8-6.5 0-2.6-1.2-4.5-3.4-6.6-.4 2-1.4 2.8-2.4 2.8.7-3.1-.6-5.2-3.5-7.7.3 2.4-.8 4.2-2.5 6.2C5.5 11.2 5 13 5 14.9 5 18.4 7.6 21 12.2 21Z"/></symbol>
+    <symbol id="p-share" viewBox="0 0 24 24"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 12v7h16v-7"/></symbol>
+    <symbol id="p-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+    <symbol id="p-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="p-close" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19"/></symbol>
+    <symbol id="p-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="p-spark" viewBox="0 0 24 24"><path d="M12 2.5 14.4 9.6 21.5 12l-7.1 2.4L12 21.5l-2.4-7.1L2.5 12l7.1-2.4L12 2.5Z"/></symbol>
+  </svg>
+
+  <div class="workbench-copy">
+    <span>DISBIT / ВЫБРАННОЕ НАПРАВЛЕНИЕ</span>
+    <h1>Путь</h1>
+    <p>Интерактивный макет. Выполните обещание, создайте новое, откройте марафон или профиль. Изменения сохраняются в этом браузере.</p>
+    <a href="index.html">Вернуться к пяти вариантам</a>
+  </div>
+
+  <div class="device-frame">
+    <div class="app" id="app">
+      <div class="status-bar" aria-hidden="true"><span>9:41</span><span class="signal"><i></i><i></i><i></i><i></i><b></b></span></div>
+      <header class="app-header" id="app-header"></header>
+      <main class="app-main" id="content" tabindex="-1"></main>
+      <nav class="bottom-nav" id="bottom-nav" aria-label="Разделы приложения"></nav>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <dialog class="app-dialog detail-dialog" id="detail-dialog" aria-labelledby="detail-title">
+    <div id="detail-content"></div>
+  </dialog>
+  <dialog class="app-dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+    <div class="dialog-top"><h2 id="confirm-title">Удалить обещание?</h2><button type="button" class="icon-button" data-close-dialog="confirm-dialog" aria-label="Закрыть"><svg class="icon"><use href="#p-close"></use></svg></button></div>
+    <p id="confirm-text"></p>
+    <div class="dialog-actions"><button type="button" class="button-secondary" data-close-dialog="confirm-dialog">Оставить</button><button type="button" class="button-danger" id="confirm-delete">Удалить</button></div>
+  </dialog>
+  <dialog class="app-dialog celebration-dialog" id="celebration-dialog" aria-labelledby="celebration-title">
+    <div id="celebration-content"></div>
+  </dialog>
+
+  <script src="path.js"></script>
+</body>
+</html>

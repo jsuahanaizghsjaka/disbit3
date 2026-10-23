@@ -4,12 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Политика конфиденциальности — disbit</title>
+  <meta name="theme-color" content="#0B1324" />
   <link rel="icon" href="icons/app.ico" />
   <link rel="stylesheet" href="fonts.css" />
   <style>
     :root {
-      --bg: #0C1422; --card: rgba(91,141,255,0.07); --line: rgba(91,141,255,0.16);
-      --text: #EAF2FF; --text-2: #9DB4E6; --text-3: #7A8BA8; --primary: #5B8DFF;
+      color-scheme: dark;
+      --bg: #0B1324; --card: #14233B; --line: #2B3C56;
+      --text: #F4F7FF; --text-2: #AEBBD1; --text-3: #AEBBD1; --primary: #9AB2FF;
     }
     * { box-sizing: border-box; }
     body {
@@ -20,10 +22,10 @@
     .wrap { max-width: 640px; margin: 0 auto; }
     .logo { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
     .logo span { color: var(--primary); }
-    h1 { font-family: 'Unbounded', sans-serif; font-size: 26px; line-height: 1.2; margin: 20px 0 6px; }
+    h1 { font-family: 'Onest', sans-serif; font-size: clamp(24px,6vw,32px); line-height: 1.2; margin: 20px 0 12px; overflow-wrap: anywhere; }
     .upd { color: var(--text-3); font-size: 13px; margin: 0 0 28px; }
     h2 { font-size: 17px; font-weight: 800; margin: 28px 0 10px; }
-    p, li { color: var(--text-2); font-size: 15px; }
+    p, li { color: var(--text-2); font-size: 16px; line-height:24px; }
     a { color: var(--primary); }
     ul { padding-left: 20px; margin: 8px 0; }
     li { margin-bottom: 6px; }
@@ -32,12 +34,15 @@
       border-radius: 16px; padding: 16px 18px; margin: 14px 0;
     }
     .card strong { color: var(--text); }
-    .back { display: inline-block; margin-top: 32px; color: var(--primary); text-decoration: none; font-weight: 700; }
+    .back { display: inline-flex; align-items:center; min-height:44px; margin-block:16px; color: var(--primary); font-weight: 700; }
+    a { overflow-wrap:anywhere; text-underline-offset:4px; }
+    a:focus-visible { outline:2px solid var(--primary); outline-offset:4px; border-radius:4px; }
     .foot { color: var(--text-3); font-size: 12px; margin-top: 28px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <main class="wrap">
+    <a class="back" href="index.html#profile">← В профиль</a>
     <div class="logo">dis<span>bit</span></div>
     <h1>Политика конфиденциальности</h1>
     <p class="upd">Обновлено: 27 августа 2026</p>
@@ -108,8 +113,8 @@
     <p>Вопросы о данных и запросы на удаление — на почту:
       <a href="mailto:disbitx1@gmail.com">disbitx1@gmail.com</a></p>
 
-    <a class="back" href="index.html">← Вернуться в приложение</a>
+    <a class="back" href="index.html#profile">← Вернуться в профиль</a>
     <p class="foot">disbit · прототип. Реальные списания и блокировки появятся в нативной версии и будут отдельно описаны.</p>
-  </div>
+  </main>
 </body>
 </html>

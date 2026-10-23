@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Disbit · пять направлений дизайна</title>
+  <link rel="icon" href="../frontend/icons/icon-192.png">
+  <link rel="stylesheet" href="../frontend/fonts.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к макетам</a>
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="ic-home" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.5l8.5 7V20H4V10.5Z"/><path d="M9 20v-6h6v6"/></symbol>
+    <symbol id="ic-map" viewBox="0 0 24 24"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Z"/><path d="M9 3v16m6-14v16"/></symbol>
+    <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+    <symbol id="ic-friends" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.1 3.3-4.6 6.5-4.6s5.5 1.5 6.5 4.6M16 4.7a3.5 3.5 0 0 1 0 6.7M17.3 15.7c2.1.5 3.5 2 4.2 4.3"/></symbol>
+    <symbol id="ic-user" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="4"/><path d="M4 21c1.3-3.7 4-5.5 8-5.5s6.7 1.8 8 5.5"/></symbol>
+    <symbol id="ic-book" viewBox="0 0 24 24"><path d="M4 5c0-1.2.8-2 2-2h13v16H6c-1.2 0-2 .8-2 2V5Z"/><path d="M4 19c0-1.2.8-2 2-2h13M8 7h7"/></symbol>
+    <symbol id="ic-run" viewBox="0 0 24 24"><circle cx="15" cy="5" r="2"/><path d="m4 20 4-4 2-5-2 2-3-.5M10 11l3-2 3 2.5 4 .5M13 15l2 5"/></symbol>
+    <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 15A8.5 8.5 0 0 1 9 4a8.5 8.5 0 1 0 11 11Z"/></symbol>
+    <symbol id="ic-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="ic-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="ic-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 4.7 2 6 2 6H4s2-1.3 2-6ZM10 19a2.2 2.2 0 0 0 4 0"/></symbol>
+    <symbol id="ic-fire" viewBox="0 0 24 24"><path d="M12.2 21c4.2 0 6.8-2.7 6.8-6.5 0-2.6-1.2-4.5-3.4-6.6-.4 2-1.4 2.8-2.4 2.8.7-3.1-.6-5.2-3.5-7.7.3 2.4-.8 4.2-2.5 6.2C5.5 11.2 5 13 5 14.9 5 18.4 7.6 21 12.2 21Z"/></symbol>
+    <symbol id="ic-wallet" viewBox="0 0 24 24"><path d="M4 6.5h15a2 2 0 0 1 2 2V19H4a2 2 0 0 1-2-2V7a3 3 0 0 1 3-3h13"/><path d="M21 11h-6a3 3 0 0 0 0 6h6"/><circle cx="16" cy="14" r=".8"/></symbol>
+  </svg>
+
+  <main class="board" id="main">
+    <header class="board-head">
+      <div class="board-kicker">DISBIT / ИССЛЕДОВАНИЕ ИНТЕРФЕЙСА</div>
+      <h1>Пять лиц одного приложения</h1>
+      <p>Один сценарий, пять характеров. Выберите направление и сравните пять экранов.</p>
+    </header>
+
+    <nav class="concept-tabs" aria-label="Варианты дизайна">
+      <button type="button" data-concept="1"><b>01</b><span>Путь</span></button>
+      <button type="button" data-concept="2"><b>02</b><span>Клуб</span></button>
+      <button type="button" data-concept="3"><b>03</b><span>Объекты</span></button>
+      <button type="button" data-concept="4"><b>04</b><span>Тихий лес</span></button>
+      <button type="button" data-concept="5"><b>05</b><span>Студия</span></button>
+    </nav>
+
+    <div class="preview-grid">
+      <div class="phone-zone">
+        <div class="phone-frame"><div class="phone-screen" id="phone-screen"></div></div>
+      </div>
+      <aside class="notes" id="concept-notes" aria-live="polite"></aside>
+    </div>
+    <footer class="board-footer">Клавиши 1–5 и ← → переключают варианты. Данные на экранах примерные.</footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+/* One artwork, several poses. No perpetual movement; a step animates only on completion. */
+.traveler-art .traveler-hat { display: none; }
+.traveler-art.gear-hat .traveler-hat, .traveler-art.gear-cane .traveler-hat { display: inline; }
+.traveler-portrait { width: 100%; height: 100%; background: #263D50; border-radius: inherit; }
+.traveler-arm-front, .traveler-arm-back, .traveler-leg-front, .traveler-leg-back, .traveler-pack { transform-box: view-box; }
+.traveler-arm-front { transform-origin: 95px 101px; }
+.traveler-arm-back { transform-origin: 136px 102px; }
+.traveler-leg-front { transform-origin: 105px 170px; }
+.traveler-leg-back { transform-origin: 120px 172px; }
+.traveler-pack { transform-origin: 85px 85px; }
+.pose-swim .traveler-pack, .pose-swim .traveler-shadow { display: none; }
+.pose-swim .traveler-arm-front { transform: rotate(-135deg); }
+.pose-climb .traveler-arm-front { transform: rotate(-145deg); }
+.pose-climb .traveler-arm-back { transform: rotate(155deg); }
+.pose-trudge .traveler-body { transform: rotate(7deg); transform-origin: 115px 281px; }
+.finished .pose-walk .traveler-arm-front, .finished .pose-trudge .traveler-arm-front { transform: rotate(-125deg); }
+.journey-finished .pose-walk .traveler-arm-front, .journey-finished .pose-trudge .traveler-arm-front { transform: rotate(-125deg); }
+.journey-finished .pose-climb .traveler-arm-front { transform: rotate(-115deg); }
+.journey-finished .pose-swim .traveler-arm-front { transform: rotate(-175deg); }
+.walker-card .w-sun, .walker-card .w-stars *, .walker-card .w-snow *, .walker-card .w-waves *, .walker-card .w-lianas *, .walker-card .w-blizz *, .walker-card .w-haze, .walker-card .w-blizz-wind *, .walker-card .w-cloth { animation: none; }
+.w-haze { opacity: .25; }
+.w-walker { transition: transform 700ms var(--ease-in-out, cubic-bezier(.77,0,.175,1)); }
+.walking .pose-walk .traveler-arm-front, .walking .pose-walk .traveler-leg-back,
+.walking .pose-trudge .traveler-arm-front, .walking .pose-trudge .traveler-leg-back { animation: journey-stride 350ms ease-in-out 2 alternate; }
+.walking .pose-walk .traveler-arm-back, .walking .pose-walk .traveler-leg-front,
+.walking .pose-trudge .traveler-arm-back, .walking .pose-trudge .traveler-leg-front { animation: journey-stride 350ms ease-in-out 2 alternate-reverse; }
+.walking .traveler-pack { animation: journey-pack 350ms ease-in-out 2 alternate; }
+.walking .pose-climb .traveler-arm-front { animation: journey-reach 700ms ease-in-out; }
+.walking .pose-swim .traveler-arm-front { animation: journey-stroke 700ms ease-in-out; }
+@keyframes journey-stride { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+@keyframes journey-pack { to { transform: translateY(-2px) rotate(-1deg); } }
+@keyframes journey-reach { 0%,100% { transform: rotate(-145deg); } 50% { transform: rotate(-165deg); } }
+@keyframes journey-stroke { 0%,100% { transform: rotate(-135deg); } 50% { transform: rotate(-45deg); } }
+.walker-card { border: 1px solid var(--line); border-radius: 22px; background: var(--surface); box-shadow: none; }
+.w-goal { font: 700 20px/1.3 'Onest',sans-serif; overflow-wrap: anywhere; }
+#screen-marathon .w-scene { height: auto; aspect-ratio: 320/180; }
+#screen-marathon .w-scene, #completion-scenes .w-scene { background: var(--surface); }
+#screen-marathon .w-head { padding: 18px; }
+#screen-marathon .w-foot { padding: 16px; }
+.journey-deadline { color: var(--text-2); font-size: 13px; margin: 12px 0 24px; }
+#marathon-linked { margin-bottom: 28px; }
+.journey-habit { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 12px 0; }
+.journey-habit > span:nth-child(2) { flex: 1; min-width: 0; }
+.journey-habit b { font-size: 15px; overflow-wrap: anywhere; }
+.journey-habit small { display: block; color: var(--text-2); margin-top: 5px; font-size: 13px; }
+.journey-habit > .ic { width: 20px; flex-shrink: 0; color: var(--good); }
+#goals-card { background: none; border: 0; padding: 0; }
+.goal-row { padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); margin-bottom: 12px; }
+.goal-row.selected-route { border-color: var(--primary); }
+.goal-top { display: grid; grid-template-columns: 28px minmax(0,1fr); align-items: start; gap: 8px; }
+.g-name { overflow-wrap: anywhere; white-space: normal; font-size: 17px; }
+.g-deadline { grid-column: 2; text-align: left; font-size: 13px; }
+.goal-controls { flex-wrap: wrap; gap: 8px; }
+.goal-controls .mini-btn { min-height: 44px; padding: 8px 12px; border-radius: 12px; }
+.goal-bar { margin-block: 14px; }
+.journey-section-label { margin: 24px 0 12px; color: var(--text-2); font-size: 14px; }
+.journey-summary-link { color: var(--good); }
+.scene-pick { min-width: 0; border-radius: 16px; background: var(--surface); }
+.scene-pick.locked .sp-art, .gear-pick.locked .gp-art { opacity: 1; filter: none; }
+.scene-pick.locked, .gear-pick.locked { opacity: 1; }
+.sp-name { font: 650 14px 'Onest',sans-serif; }
+.scene-status, .gear-status { display: block; font-size: 12px; color: var(--text-2); padding: 4px; }
+.scene-picker { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.scene-pick.selected { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.mh-row { min-height: 56px; display: grid; grid-template-columns: 24px 24px minmax(0,1fr); padding: 12px; gap: 8px; }
+.mh-name { overflow-wrap: anywhere; }
+.mh-taken { grid-column: 3; white-space: normal; }
+.traveler-studio { display: flex; align-items: center; background: #14233B; border-radius: 24px; overflow: hidden; color: #F4F7FF; padding: 12px; margin-bottom: 16px; }
+.traveler-studio > svg { width: 52%; height: 240px; flex-shrink: 0; }
+.traveler-studio h2 { font-size: 23px; line-height: 1.2; margin: 10px 0; }
+.traveler-studio p, .journey-eyebrow { font-size: 13px; color: #AEBBD1; line-height: 1.6; }
+.bit-hero { padding: 16px; }
+.bh-value { font: 750 34px 'Onest',sans-serif; font-variant-numeric: tabular-nums; }
+.gear-picker { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.gear-pick { min-width: 0; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.gp-svg { width: 100%; height: 110px; }
+.gp-art { height: 110px; }
+.gear-pick.selected { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.gear-pick.selected .gear-status { color: var(--text); }
+.cosmetic-preview { display: flex; justify-content: center; align-items: center; margin: 16px 0; border-radius: 16px; background: var(--surface); overflow: hidden; }
+.cosmetic-preview svg { width: 100%; max-height: 220px; }
+.cosmetic-preview * { animation: none !important; }
+.cosmetic-preview > .ic { width: 80px; height: 100px; }
+.purchase-swatch { display: block; width: 100%; height: 100px; }
+#confirm-dialog { max-height: calc(100dvh - 24px); overflow: auto; }
+#confirm-dialog .cosmetic-preview img { object-fit: contain; }
+#completion-scenes .w-scene { aspect-ratio: 320/160; }
+#completion-scenes .w-goal { font-size: 20px; }
+#completion-scenes .w-steps { color: var(--text); }
+#completion-scenes .w-foot { padding: 16px; }
+.completion-content { max-width: 460px; }
+.friend-card { padding: 16px; border-radius: 18px; margin-top: 12px; gap: 10px; }
+.friend-card .friend-name { font-size: 16px; overflow-wrap: anywhere; }
+.friend-card .friend-login { font-size: 13px; overflow-wrap: anywhere; }
+.friend-metrics { color: var(--text); font-size: 14px; padding-top: 6px; }
+.friend-shared { grid-column: 1/-1; padding-top: 10px; border-top: 1px solid var(--line); }
+.friend-shared summary { min-height: 44px; cursor: pointer; font-size: 14px; display: flex; align-items: center; color: var(--text-2); }
+.friend-shared button { display: block; width: 100%; text-align: left; background: var(--surface-2); border: 0; border-radius: 12px; padding: 12px; margin-top: 6px; min-height: 44px; overflow-wrap: anywhere; }
+.friend-shared button small { display: block; margin-top: 5px; color: var(--text-2); }
+#btn-friend-add { width: 100%; justify-content: center; margin-bottom: 16px; }
+#friends-board .friend-row { display: grid; grid-template-columns: 20px 40px minmax(0,1fr); gap: 10px; align-items: center; padding: 14px 0; }
+#friends-board .friend-ava { width: 40px; height: 40px; }
+#friends-board .goal-text { grid-column: 3; white-space: normal; color: var(--text-2); font-size: 13px; }
+#friends-board .friend-name { overflow-wrap: anywhere; }
+@media(hover:hover) and (pointer:fine) { .journey-habit:hover, .gear-pick:hover, .scene-pick:hover { background: var(--surface-2); } }
+@media(prefers-reduced-motion:reduce) { .path-person *, .walking .path-person *, .w-walker { animation: none !important; transition: none !important; } }
