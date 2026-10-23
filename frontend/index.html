@@ -3,15 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0C1422" />
+  <meta name="theme-color" content="#0B1324" />
   <title>disbit — обещания себе</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="fonts.css" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="path-ui.css" />
+  <link rel="stylesheet" href="path-journey.css" />
+  <link rel="stylesheet" href="path-insights.css" />
+  <link rel="stylesheet" href="path-support.css" />
+  <link rel="stylesheet" href="path-motion.css" />
 </head>
 <body>
+  <a class="skip-link" href="#today">К основному содержимому</a>
 
   <!-- АУРА: размытые пятна света за контентом -->
   <div class="aura" aria-hidden="true">
@@ -94,15 +100,13 @@
     <!-- ================= ЭКРАН: СЕГОДНЯ ================= -->
     <main class="screen active" id="screen-today">
 
-      <h1 class="screen-title">Главная</h1>
+      <h1 class="screen-title">Сегодня</h1>
 
       <!-- баннер доступной награды -->
       <div id="reward-banner" hidden></div>
 
       <!-- промо марафона: новичок видит фичу сразу, не раскапывая настройки -->
-      <div id="marathon-promo" hidden></div>
 
-      <div class="week-strip" id="week-strip"></div>
 
       <section class="progress-card">
         <div class="progress-info">
@@ -120,6 +124,12 @@
           <div class="ring-label" id="ring-label">0%</div>
         </div>
       </section>
+
+      <div class="week-strip" id="week-strip"></div>
+      <button class="quiet-link" id="today-calendar">Открыть календарь</button>
+      <div id="marathon-promo" hidden></div>
+      <div id="walker" hidden></div>
+      <button class="quiet-link" id="all-marathons" hidden>Все марафоны</button>
 
       <!-- закреплённые: всплывают наверх, секция появляется только когда есть что закрепить -->
       <div id="pinned-block" hidden>
@@ -143,20 +153,24 @@
 
       <!-- марафон: путник идёт к цели, 1 обещание = 1 шаг. Стоит сразу под
            обещаниями, чтобы прогресс двигался на глазах при отметке -->
-      <div id="walker" hidden></div>
 
       <!-- большие цели (переехали из календаря) -->
+      <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
+    </main>
+
+    <main class="screen" id="screen-marathon">
+      <h1 class="screen-title">Марафон</h1>
+      <button class="row-btn path-avatar-link" id="open-avatar"><svg class="ic"><use href="#i-user"/></svg><span>Персонаж и биты</span><svg class="ic"><use href="#i-chev-r"/></svg></button>
+      <div id="marathon-walker-slot"></div>
+      <section id="marathon-linked" aria-label="Обещания маршрута"></section>
       <section class="card" id="goals-card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-target"/></svg> Большие цели</h3>
-        <p class="hint" style="margin:0 0 8px">Долгие цели на месяцы — основа, ради которой живут ежедневные обещания.</p>
+        <h2 class="card-title">Твои маршруты</h2>
         <div id="goal-list"></div>
         <button class="row-btn" id="btn-goal-add">
-          <svg class="ic"><use href="#i-plus"/></svg><span>Добавить большую цель</span>
+          <svg class="ic"><use href="#i-plus"/></svg><span>Новый марафон или цель</span>
         </button>
       </section>
 
-      <!-- итог дня — в самом низу: это финальное действие экрана -->
-      <button class="day-summary-btn" id="btn-day-summary">Подвести итог дня</button>
     </main>
 
     <!-- ================= ЭКРАН: КАЛЕНДАРЬ ================= -->
@@ -181,9 +195,8 @@
       <div class="cal-grid" id="cal-grid"></div>
 
       <div class="cal-legend">
-        <span><i class="lg-dot done"></i>всё выполнено</span>
-        <span><i class="lg-dot part"></i>частично</span>
-        <span><i class="lg-dot fail"></i>пропуск</span>
+        <span>✓ Выполнено</span><span>м Минимум</span><span>Ⅱ Грэйс-день</span>
+        <span>• Частично</span><span>× Не выполнено</span><span>· Нет плана</span>
       </div>
 
       <section class="card" id="cal-month-stats"></section>
@@ -203,7 +216,8 @@
          иконки обещаний и грэйс-дни. Биты сюда не покупаются — только
          зарабатываются выполненными обещаниями. -->
     <main class="screen" id="screen-avatar">
-      <h1 class="screen-title">Аватар</h1>
+      <h1 class="screen-title">Персонаж и биты</h1>
+      <div id="traveler-preview" class="traveler-preview"></div>
 
       <section class="card bit-hero">
         <div>
@@ -221,8 +235,19 @@
 
       <section class="card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-tool"/></svg> Снаряжение путника<span class="bit-chip">0</span></h3>
-        <p class="hint" style="margin:0 0 10px">Что путник берёт с собой в марафон. Выбранное работает на всех сценах; «по сцене» — как было раньше.</p>
+        <p class="hint" style="margin:0 0 10px">Для пустыни, Луны и джунглей. В океане, на Эвересте и в Антарктиде используется специальная экипировка маршрута.</p>
         <div class="gear-picker" id="gear-picker"></div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Сцены маршрутов</h2>
+        <p class="hint">Открытая сцена доступна в настройках любого марафона.</p>
+        <div class="scene-picker" id="journey-scene-shop"></div>
+      </section>
+      <section class="card">
+        <h2 class="card-title">Аватар профиля</h2>
+        <p class="hint">Фото, эмодзи и знаки не меняют путешественника.</p>
+        <button class="row-btn" id="journey-profile-avatar">Выбрать аватар</button>
       </section>
 
       <section class="card">
@@ -251,7 +276,6 @@
 
       <section class="card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-users"/></svg> Мои друзья</h3>
-        <p class="hint" style="margin:0 0 8px">Вместе обещания заходят легче: видно, кто на серии, и не хочется отставать.</p>
         <div id="friend-list"></div>
         <button class="row-btn" id="btn-friend-add">
           <svg class="ic"><use href="#i-plus"/></svg><span>Добавить друга</span>
@@ -259,7 +283,7 @@
       </section>
 
       <section class="card">
-        <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-flame"/></svg> Соревнование</h3>
+        <h2 class="card-title">Ваш прогресс</h2>
         <div id="friends-board"></div>
       </section>
 
@@ -315,6 +339,7 @@
           <span class="wc-label">выполнено обещаний за неделю</span>
         </div>
         <div id="week-chart-box"></div>
+        <ul class="week-text" id="week-text" aria-label="Результаты по дням недели"></ul>
       </section>
 
       <div class="stats-grid">
@@ -355,6 +380,7 @@
           <i class="hm-cell l3"></i>
           <span>всё</span>
         </div>
+        <details class="chart-text"><summary>История текстом</summary><ul id="heatmap-text"></ul></details>
       </section>
 
       <section class="card">
@@ -364,7 +390,7 @@
 
       <section class="card">
         <h3 class="card-title">История штрафов</h3>
-        <p class="sim-note"><svg class="ic ic-s"><use href="#i-alert"/></svg> Симуляция: реальные деньги не списываются.</p>
+        <p class="sim-note" data-payment-note>Режим платежей уточняется.</p>
         <div id="ledger-list"></div>
       </section>
     </main>
@@ -378,6 +404,7 @@
         <div class="avatar" id="profile-avatar">?</div>
         <div class="profile-name-box">
           <h2 class="profile-name" id="profile-name">Без имени</h2>
+          <p class="profile-login" id="profile-login"></p>
           <p class="profile-since" id="profile-since"></p>
         </div>
         <button class="icon-btn" id="btn-profile-edit" aria-label="Редактировать профиль">
@@ -386,7 +413,7 @@
       </section>
 
       <!-- достижения: компактная карточка, вся коллекция — на отдельном экране -->
-      <section class="card ach-card" id="ach-card" role="button" tabindex="0"
+      <a class="card ach-card" id="ach-card" href="#medals"
         aria-label="Открыть достижения">
         <div class="ach-top">
           <h3 class="card-title" style="margin:0">
@@ -396,7 +423,7 @@
         </div>
         <div class="ach-preview" id="ach-preview"></div>
         <div class="ach-bar"><div class="ach-fill" id="ach-fill"></div></div>
-      </section>
+      </a>
 
       <!-- мотивация -->
       <section class="card">
@@ -406,8 +433,11 @@
             aria-label="Уровень мотивации" />
           <output id="mot-out" for="mot-level">50%</output>
         </div>
+        <p id="mot-read" class="mot-read" hidden></p>
+        <label class="field-label" id="mot-text-label" for="mot-text">Что тебя мотивирует</label>
         <textarea class="field-textarea" id="mot-text" maxlength="500"
           placeholder="Что тебя мотивирует? Твои цели, желания, ради чего всё это…"></textarea>
+        <p class="hint" id="mot-private">Личный текст. Друзья его не видят.</p>
         <div class="sheet-actions" style="margin-top:12px">
           <button class="btn-ghost" id="mot-edit" hidden>Изменить</button>
           <button class="btn-primary" id="mot-save">Сохранить мотивацию</button>
@@ -427,6 +457,7 @@
       <!-- депозит: деньги на кону лежат заранее, штраф списывается отсюда -->
       <section class="card" id="wallet-card" hidden>
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-coins"/></svg> Депозит</h3>
+        <p class="wallet-mode" id="wallet-mode"></p>
         <div class="wallet-top">
           <div>
             <div class="wallet-balance" id="wallet-balance">0 ₽</div>
@@ -438,6 +469,10 @@
           <svg class="ic ic-s"><use href="#i-alert"/></svg>
           Тестовый режим: деньги ненастоящие, платёжка ещё не подключена.
         </p>
+        <p id="wallet-state" class="hint" role="status"></p>
+        <button class="btn-ghost" id="wallet-retry">Обновить депозит</button>
+        <details class="refund-info"><summary>Возврат остатка</summary><p class="hint">Возврат на исходный способ оплаты пока не подключён. Заявку отправить нельзя.</p><label class="field-label" for="refund-amount">Сумма возврата, ₽</label><input id="refund-amount" class="field-input" type="number" disabled aria-describedby="refund-status"><p id="refund-status" class="hint">Недоступно. Деньги не перемещаются.</p></details>
+        <h4 class="history-heading">Последние операции</h4>
         <div id="wallet-history"></div>
       </section>
 
@@ -445,18 +480,18 @@
       <section class="card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-chart"/></svg> Статистика</h3>
         <p class="hint" style="margin:0 0 8px">Статистика по отдельному обещанию — тапни его карточку на главной.</p>
-        <button class="row-btn" id="btn-open-stats">
+        <a class="row-btn" id="btn-open-stats" href="#stats">
           <svg class="ic"><use href="#i-chart"/></svg><span>Общая статистика</span>
-        </button>
+        </a>
       </section>
 
       <!-- календарь: из дока убран (его слот занял «Аватар»), вход отсюда -->
       <section class="card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-calendar"/></svg> Календарь</h3>
         <p class="hint" style="margin:0 0 8px">История по дням: можно доотметить или снять отметку задним числом.</p>
-        <button class="row-btn" id="btn-open-calendar">
+        <a class="row-btn" id="btn-open-calendar" href="#calendar">
           <svg class="ic"><use href="#i-calendar"/></svg><span>Открыть календарь</span>
-        </button>
+        </a>
       </section>
 
       <!-- аккаунт -->
@@ -486,7 +521,13 @@
             <span class="as-thumb" aria-hidden="true"></span>
           </button>
         </div>
-        <p class="hint">Автоитог отключить нельзя — в этом весь смысл штрафа 😉</p>
+        <p class="hint">Прошедшие дни проверяются при запуске. Этот расчёт нельзя отключить в настройках.</p>
+        <div class="setting-row">
+          <label for="set-motion">Движение интерфейса</label>
+          <select id="set-motion" name="motion"><option value="system">Как в системе</option><option value="reduce">Уменьшить</option></select>
+        </div>
+        <p class="hint" id="motion-hint"></p>
+        <p class="hint" id="notif-browser">Напоминания доступны только в установленном приложении. Браузер не отправляет их в фоне.</p>
 
         <!-- Напоминания. Локальные уведомления есть только в приложении:
              в браузере плагина нет и весь блок остаётся скрытым. -->
@@ -518,12 +559,16 @@
             <input type="time" class="time-inp" id="set-notif-evening" value="21:00" />
           </div>
           <p class="hint" id="notif-hint" hidden></p>
+          <p class="hint" id="notif-status" role="status"></p>
+          <details id="notif-help" hidden><summary>Как разрешить уведомления</summary><p>В настройках телефона открой «Приложения» → disbit → «Уведомления» и разреши показ. Затем вернись сюда и включи напоминания.</p><button class="btn-secondary" id="notif-check" type="button">Проверить разрешение</button></details>
         </div>
+        <div class="capability-note"><b>Блокировка приложений</b><span>Пока недоступна на Android и iOS. Старые обещания сохранены без активного ограничения.</span><button class="row-btn" type="button" id="capability-open">Что будет доступно</button></div>
       </section>
 
       <!-- данные -->
       <section class="card">
         <h3 class="card-title">Данные</h3>
+        <p class="hint" id="data-scope">JSON содержит локальную копию обещаний, истории, оформления и настроек. Баланс депозита, медиафайлы и пароли в неё не входят.</p>
         <button class="row-btn" id="btn-export">
           <svg class="ic"><use href="#i-download"/></svg><span>Экспорт данных (JSON)</span>
         </button>
@@ -532,41 +577,51 @@
         </button>
         <input type="file" id="import-file" accept="application/json" hidden />
         <button class="row-btn danger" id="btn-wipe">
-          <svg class="ic"><use href="#i-trash"/></svg><span>Стереть все данные</span>
+          <svg class="ic"><use href="#i-trash"/></svg><span>Очистить данные на устройстве</span>
         </button>
-        <a class="row-btn" href="privacy.html">
+        <p id="data-status" class="hint" role="status" tabindex="-1" hidden></p>
+        <a class="row-btn" href="privacy.html?from=profile">
           <svg class="ic"><use href="#i-lock"/></svg><span>Политика конфиденциальности</span>
         </a>
       </section>
 
-      <p class="about-note">disbit v0.4 · прототип · штрафы симулируются<br/>Реальные списания и блокировки — в нативной версии.</p>
+      <p class="about-note">Режим платежей указан в депозите. Блокировка приложений пока недоступна.</p>
     </main>
 
     <!-- ПЛАВАЮЩИЙ GLASS-ДОК (по мотивам dock.tsx: гауссова магнификация) -->
     <nav class="dock" id="dock" aria-label="Основная навигация">
       <!-- стеклянная линза-ползунок: скользит под активную вкладку -->
-      <span class="dock-lens" id="dock-lens" aria-hidden="true"></span>
-      <button class="dock-item nav-item active" data-screen="today">
+      <a class="dock-item nav-item active" href="#today" data-screen="today">
         <span class="di-icon"><svg class="ic"><use href="#i-home"/></svg></span>
-        <span class="di-label">Главная</span>
-      </button>
-      <button class="dock-item nav-item" data-screen="avatar">
-        <span class="di-icon"><svg class="ic"><use href="#i-palette"/></svg></span>
-        <span class="di-label">Аватар</span>
-      </button>
-      <button class="dock-item fab" id="btn-add" aria-label="Новое обещание">
+        <span class="di-label">Сегодня</span>
+      </a>
+      <a class="dock-item nav-item" href="#marathon" data-screen="marathon">
+        <span class="di-icon"><svg class="ic"><use href="#i-target"/></svg></span>
+        <span class="di-label">Марафон</span>
+      </a>
+      <button class="dock-item fab" id="btn-add" aria-label="Создать">
         <span class="di-icon"><svg class="ic"><use href="#i-plus"/></svg></span>
-        <span class="di-label">Новая</span>
+        <span class="di-label">Создать</span>
       </button>
-      <button class="dock-item nav-item" data-screen="friends">
+      <a class="dock-item nav-item" href="#friends" data-screen="friends">
         <span class="di-icon"><svg class="ic"><use href="#i-users"/></svg></span>
         <span class="di-label">Друзья</span>
-      </button>
-      <button class="dock-item nav-item" data-screen="profile">
+      </a>
+      <a class="dock-item nav-item" href="#profile" data-screen="profile">
         <span class="di-icon"><svg class="ic"><use href="#i-user"/></svg></span>
         <span class="di-label">Профиль</span>
-      </button>
+      </a>
     </nav>
+  </div>
+
+  <div class="sheet-overlay" id="create-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="create-title">
+      <h2 class="sheet-title" id="create-title">Создать</h2>
+      <button class="create-option" id="create-promise"><svg class="ic"><use href="#i-check"/></svg><span><b>Обещание</b><small>Одно действие, которое повторяется</small></span></button>
+      <button class="create-option" id="create-marathon"><svg class="ic"><use href="#i-target"/></svg><span><b>Марафон или цель</b><small>Путь из ежедневных шагов</small></span></button>
+      <button class="create-option" id="create-idea"><svg class="ic"><use href="#i-bookmark"/></svg><span><b>Идея на будущее</b><small>Сохранить и вернуться позже</small></span></button>
+      <button class="btn-ghost" data-close-sheet="create-overlay">Закрыть</button>
+    </div>
   </div>
 
   <!-- ===== ШТОРКА: ДОБАВИТЬ / РЕДАКТИРОВАТЬ ОБЕЩАНИЕ ===== -->
@@ -577,14 +632,18 @@
 
       <label class="field-label" for="f-name">Название</label>
       <input class="field-input" id="f-name" type="text" placeholder="Например: Читать 20 страниц" maxlength="40" autocomplete="off" />
+      <span class="hint" id="name-limit" hidden></span>
+      <div class="habit-preview" id="habit-preview" aria-label="Предпросмотр обещания"></div>
 
       <span class="field-label">Иконка</span>
       <div class="picker" id="icon-picker"></div>
 
-      <span class="field-label">Цвет</span>
+      <span class="field-label">Акцент карточки</span>
       <div class="picker" id="color-picker"></div>
 
-      <span class="field-label">Дни недели <span class="days-count" id="days-count">7 в неделю</span></span>
+      <span class="field-label">Расписание</span>
+      <div class="seg" id="schedule-mode"><button class="seg-btn active" data-schedule="fixed" type="button">По дням</button><button class="seg-btn" data-schedule="flex" type="button">N дней в неделю</button></div>
+      <span class="field-label" id="fixed-days-label">Дни недели <span class="days-count" id="days-count">7 в неделю</span></span>
       <div class="day-picker" id="day-picker"></div>
 
       <!-- гибкий режим: N раз в неделю вместо строгих дней -->
@@ -592,7 +651,7 @@
         <div class="wt-row">
           <div>
             <h3 class="wt-title">Сколько дней в неделю</h3>
-            <p class="wt-sub" id="wt-sub">Строго по выбранным дням</p>
+            <span class="sr-only" id="wt-sub">Строго по выбранным дням</span>
           </div>
           <div class="wt-stepper">
             <button type="button" class="wt-step" id="wt-minus" aria-label="Меньше дней в неделю">−</button>
@@ -600,8 +659,6 @@
             <button type="button" class="wt-step" id="wt-plus" aria-label="Больше дней в неделю">+</button>
           </div>
         </div>
-        <p class="hint" id="wt-hint">Не получается день в день? Поставь, сколько раз за неделю —
-          и делай в любые дни. Штраф будет, только если норму уже не успеть добрать.</p>
       </section>
 
       <span class="field-label">Цель</span>
@@ -611,19 +668,22 @@
       </div>
       <div class="count-fields" id="count-fields" hidden>
         <input class="field-input small" id="f-target" type="number" inputmode="numeric" min="1" value="5" aria-label="Сколько раз" />
-        <input class="field-input" id="f-unit" type="text" placeholder="ед. (страниц, стаканов…)" maxlength="14" />
+        <input class="field-input" id="f-unit" type="text" placeholder="Страниц, стаканов…" maxlength="14" aria-label="Единица измерения" />
       </div>
 
-      <label class="field-label" for="f-min">Минимум — запасной вариант (необязательно)</label>
+      <section class="extra-conditions" id="extra-conditions" aria-labelledby="minimum-label">
+      <label class="field-label" id="minimum-label" for="f-min">Минимум</label>
       <input class="field-input" id="f-min" type="text" maxlength="60"
         placeholder="Например: прочитать 1 страницу" />
       <p class="hint">Нет сил — сделай минимум. Серия сохранится, дисциплина не прервётся.</p>
+      </section>
 
       <span class="field-label">Штраф при невыполнении</span>
       <div class="seg" id="stake-mode">
         <button class="seg-btn active" data-stake="money"><svg class="ic ic-s"><use href="#i-coins"/></svg>Деньги</button>
-        <button class="seg-btn" data-stake="lock"><svg class="ic ic-s"><use href="#i-lock"/></svg>Блокировка</button>
+        <button class="seg-btn" data-stake="lock" disabled aria-describedby="lock-unavailable"><svg class="ic ic-s"><use href="#i-lock"/></svg>Недоступно</button>
       </div>
+      <p class="hint" id="lock-unavailable">Блокировка других приложений пока не поддерживается. Старые обещания сохраняются, но приложения не блокируют.</p>
 
       <div class="stake-money" id="stake-money">
         <div class="count-fields">
@@ -631,22 +691,23 @@
           <span class="suffix">₽ за пропуск</span>
         </div>
         <div class="seg" id="recipient">
-          <button class="seg-btn active" data-rec="charity"><svg class="ic ic-s"><use href="#i-heart"/></svg>Благотворительность</button>
-          <button class="seg-btn" data-rec="creators"><svg class="ic ic-s"><use href="#i-tool"/></svg>Создателям</button>
+          <button class="seg-btn" data-rec="charity"><svg class="ic ic-s"><use href="#i-heart"/></svg>Благотворительность</button>
+          <button class="seg-btn active" data-rec="creators"><svg class="ic ic-s"><use href="#i-tool"/></svg>Создателям</button>
         </div>
       </div>
 
       <div class="stake-lock" id="stake-lock" hidden>
         <div class="count-fields">
           <input class="field-input small" id="f-lock-mins" type="number" inputmode="numeric"
-            min="15" step="15" value="60" aria-label="На сколько блокировать" />
+            min="15" step="15" value="60" aria-label="На сколько блокировать" disabled />
           <span class="suffix" id="f-lock-suffix">минут за пропуск</span>
         </div>
-        <input class="field-input" id="f-apps" type="text" placeholder="Приложения через запятую: Instagram, TikTok" />
-        <p class="hint">Пропустил — выбранные приложения блокируются на это время.
-          В прототипе блокировка симулируется, реальная — в нативной версии.</p>
+        <input class="field-input" id="f-apps" type="text" placeholder="Приложения" aria-label="Приложения старого тестового режима" disabled />
+        <p class="hint">Это настройки старого тестового режима. Денежный штраф можно выбрать отдельно — автоматически он не включается.</p>
       </div>
 
+      <p class="form-summary" id="habit-summary"></p>
+      <p class="form-error" id="habit-form-error" role="alert" hidden></p>
       <div class="sheet-actions">
         <button class="btn-ghost" id="btn-cancel">Отмена</button>
         <button class="btn-primary" id="btn-save">Дать обещание</button>
@@ -665,6 +726,7 @@
       </div>
       <p class="hint" style="text-align:center">Мы отправили код из 6 цифр. Введи его ниже.</p>
 
+      <label class="field-label" for="verify-code">Код из письма</label>
       <input class="field-input code-input" id="verify-code" type="text" inputmode="numeric"
         maxlength="6" placeholder="000000" autocomplete="one-time-code" />
       <p class="auth-error" id="verify-error" hidden></p>
@@ -684,6 +746,7 @@
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="topup-title">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="topup-title">Пополнить депозит</h2>
+      <p id="topup-mode" class="sim-note"></p>
       <p class="hint">Штрафы списываются с депозита — карта не привязывается,
         деньги сами не уходят. Остаток всегда виден.</p>
 
@@ -696,7 +759,8 @@
 
       <label class="field-label" for="topup-custom">Другая сумма, ₽</label>
       <input class="field-input small" id="topup-custom" type="number" inputmode="numeric"
-        min="50" max="50000" step="50" placeholder="300" />
+        min="50" max="50000" step="0.01" placeholder="300" />
+      <p class="hint">От 50 до 50 000 ₽ за одно пополнение.</p>
       <p class="auth-error" id="topup-error" hidden></p>
 
       <div class="sheet-actions">
@@ -707,6 +771,12 @@
   </div>
 
   <!-- ===== ШТОРКА: ПРИНЯТЬ ПРИГЛАШЕНИЕ (пришли по ссылке/QR) ===== -->
+  <div class="sheet-overlay" id="operation-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="operation-title">
+      <h2 class="sheet-title" id="operation-title">Операция</h2><div id="operation-body"></div>
+      <button class="btn-primary full" id="operation-close">Закрыть</button>
+    </div>
+  </div>
   <div class="sheet-overlay" id="join-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="join-title">
       <div class="sheet-handle"></div>
@@ -791,6 +861,7 @@
             <button class="hstat-mi" id="hstat-minimum" role="menuitem">
               <svg class="ic ic-s"><use href="#i-check"/></svg><span>Отметить минимум</span>
             </button>
+            <button class="hstat-mi" id="hstat-skip" role="menuitem">Пропустить день</button>
             <button class="hstat-mi" id="hstat-invite" role="menuitem">
               <svg class="ic ic-s"><use href="#i-users"/></svg><span>Позвать по QR / ссылке</span>
             </button>
@@ -806,6 +877,13 @@
       </div>
 
       <div id="hstat-body"></div>
+      <div class="detail-actions">
+        <button class="btn-ghost" id="detail-pin">Закрепить</button>
+        <button class="btn-ghost" id="detail-share">Поделиться</button>
+        <button class="btn-ghost" id="detail-undo" hidden>Отменить выполнение</button>
+        <button class="btn-ghost" id="detail-archive">В архив</button>
+        <button class="btn-ghost" data-close-sheet="hstat-overlay">Закрыть</button>
+      </div>
     </div>
   </div>
 
@@ -828,6 +906,7 @@
       <h2 class="sheet-title" id="pf-sheet-title">Профиль</h2>
 
       <div class="avatar-preview"><div class="avatar" id="ava-preview">?</div></div>
+      <button class="btn-ghost full" id="choose-traveler-avatar">Портрет путешественника</button>
 
       <label class="field-label" for="pf-name-input">Имя</label>
       <input class="field-input" id="pf-name-input" type="text" placeholder="Как тебя зовут?" maxlength="24" autocomplete="name" />
@@ -873,13 +952,13 @@
       <div class="picker" id="goal-icon-picker"></div>
 
       <label class="field-label" for="g-deadline">Срок (необязательно)</label>
-      <input class="field-input" id="g-deadline" type="date" />
+      <input class="field-input" id="g-deadline" type="date" hidden />
 
       <label class="field-label" for="g-steps">
         Шагов до финиша
         <button type="button" class="days-count" id="g-steps-hint">1 шаг = 1 обещание</button>
       </label>
-      <input class="field-input small" id="g-steps" type="number" min="0" max="999" step="1" placeholder="30" />
+      <input class="field-input small" id="g-steps" type="number" min="0" max="999" step="1" placeholder="30" hidden />
       <p class="hint">Путник идёт к цели: каждое выполненное обещание — шаг вперёд.
         Поставь 0, чтобы вести прогресс вручную, без путника.</p>
 
@@ -892,7 +971,7 @@
       </span>
       <div id="goal-habit-list"></div>
       <p class="hint" id="g-habits-hint">
-        Обещание с названием цели создастся сама. Можно добавить ещё — до 5 всего.
+        Выбери от 1 до 5 существующих обещаний. Новые обещания и штрафы не создаются.
         Одно обещание участвует только в одном марафоне.
       </p>
 
@@ -900,6 +979,7 @@
         <button class="btn-ghost" id="g-cancel">Отмена</button>
         <button class="btn-primary" id="g-save">Сохранить</button>
       </div>
+      <p class="auth-error" id="g-error" role="alert" hidden></p>
     </div>
   </div>
 
@@ -963,19 +1043,22 @@
   </div>
 
   <!-- ===== БАННЕР ПРУФА: сними живое фото/видео после отметки ===== -->
-  <div class="proof-overlay" id="proof-overlay" hidden>
+  <div class="proof-overlay" id="proof-overlay" role="dialog" aria-modal="true" aria-labelledby="proof-title" hidden>
     <div class="proof-inner">
-      <h2 class="proof-title">Поделись моментом</h2>
+      <button class="icon-btn proof-close" id="proof-close" aria-label="Закрыть съёмку"><svg class="ic"><use href="#i-x"/></svg></button>
+      <h2 class="proof-title" id="proof-title">Поделиться моментом</h2>
       <p class="proof-habit" id="proof-habit-name"></p>
-      <p class="proof-sub">Сними <b>живое</b> фото или короткое видео, как справился. Из галереи — нельзя.</p>
+      <p class="proof-sub">Фото или видео до 15 секунд. Камера включится по нажатию. Для сохранения шага отправь пруф или используй пропуск.</p>
+      <button class="btn-primary" id="proof-start">Включить камеру</button>
 
       <div class="proof-stage">
         <video class="proof-media proof-cam" id="proof-cam" autoplay playsinline muted></video>
-        <img class="proof-media proof-preview" id="proof-preview" alt="" hidden />
+        <img class="proof-media proof-preview" id="proof-preview" alt="Снятое подтверждение выполнения" hidden />
         <video class="proof-media proof-preview" id="proof-preview-vid" playsinline controls hidden></video>
         <span class="proof-rec" id="proof-rec" hidden>● <b id="proof-rec-time">0</b>с</span>
       </div>
-      <p class="proof-cam-err" id="proof-cam-err" hidden></p>
+      <p class="proof-cam-err" id="proof-cam-err" role="alert" hidden></p>
+      <p class="form-error" id="proof-upload-error" role="alert" hidden></p>
 
       <!-- режим съёмки -->
       <div class="proof-controls" id="proof-cap">
@@ -986,14 +1069,42 @@
       <!-- подтверждение снятого -->
       <div class="proof-controls" id="proof-confirm" hidden>
         <button class="btn-ghost" id="proof-retake">Переснять</button>
-        <button class="btn-primary" id="proof-send">Поделиться</button>
+        <button class="btn-primary" id="proof-send">Отправить пруф</button>
       </div>
 
       <button class="proof-skip" id="proof-skip">
-        Пропустить · осталось <b id="proof-skip-left">5</b>
+        Без фото
       </button>
+      <button class="btn-ghost" id="proof-share-card">Поделиться карточкой</button>
     </div>
   </div>
+
+  <dialog class="action-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button class="btn-ghost" value="cancel" autofocus>Оставить как есть</button>
+        <button class="btn-primary" value="confirm">Подтвердить</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="completion-dialog" id="completion-dialog" aria-labelledby="completion-title" aria-describedby="completion-name">
+    <form method="dialog" class="completion-content">
+      <p class="completion-eyebrow">ТВОЙ ШАГ</p>
+      <h2 id="completion-title">Ещё один шаг вперёд</h2>
+      <p id="completion-name"></p>
+      <div id="completion-scenes"></div>
+      <p id="completion-streak"></p>
+      <div class="dialog-actions">
+        <button class="btn-primary" type="button" id="completion-skip" autofocus>Пропустить</button>
+        <button class="btn-ghost" value="summary" id="completion-summary" hidden>Итоги марафона</button>
+        <button class="btn-ghost" value="share">Поделиться фото или видео</button>
+        <button class="quiet-link" value="cancel">Вернуться без отметки</button>
+      </div>
+      <p class="hint" id="completion-proof-hint" role="status">Подтверди шаг фото или видео, либо используй пропуск.</p>
+    </form>
+  </dialog>
 
   <!-- ===== «НАЧАЛО»: интро-воронка при самом первом входе (фон как у приложения) ===== -->
   <div class="intro" id="intro" hidden>
@@ -1003,6 +1114,7 @@
     <div class="intro-progress"><span class="intro-progress-fill" id="intro-progress"></span></div>
 
     <div class="intro-inner">
+      <button class="path-back" id="intro-back" type="button">Назад</button>
       <!-- 1: сколько часов в телефоне -->
       <section class="intro-step" data-step="hours">
         <p class="intro-kicker">Честно про телефон</p>
@@ -1015,18 +1127,16 @@
 
       <!-- 2: сколько потеряешь -->
       <section class="intro-step" data-step="lose" hidden>
-        <p class="intro-kicker">При таком темпе</p>
-        <div class="intro-big" id="intro-lose-num">0</div>
-        <p class="intro-big-sub">жизни уйдёт в экран телефона</p>
-        <button class="btn-primary intro-cta" data-next>Это жесть 😳</button>
+        <h2 class="intro-q">Начни с небольшого обещания</h2>
+        <p class="intro-hint">Например, читать 10 минут каждый вечер. Выбери действие, которое действительно помещается в твой день.</p>
+        <button class="btn-primary intro-cta" data-next>Дальше</button>
       </section>
 
       <!-- 3: сколько вернёт disbit -->
       <section class="intro-step" data-step="gain" hidden>
-        <p class="intro-kicker">disbit может вернуть</p>
-        <div class="intro-big intro-gain" id="intro-gain-num">0</div>
-        <p class="intro-big-sub">можно вернуть — если жить, а не скроллить</p>
-        <button class="btn-primary intro-cta" data-next>Хочу так 🔥</button>
+        <h2 class="intro-q">Оставь место для сложных дней</h2>
+        <p class="intro-hint">Минимум помогает продолжить: одна страница вместо десяти минут чтения. А доступный грэйс-день можно выбрать явно, без шага марафона и бита.</p>
+        <button class="btn-primary intro-cta" data-next>Дальше</button>
       </section>
 
       <!-- 4: что хочешь улучшить -->
@@ -1095,7 +1205,7 @@
       <section class="intro-step intro-step-wide" data-step="perks" hidden>
         <h2 class="intro-q">Почему с disbit получится</h2>
         <ul class="intro-perks">
-          <li><span class="ip-ic">🎯</span><div><b>Штраф на кону</b><span>Не хватает дисциплины? На кону деньги или блокировка. Деньги — на благотворительность или разработчикам.</span></div></li>
+          <li><span class="ip-ic">🎯</span><div><b>Последствия заранее</b><span>Укажи штраф за невыполнение. Режим платежей виден в депозите; блокировка приложений пока недоступна.</span></div></li>
           <li><span class="ip-ic">⚡</span><div><b>Минимум</b><span>Нет сил на полное — сделай маленький шаг. Серия жива.</span></div></li>
           <li><span class="ip-ic">🛟</span><div><b>Грейс-день</b><span>Один пропуск не рвёт серию.</span></div></li>
           <li><span class="ip-ic">🏔️</span><div><b>Марафон</b><span>Путник идёт к твоей большой цели — 1 обещание = 1 шаг.</span></div></li>
@@ -1109,7 +1219,7 @@
       <!-- 9: отпечаток-обещание -->
       <section class="intro-step" data-step="commit" hidden>
         <p class="intro-kicker">Дай слово себе</p>
-        <h2 class="intro-q">Приложи палец и пообещай стать лучше</h2>
+        <h2 class="intro-q">Готов к первому обещанию?</h2>
         <button class="fp" id="intro-fp" aria-label="Приложить палец и дать обещание">
           <span class="fp-fill" id="intro-fp-fill"></span>
           <svg class="fp-svg" viewBox="0 0 100 100" aria-hidden="true">
@@ -1126,6 +1236,7 @@
           </svg>
         </button>
         <p class="intro-hint" id="intro-fp-hint">Держи палец пару секунд</p>
+        <button class="btn-primary intro-cta" id="intro-finish">Перейти в приложение</button>
       </section>
     </div>
   </div>
@@ -1136,14 +1247,12 @@
       <section class="ob-slide">
         <div class="ob-art ob-art-1"><svg class="ic"><use href="#i-coins"/></svg></div>
         <h2 class="ob-title">Не ставки, а штраф</h2>
-        <p class="ob-text">Нарушил обещание — теряешь то, что назначил себе сам заранее:
-          деньги на благотворительность или блокировку приложений. Дисциплина через ответственность.</p>
+        <p class="ob-text">Выбери обещание, расписание и штраф за невыполнение. Режим платежей указан в депозите. Блокировка приложений пока недоступна.</p>
       </section>
       <section class="ob-slide">
         <div class="ob-art ob-art-2"><svg class="ic"><use href="#i-flame"/></svg></div>
         <h2 class="ob-title">Грейс-день и минимум</h2>
-        <p class="ob-text">Один пропуск серию не рвёт — два подряд рвут. Нет сил на полную?
-          Сделай запасной «минимум» — дисциплина не прервётся.</p>
+        <p class="ob-text">Нет сил читать 10 минут? Сделай свой минимум: одну страницу. Или нажми «Пропустить день», если есть грэйс-день. Серия сохранится; за грэйс-день нет шага и бита.</p>
       </section>
       <section class="ob-slide">
         <div class="ob-art ob-art-3"><svg class="ic"><use href="#i-award"/></svg></div>
@@ -1155,6 +1264,7 @@
 
     <div class="ob-dots" id="ob-dots" aria-hidden="true"></div>
     <div class="ob-actions">
+      <button class="btn-ghost" id="ob-back">Назад</button>
       <button class="btn-ghost" id="ob-skip">Пропустить</button>
       <button class="btn-primary" id="ob-next">Далее</button>
     </div>
@@ -1201,6 +1311,7 @@
       </div>
 
       <p class="auth-error" id="auth-error" hidden></p>
+      <details class="account-availability"><summary>Другие способы входа</summary><p class="hint">Вход через Google и Apple, а также восстановление пароля пока не подключены. Сейчас доступны логин или почта и пароль.</p></details>
 
       <div class="sheet-actions">
         <button class="btn-ghost" id="auth-cancel">Позже</button>
@@ -1245,8 +1356,46 @@
     </div>
   </div>
 
+  <div class="sheet-overlay" id="capability-overlay" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="capability-title">
+      <h2 id="capability-title" class="sheet-title">Блокировка приложений</h2>
+      <p class="hint">Не подключена. Ни один шаг ниже не запрашивает доступ и не ограничивает телефон. Это описание будущего нативного сценария для Android и iOS.</p>
+      <fieldset class="capability-picker"><legend>Макеты состояний</legend>
+        <button type="button" data-capability="choose" aria-pressed="true">Выбор</button>
+        <button type="button" data-capability="permission" aria-pressed="false">Разрешение</button>
+        <button type="button" data-capability="active" aria-pressed="false">Ограничение</button>
+        <button type="button" data-capability="finished" aria-pressed="false">Завершение</button>
+        <button type="button" data-capability="revoked" aria-pressed="false">Отзыв доступа</button>
+      </fieldset>
+      <section class="capability-preview" aria-live="polite">
+        <h3 id="capability-state-title">Выбранные приложения</h3>
+        <p id="capability-state-copy">Приложения не выбраны. Список и длительность появятся после подключения нативной функции.</p>
+        <button class="btn-secondary full" id="capability-state-action" type="button" disabled>Выбор пока недоступен</button>
+      </section>
+      <details><summary>Как будет работать</summary>
+      <ol class="capability-steps">
+        <li><b>Выбор приложений.</b> Список выбранного и длительность ограничения перед подтверждением.</li>
+        <li><b>Разрешение.</b> Объяснение доступа, переход к системному запросу, отдельное состояние отказа.</li>
+        <li><b>Активное ограничение.</b> Причина, выбранные приложения и реальное время окончания от системы.</li>
+        <li><b>Завершение.</b> Подтверждение снятия ограничения только после ответа системы.</li>
+        <li><b>Отзыв доступа.</b> Путь в системные настройки и сообщение, что блокировка больше не работает.</li>
+      </ol>
+      </details>
+      <p class="hint">Старые условия не превращаются в денежный штраф автоматически.</p>
+      <button type="button" class="btn-secondary full" data-close-sheet="capability-overlay">Закрыть</button>
+    </section>
+  </div>
+
   <!-- генератор QR (qrcode-generator, MIT, Kazuhiko Arase) — локально, чтобы работало офлайн -->
   <script src="vendor/qrcode.js"></script>
+  <script src="path-traveler.js"></script>
+  <script src="path-journey.js"></script>
+  <script src="path-insights.js"></script>
+  <script src="path-support.js"></script>
+  <script src="path-ui.js"></script>
+  <script src="path-motion.js"></script>
+  <script src="path-faces.js"></script>
+  <script src="path-archive.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
