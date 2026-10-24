@@ -11,3 +11,14 @@ android/keystore.properties
 # Local browser regression artifacts
 .playwright-cli/
 test-results/
+
+# Runtime data and local secrets; existing tracked archives are not removed here.
+.env
+.env.*
+!.env.example
+!*.env.example
+*.db-wal
+*.db-shm
+server-backups/
+var/
+release-artifacts/

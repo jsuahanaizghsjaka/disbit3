@@ -1,0 +1,17 @@
+# Merge into the existing Caddy configuration; do not replace it blindly.
+disbit.ru {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:3000
+    header X-Content-Type-Options nosniff
+    header Referrer-Policy strict-origin-when-cross-origin
+}
+
+# Before publishing: create DNS A and set STAGING_ALLOWED_CIDRS in Caddy's
+# service environment to the testers' IP/CIDR list. Restrict every route,
+# including /api. Basic Auth would conflict with the app's Bearer header.
+staging.disbit.ru {
+    @blocked not remote_ip {$STAGING_ALLOWED_CIDRS}
+    respond @blocked "Staging access restricted" 403
+    header X-Robots-Tag "noindex, nofollow, noarchive"
+    reverse_proxy 127.0.0.1:3100
+}

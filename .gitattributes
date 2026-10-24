@@ -1,0 +1,4 @@
+# Linux deployment scripts must remain executable by /bin/sh after Windows checkout.
+ops/*.sh text eol=lf
+ops/*.service text eol=lf
+ops/*.timer text eol=lf

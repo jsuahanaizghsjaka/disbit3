@@ -12,6 +12,7 @@
    ============================================================ */
 
 import dns from 'node:dns';
+import { runtime } from './runtime.js';
 
 const resolver = new dns.promises.Resolver();
 resolver.setServers(['1.1.1.1', '8.8.8.8']);   // не зависим от DNS хостинга
@@ -93,6 +94,7 @@ async function sendViaSendgrid(to, subject, html) {
 
 export async function sendMail(to, subject, html) {
   if (!mailConfigured()) {
+    if (runtime.hosted) throw new Error('Mail provider is not configured');
     // dev-режим: без ключа письмо не уходит, но код видно в логах Railway
     console.log(`[mail:dev] → ${to} | ${subject}\n${html.replace(/<[^>]+>/g, ' ').trim()}`);
     return { sent: false, dev: true };

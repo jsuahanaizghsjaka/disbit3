@@ -1,0 +1,24 @@
+[Unit]
+Description=Disbit %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=disbit-%i
+Group=disbit-%i
+WorkingDirectory=/opt/disbit/%i/current
+EnvironmentFile=/etc/disbit/%i.env
+ExecStart=/usr/bin/node backend/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/disbit-%i
+
+[Install]
+WantedBy=multi-user.target

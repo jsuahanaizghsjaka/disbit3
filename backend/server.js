@@ -7,6 +7,8 @@
    Запуск:  npm install  &&  npm start   (по умолчанию порт 3000)
    ============================================================ */
 
+import { runtime } from './lib/runtime.js';
+import { db } from './db/db.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
@@ -23,6 +25,7 @@ import walletRouter from './routes/wallet.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.disable('x-powered-by');
 
 app.use(cors());                    // чтобы фронтенд с другого порта мог обращаться
 app.use(express.json({ limit: '1mb' }));
@@ -30,7 +33,16 @@ app.use(authMiddleware);            // Authorization: Bearer → req.userId
 
 // проверка, что сервер жив
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'disbit-backend', storage: 'sqlite', auth: true });
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, service: 'disbit-backend', storage: 'sqlite', auth: true,
+    environment: runtime.name, release: runtime.release, apiVersion: 1,
+    capabilities: { proofRequired: true, proofSkipsPerMonth: 5, pastDaysReadOnly: true, livePayments: false } });
+});
+
+app.get('/api/ready', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { db.prepare('SELECT 1 FROM users LIMIT 1').get(); res.json({ ok: true, release: runtime.release }); }
+  catch { res.status(503).json({ ok: false }); }
 });
 
 // эндпоинты
@@ -64,6 +76,12 @@ app.get('/review', (req, res) => {
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
   console.log(`disbit backend запущен: http://localhost:${PORT}`);
 });
+function shutdown() {
+  server.close(() => { db.close(); process.exit(0); });
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+process.once('SIGTERM', shutdown);
+process.once('SIGINT', shutdown);

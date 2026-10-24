@@ -23,6 +23,18 @@ before(async () => {
 });
 after(() => server?.kill());
 
+test('health identifies contract and release; readiness checks the database', async () => {
+  const health = await request('GET','/health');
+  assert.equal(health.headers.get('cache-control'),'no-store');
+  assert.equal(health.headers.get('x-powered-by'),null);
+  const body = await health.json();
+  assert.equal(body.apiVersion,1);
+  assert.equal(body.capabilities.proofSkipsPerMonth,5);
+  assert.equal(body.capabilities.livePayments,false);
+  assert.equal((await request('GET','/ready')).status,200);
+  assert.equal((await request('POST','/wallet/webhook',{event:'payment.succeeded'})).status,503);
+});
+
 test('completed count survives API reload and explicit undo', async () => {
   const today = new Date().toLocaleDateString('en-CA');
   assert.equal((await request('POST','/proofs/skip',{habitId:'beta-count',day:today})).status,200);

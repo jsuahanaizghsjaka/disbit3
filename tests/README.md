@@ -1,5 +1,21 @@
 # Проверка исправлений беты
 
+## Подготовка релиза, 24 октября
+
+`npm test` дополнительно проверяет health/readiness, изолированный staging, запрет платежей/webhook, повторный запуск с сохранением данных, неверный конфиг до открытия БД, offline backup/restore, повреждение копии и повторные миграции старой схемы. Используются только временные искусственные данные.
+
+Для визуальной проверки путника запустить **свежий** fixture отдельно от `browser-beta-fixes.js` (тот расходует квоту и завершает обещания):
+
+```powershell
+playwright-cli -s=traveler open http://127.0.0.1:3337 --browser=chrome
+playwright-cli -s=traveler --raw run-code --filename=tests/browser-traveler-layout.js
+playwright-cli -s=traveler --raw run-code --filename=tests/browser-swimming.js
+playwright-cli -s=traveler console error
+playwright-cli -s=traveler close
+```
+
+Проверки не заменяют физические Android/iOS, настоящую камеру, установку поверх старого APK и приёмку production.
+
 ## Актуальный прогон после правок 23 октября
 
 `npm test` запускает серверные регрессии, включая 5 пропусков пруфа, защиту прошлых дней, смену месяца и хранение минимума.
