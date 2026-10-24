@@ -18,3 +18,33 @@ jobs:
       - run: npm ci --prefix backend
       - run: npm test
       - run: node scripts/check-release.mjs
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: docker build -t disbit-ci .
+      - run: node scripts/docker-smoke.mjs disbit-ci
+  ios-simulator:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node scripts/sync-ios.mjs
+      - run: xcodebuild -version
+      - name: Build unsigned simulator app
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: disbit-ios-simulator
+          path: build/ios/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error
+          retention-days: 7
