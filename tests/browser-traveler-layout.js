@@ -1,5 +1,6 @@
 // Run with playwright-cli run-code against tests/fixture-server.mjs only.
 async page => {
+  await page.emulateMedia({reducedMotion:'no-preference',colorScheme:'dark'});
   const assert = (ok, message) => { if (!ok) throw Error(message); };
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));

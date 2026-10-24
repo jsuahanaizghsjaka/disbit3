@@ -32,6 +32,7 @@ router.get('/', authRequired, (req, res) => {
 
 // POST /api/wallet/topup { amount } — amount в КОПЕЙКАХ
 router.post('/topup', authRequired, express.json(), async (req, res) => {
+  if (!paymentsInfo().available) return res.status(503).json({ error: 'Пополнение пока недоступно', code: 'PAYMENTS_DISABLED' });
   const amount = Number(req.body?.amount);
   if (!Number.isInteger(amount) || amount < MIN_TOPUP || amount > MAX_TOPUP) {
     return res.status(400).json({
@@ -65,6 +66,7 @@ router.post('/topup', authRequired, express.json(), async (req, res) => {
    • зачисляем только по данным из вебхука, а не из тела запроса клиента;
    • повторный вебхук не зачисляет дважды (UNIQUE provider+provider_id). */
 router.post('/webhook', express.json(), (req, res) => {
+  if (!paymentsInfo().live) return res.status(503).json({ error: 'Payments disabled' });
   const ev = parseWebhook(req.body);
   if (!ev) return res.status(400).json({ error: 'Неизвестный формат' });
   if (!ev.paid || !ev.userId || !ev.amountKop) return res.json({ ok: true, ignored: true });

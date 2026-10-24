@@ -7,23 +7,25 @@
      createTopup(userId, amountKop, opts) → { url, providerId }
      parseWebhook(req)                    → { providerId, amountKop, paid, userId }
 
-   Сейчас активен 'manual' — тестовый режим без денег: зачисляет сразу.
-   Он НЕ должен работать на проде: включается только PAYMENTS_MODE=manual.
+   manual доступен только локально. Размещённые среды используют disabled.
+   Старый адаптер ЮKassa оставлен как заготовка и недоступен через runtime.
    ============================================================ */
 
-const PROVIDER = (process.env.PAYMENTS_PROVIDER || 'manual').toLowerCase();
+import { runtime } from './runtime.js';
+const PROVIDER = runtime.provider;
 
 export function paymentsInfo() {
   return {
     provider: PROVIDER,
-    live: PROVIDER !== 'manual',
+    live: false,
+    available: PROVIDER === 'manual',
     currency: process.env.PAYMENTS_CURRENCY || 'RUB',
     // подсказка фронту: в ручном режиме деньги ненастоящие
     simulated: PROVIDER === 'manual'
   };
 }
 
-/* ---------- ЮKassa (заготовка: включится, когда будут ключи) ---------- */
+/* ---------- ЮKassa (карантин: нужны намерения, проверка и возвраты) ---------- */
 async function yookassaCreateTopup(userId, amountKop, opts) {
   const shopId = process.env.YOOKASSA_SHOP_ID;
   const key = process.env.YOOKASSA_SECRET_KEY;
@@ -69,11 +71,12 @@ function manualCreateTopup(userId, amountKop, opts) {
 
 /* ---------- Публичный интерфейс ---------- */
 export async function createTopup(userId, amountKop, opts) {
-  if (PROVIDER === 'yookassa') return yookassaCreateTopup(userId, amountKop, opts);
+  if (PROVIDER !== 'manual') throw new Error('Payments are disabled pending release approval');
   return manualCreateTopup(userId, amountKop, opts);
 }
 
 export function parseWebhook(body) {
-  if (PROVIDER === 'yookassa') return yookassaParseWebhook(body);
+  // The legacy adapter is intentionally unreachable until payment intents,
+  // provider verification, refunds and reconciliation are implemented.
   return null;
 }

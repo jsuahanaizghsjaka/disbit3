@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Disbit backup %i
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=disbit-backup@%i.service
+
+[Install]
+WantedBy=timers.target

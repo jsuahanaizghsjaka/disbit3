@@ -10,3 +10,13 @@ store-assets
 .vscode
 *.apk
 *.aab
+**/.env*
+keystore
+server-backups
+backend/db/proofs
+**/*.db*
+**/*.sqlite*
+test-results
+.playwright-cli
+var
+release-artifacts

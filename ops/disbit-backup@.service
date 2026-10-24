@@ -1,0 +1,7 @@
+[Unit]
+Description=Offline Disbit backup %i (brief maintenance window)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/disbit/%i/current/ops/backup.sh %i
+UMask=0077

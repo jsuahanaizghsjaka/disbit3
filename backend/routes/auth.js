@@ -149,8 +149,8 @@ router.post('/resend', async (req, res) => {
   }
   const code = issueCode(req.userId);
   try {
-    await sendMail(user.email, 'disbit — код подтверждения', verifyCodeHtml(code));
-    res.json({ ok: true, sent: true, configured: mailConfigured() });
+    const delivery = await sendMail(user.email, 'disbit — код подтверждения', verifyCodeHtml(code));
+    res.json({ ok: true, sent: delivery.sent, configured: mailConfigured() });
   } catch (e) {
     console.error('[mail] resend:', e.message);
     res.status(502).json({ error: 'Не удалось отправить письмо — попробуй позже' });

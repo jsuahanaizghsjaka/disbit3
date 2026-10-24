@@ -5,7 +5,8 @@
    ============================================================ */
 
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { runtime } from '../lib/runtime.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -15,11 +16,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Каталог создаём заранее: если DB_PATH указывает на ещё не смонтированный том
 // (например, /data до создания volume), DatabaseSync иначе упал бы на open.
 const DB_FILE = process.env.DB_PATH || path.join(__dirname, 'disbit.db');
+if (runtime.hosted && process.env.INITIALIZE_DATABASE !== '1') {
+  if (!existsSync(DB_FILE) || !existsSync(process.env.PROOFS_DIR)) {
+    throw new Error('Hosted data is missing: verify mounted database and proofs; INITIALIZE_DATABASE=1 is for a new empty environment only');
+  }
+}
 mkdirSync(path.dirname(DB_FILE), { recursive: true });
 export const db = new DatabaseSync(DB_FILE);
 
 // внешние ключи + схема
 db.exec('PRAGMA foreign_keys = ON;');
+db.exec('PRAGMA busy_timeout = 5000;');
 db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 
 // мягкие миграции для баз, созданных до появления авторизации
@@ -41,7 +48,9 @@ for (const sql of [
   // сессии без срока жизни: старые строки получат его в routes/auth.js
   "ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0"
 ]) {
-  try { db.exec(sql); } catch { /* колонка уже есть */ }
+  const [, table, column] = sql.match(/^ALTER TABLE (\w+) ADD COLUMN (\w+)/);
+  const exists = db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
+  if (!exists) db.exec(sql); // Disk/permission/schema failures must abort startup.
 }
 
 // до авторизации гостевые данные писались под user_id=1; теперь гость = 0.
