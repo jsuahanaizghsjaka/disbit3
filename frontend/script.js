@@ -1000,9 +1000,9 @@ function walkerPath(sc, t) {
   switch (sc.motion) {
     case 'swim': {
       // плывёт по воде; у самого берега (t>0.82) выходит из воды вверх на песок
-      if (t < 0.82) return { x: 52 + (182 / .82) * t, y: 112 };
+      if (t < 0.82) return { x: 136 + (98 / .82) * t, y: 96 };
       const k = (t - 0.82) / 0.18;
-      return { x: 234 + 42 * k, y: 112 - 15 * k };
+      return { x: 234 + 24 * k, y: 96 + k };
     }
     case 'climb': return { x: 232, y: 104 - 42 * t };   // запас над поднятой рукой подробного персонажа
     default:      return { x: 26 + 246 * t, y: 104 };   // идёт по земле (walk/trudge)
@@ -1332,8 +1332,8 @@ function showCompletion(h, progressBefore, resolve, quota) {
     const man = card.querySelector('.w-walker');
     man.innerHTML = `<g transform="scale(1.6)">${man.innerHTML}</g>`;
     // A close-up shows a legible local step even in a 999-step route.
-    const from = sc.motion === 'climb' ? {x:180,y:122} : {x:125,y:116};
-    const to = sc.motion === 'climb' ? {x:180,y:102} : {x:165,y:116};
+    const from = sc.motion === 'climb' ? {x:180,y:122} : {x:125,y:sc.motion === 'swim' ? 96 : 116};
+    const to = sc.motion === 'climb' ? {x:180,y:102} : {x:165,y:sc.motion === 'swim' ? 96 : 116};
     man.style.transition = 'none';
     man.style.transform = `translate(${to.x}px, ${to.y}px)`;
     animations.push({ man, from, to, card, finished: done === g.steps });
@@ -3706,6 +3706,12 @@ function claimDeviceFor(user) {
   if (!login) return false;
   const prev = localStorage.getItem(OWNER_KEY);
   localStorage.setItem(OWNER_KEY, login);
+  // До первого входа отметка времени относится к пустому состоянию браузера.
+  // Она не должна побеждать уже сохранённый профиль нового владельца на сервере.
+  if (!prev) {
+    localStorage.removeItem(STATE_TS_KEY);
+    clearTimeout(statePushTimer);
+  }
   if (prev && prev !== login) {
     clearUserData();
     location.reload();

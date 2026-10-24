@@ -9,11 +9,15 @@ function pathTravelerArtwork(gear = 'hat') {
         <path d="m167 171 5-2 5 7-3 8-6-2Z" fill="#c69a74"/>
       </g>
       <g class="traveler-leg-back">
-        <path d="m110 165 27 5-9 49-38 39-13-9 28-43Z" fill="#84745e"/>
-        <path d="m110 176 12 2-10 34-28 38" fill="none" stroke="#665d50" stroke-width="3"/>
-        <path d="m78 246 15 10-3 10-14 7-22-8 1-7 16-1Z" fill="#4d4139"/>
-        <path d="m55 264 22 6 14-7-1 6-15 7-22-7Z" fill="#282b2d"/>
-        <path d="m74 252 11 7m-15-3 10 6" stroke="#ac9575" stroke-width="2"/>
+        <path d="M108 165h28l-13 48q-3 13-15 12l-10-8 8-31Z" fill="#84745e"/>
+        <path d="m124 179-10 29" stroke="#665d50" stroke-width="3" stroke-linecap="round"/>
+        <g class="traveler-shin-back">
+          <path d="M100 211q9-8 20 1l-9 25-13 28-16-5 15-37Z" fill="#8f7e62"/>
+          <path d="m102 220 12 1m-15 5 10 2m-15 27 11-27" stroke="#6c614f" stroke-width="2" stroke-linecap="round"/>
+          <path d="m83 257 16 3 3 9 17 3q5 2 4 7H82l-3-6Z" fill="#4d4139"/>
+          <path d="M80 275h43v5H81Z" fill="#282b2d"/>
+          <path d="m97 265 8 2m-6 3 9 2" stroke="#ac9575" stroke-width="2"/>
+        </g>
       </g>
       <g class="traveler-pack">
         <path d="M58 80q9-14 27-10l12 7 8 75-17 17-31-7q-11-39 1-82Z" fill="#576259"/>
@@ -30,13 +34,17 @@ function pathTravelerArtwork(gear = 'hat') {
         <path d="m49 130 8-1m-7 5 8-1" stroke="#d5d9d0" stroke-width="2"/>
       </g>
       <g class="traveler-leg-front">
-        <path d="m92 163 29-1 6 45 21 52-18 8-28-50-12-34Z" fill="#b19b77"/>
-        <path d="m111 179 7 33 18 42" fill="none" stroke="#8f7d62" stroke-width="3"/>
-        <path d="m102 187 15-2 4 19-15 3Z" fill="#a38e6c" stroke="#85775f" stroke-width="1.5"/>
-        <path d="m104 190 14-2m-10 15 9-2" stroke="#cab58d" stroke-width="1.5"/>
-        <path d="m129 255 18-7 7 14 18 6 1 9-32 1-11-7Z" fill="#655142"/>
-        <path d="m140 274 33-1v6l-34 2-10-7v-5Z" fill="#2f3030"/>
-        <path d="m142 258 10 3m-8 1 12 3m-10 1 12 3" stroke="#c6ae87" stroke-width="2"/>
+        <path d="M92 163h28l9 42q4 14-6 19l-13-3-13-30Z" fill="#b19b77"/>
+        <path d="m112 177 9 29" stroke="#8f7d62" stroke-width="3" stroke-linecap="round"/>
+        <path d="m99 185 15-3 5 18-15 4Z" fill="#a38e6c" stroke="#85775f" stroke-width="1.5"/>
+        <path d="m102 188 13-3m-8 15 9-2" stroke="#cab58d" stroke-width="1.5"/>
+        <g class="traveler-shin-front">
+          <path d="M110 213q10-7 19 0l5 25 4 27-18 2-6-29Z" fill="#b9a581"/>
+          <path d="m113 219 13 1m-10 5 12 1m-6 6 6 27" stroke="#918064" stroke-width="2" stroke-linecap="round"/>
+          <path d="m119 260 18-2 4 10 17 5q5 2 4 6h-41l-3-7Z" fill="#655142"/>
+          <path d="M120 275h42v6h-41Z" fill="#2f3030"/>
+          <path d="m134 265 9 3m-7 1 10 3" stroke="#c6ae87" stroke-width="2"/>
+        </g>
       </g>
       <path d="M92 85q15-9 35 1l15 22-7 62q-20 10-44-1l-7-51Z" fill="#9baca4"/>
       <path d="m91 100 6 53 5 18-12-2-7-52Z" fill="#75877f"/>
@@ -82,12 +90,52 @@ function pathTravelerArtwork(gear = 'hat') {
   </g>`;
 }
 
+// Three-quarter rear view: separate shoulders, elbows and knees for a crawl stroke.
+// Kept in horizontal coordinates instead of rotating the walking artwork.
+function swimmingTravelerArtwork() {
+  const arm = (side) => `<g transform="translate(${side === 'far' ? '170 43' : '167 61'})"><g class="swim-arm-${side}">
+    <path d="M-5-7Q10-10 20-6L21 6 0 8Z" fill="${side === 'far' ? '#75877f' : '#aab6a5'}"/>
+    <path d="m18-5 18 1 2 10-20 1Z" fill="#c69972"/>
+    <g transform="translate(35 1)"><g class="swim-forearm-${side}">
+      <path d="M-4-5 24-4l9 2 7 4-2 4-12-1L-3 6Z" fill="${side === 'far' ? '#bb8a66' : '#dbb18a'}"/>
+      <path d="m27 0 9 2m-9 1 8 2" stroke="#a77b59" stroke-width="1.3" stroke-linecap="round"/>
+    </g></g>
+  </g></g>`;
+  const leg = (side) => `<g transform="translate(${side === 'far' ? '105 48' : '103 62'})"><g class="swim-leg-${side}">
+    <path d="M4-8-23-9-29 6 1 9Z" fill="${side === 'far' ? '#84745e' : '#b19b77'}"/>
+    <path d="m-24-6-25 2-1 10 25 1Z" fill="#c69972"/>
+    <g transform="translate(-47 1)"><g class="swim-calf-${side}">
+      <path d="M2-5-23-4-35-8-39-5-32 5-23 7 2 6Z" fill="${side === 'far' ? '#bb8a66' : '#dbb18a'}"/>
+      <path d="m-25 1-9-4" stroke="#a77b59" stroke-width="1.3" stroke-linecap="round"/>
+    </g></g>
+  </g></g>`;
+  return `<g class="traveler-art swimmer-art" fill="none">
+    <g class="traveler-body swim-body">
+      ${arm('far')}${leg('far')}${leg('near')}
+      <path d="M101 40q29-1 48-8 19-5 29 10l-1 20q-20 14-39 10l-38-3Z" fill="#9baca4"/>
+      <path d="m104 58 34 6q18 3 36-9l3 7q-21 15-39 10l-38-3Z" fill="#75877f"/>
+      <path d="m107 43 30 5 25-6m-23 7 1 17" stroke="#617970" stroke-width="2" stroke-linecap="round"/>
+      <path d="m101 40-3 28 7 1 4-29Z" fill="#534d40"/>
+      <path d="m167 40 13-5 9 13-6 13-13-1Z" fill="#c49269"/>
+      <path d="m165 35 10-3 8 9-5 15-12 6-6-6 12-8Z" fill="#475c72"/>
+      <path d="M180 31q17-8 24 7l-2 19-9 8-14-6-5-13Z" fill="#c69972"/>
+      <path d="M176 47q-9-18 6-24 17-6 24 9l-5 12-10-3-8 10Z" fill="#453a31"/>
+      <path d="m179 45 22 6" stroke="#b1d2c7" stroke-width="4"/>
+      <path d="m199 48 8 3-3 8-7-2Z" fill="#344d60" stroke="#b1d2c7" stroke-width="2"/>
+      ${arm('near')}
+    </g>
+    <g class="swim-wake" stroke="#a8d7d5" stroke-linecap="round" opacity=".65">
+      <path d="M15 77q10-5 19 0m5 5q15 4 27-1m67 2q14 5 29 0m50-5 17-1" stroke-width="2"/>
+    </g>
+  </g>`;
+}
+
 function detailedTraveler(sc = {}, gearForce) {
   const gear = gearForce !== undefined ? gearForce : gearOf(sc);
   const motion = sc.motion || 'walk';
+  if (motion === 'swim') return `<g class="path-person pose-swim" data-equipment="goggles"><g transform="scale(.28) translate(-130 -65)">${swimmingTravelerArtwork()}</g></g>`;
   // Foot contact is y=281 in artwork; the outer scene controls world position.
-  const transform = motion === 'swim' ? 'translate(-8 -2) rotate(78) scale(.14) translate(-115 -145)'
-    : 'scale(.18) translate(-115 -281)';
+  const transform = 'scale(.18) translate(-115 -281)';
   return `<g class="path-person pose-${motion}" data-equipment="${gear || 'hat'}"><g transform="${transform}">${pathTravelerArtwork(gear || 'hat')}</g></g>`;
 }
 function travelerPortrait() {
