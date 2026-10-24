@@ -22,3 +22,5 @@ test-results/
 server-backups/
 var/
 release-artifacts/
+build/
+.local-*.log
