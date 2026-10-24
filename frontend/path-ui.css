@@ -50,7 +50,7 @@ body > .aura, .intro .aura { display: none; }
 .ddot.full, .ddot.half, .day.today .ddot:not(.full):not(.half):not(.miss), .ring-fg { box-shadow: none; filter: none; }
 #screen-today #walker { margin-top: 8px; }
 #screen-today .walker-card { margin-bottom: 0; box-shadow: none; }
-#screen-today .w-scene { height: 112px; }
+#screen-today .w-scene { height: auto; aspect-ratio: 320 / 132; }
 #screen-today .w-head, #screen-today .w-foot { padding: 12px; }
 #screen-today .w-goal { font-size: 18px; }
 #screen-today .habit-list .habit { animation: none; }

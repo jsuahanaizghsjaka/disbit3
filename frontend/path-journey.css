@@ -2,35 +2,62 @@
 .traveler-art .traveler-hat { display: none; }
 .traveler-art.gear-hat .traveler-hat, .traveler-art.gear-cane .traveler-hat { display: inline; }
 .traveler-portrait { width: 100%; height: 100%; background: #263D50; border-radius: inherit; }
-.traveler-arm-front, .traveler-arm-back, .traveler-leg-front, .traveler-leg-back, .traveler-pack { transform-box: view-box; }
+.traveler-arm-front, .traveler-arm-back, .traveler-leg-front, .traveler-leg-back, .traveler-shin-front, .traveler-shin-back, .traveler-pack { transform-box: view-box; }
 .traveler-arm-front { transform-origin: 95px 101px; }
 .traveler-arm-back { transform-origin: 136px 102px; }
 .traveler-leg-front { transform-origin: 105px 170px; }
 .traveler-leg-back { transform-origin: 120px 172px; }
+.traveler-shin-front { transform-origin: 120px 216px; }
+.traveler-shin-back { transform-origin: 110px 216px; }
 .traveler-pack { transform-origin: 85px 85px; }
-.pose-swim .traveler-pack, .pose-swim .traveler-shadow { display: none; }
-.pose-swim .traveler-arm-front { transform: rotate(-135deg); }
 .pose-climb .traveler-arm-front { transform: rotate(-145deg); }
 .pose-climb .traveler-arm-back { transform: rotate(155deg); }
 .pose-trudge .traveler-body { transform: rotate(7deg); transform-origin: 115px 281px; }
 .finished .pose-walk .traveler-arm-front, .finished .pose-trudge .traveler-arm-front { transform: rotate(-125deg); }
 .journey-finished .pose-walk .traveler-arm-front, .journey-finished .pose-trudge .traveler-arm-front { transform: rotate(-125deg); }
 .journey-finished .pose-climb .traveler-arm-front { transform: rotate(-115deg); }
-.journey-finished .pose-swim .traveler-arm-front { transform: rotate(-175deg); }
 .walker-card .w-sun, .walker-card .w-stars *, .walker-card .w-snow *, .walker-card .w-waves *, .walker-card .w-lianas *, .walker-card .w-blizz *, .walker-card .w-haze, .walker-card .w-blizz-wind *, .walker-card .w-cloth { animation: none; }
 .w-haze { opacity: .25; }
 .w-walker { transition: transform 700ms var(--ease-in-out, cubic-bezier(.77,0,.175,1)); }
-.walking .pose-walk .traveler-arm-front, .walking .pose-walk .traveler-leg-back,
-.walking .pose-trudge .traveler-arm-front, .walking .pose-trudge .traveler-leg-back { animation: journey-stride 350ms ease-in-out 2 alternate; }
-.walking .pose-walk .traveler-arm-back, .walking .pose-walk .traveler-leg-front,
-.walking .pose-trudge .traveler-arm-back, .walking .pose-trudge .traveler-leg-front { animation: journey-stride 350ms ease-in-out 2 alternate-reverse; }
+.walking :is(.pose-walk, .pose-trudge) .traveler-leg-front { animation: journey-hip-front 700ms ease-in-out; }
+.walking :is(.pose-walk, .pose-trudge) .traveler-leg-back { animation: journey-hip-back 700ms ease-in-out; }
+.walking :is(.pose-walk, .pose-trudge) .traveler-shin-front { animation: journey-knee-front 700ms ease-in-out; }
+.walking :is(.pose-walk, .pose-trudge) .traveler-shin-back { animation: journey-knee-back 700ms ease-in-out; }
+.walking :is(.pose-walk, .pose-trudge) .traveler-arm-front { animation: journey-hip-back 700ms ease-in-out; }
+.walking :is(.pose-walk, .pose-trudge) .traveler-arm-back { animation: journey-hip-front 700ms ease-in-out; }
 .walking .traveler-pack { animation: journey-pack 350ms ease-in-out 2 alternate; }
 .walking .pose-climb .traveler-arm-front { animation: journey-reach 700ms ease-in-out; }
-.walking .pose-swim .traveler-arm-front { animation: journey-stroke 700ms ease-in-out; }
-@keyframes journey-stride { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.swimmer-art :is(.swim-arm-far, .swim-arm-near, .swim-forearm-far, .swim-forearm-near, .swim-leg-far, .swim-leg-near, .swim-calf-far, .swim-calf-near) { transform-box: view-box; transform-origin: 0 0; }
+.swim-arm-far { transform: rotate(-115deg); }
+.swim-forearm-far { transform: rotate(85deg); }
+.swim-arm-near { transform: rotate(8deg); }
+.swim-leg-far { transform: rotate(6deg); }
+.swim-leg-near { transform: rotate(-6deg); }
+.swim-calf-near { transform: rotate(12deg); }
+.walking .swim-arm-far { animation: journey-swim-arm-far 700ms linear; }
+.walking .swim-arm-near { animation: journey-swim-arm-near 700ms linear; }
+.walking .swim-forearm-far { animation: journey-swim-elbow-far 700ms var(--ease-in-out); }
+.walking .swim-forearm-near { animation: journey-swim-elbow-near 700ms var(--ease-in-out); }
+.walking .swim-leg-far { animation: journey-swim-kick 350ms ease-in-out 2; }
+.walking .swim-leg-near { animation: journey-swim-kick-near 350ms ease-in-out 2; }
+.walking .swim-calf-far { animation: journey-swim-knee 350ms ease-in-out 2; }
+.walking .swim-calf-near { animation: journey-swim-knee-near 350ms ease-in-out 2; }
+/* Start and end in the resting pose; the swing leg bends at its knee, not at the boot. */
+@keyframes journey-hip-front { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-12deg); } 70% { transform: rotate(8deg); } }
+@keyframes journey-hip-back { 0%,100% { transform: rotate(0); } 30% { transform: rotate(10deg); } 70% { transform: rotate(-12deg); } }
+@keyframes journey-knee-front { 0%,55%,100% { transform: rotate(0); } 25% { transform: rotate(24deg); } }
+@keyframes journey-knee-back { 0%,35%,100% { transform: rotate(0); } 70% { transform: rotate(26deg); } }
 @keyframes journey-pack { to { transform: translateY(-2px) rotate(-1deg); } }
 @keyframes journey-reach { 0%,100% { transform: rotate(-145deg); } 50% { transform: rotate(-165deg); } }
-@keyframes journey-stroke { 0%,100% { transform: rotate(-135deg); } 50% { transform: rotate(-45deg); } }
+/* Opposite half-cycles: one hand recovers above the water while the other pulls. */
+@keyframes journey-swim-arm-far { 0% { transform: rotate(-115deg); } 25% { transform: rotate(-35deg); } 50% { transform: rotate(8deg); } 75% { transform: rotate(135deg); } 100% { transform: rotate(245deg); } }
+@keyframes journey-swim-arm-near { 0% { transform: rotate(8deg); } 25% { transform: rotate(135deg); } 50% { transform: rotate(245deg); } 75% { transform: rotate(325deg); } 100% { transform: rotate(368deg); } }
+@keyframes journey-swim-elbow-far { 0%,100% { transform: rotate(85deg); } 25% { transform: rotate(35deg); } 50% { transform: rotate(0); } 75% { transform: rotate(-85deg); } }
+@keyframes journey-swim-elbow-near { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-85deg); } 50% { transform: rotate(85deg); } 75% { transform: rotate(35deg); } }
+@keyframes journey-swim-kick { 0%,100% { transform: rotate(6deg); } 50% { transform: rotate(-6deg); } }
+@keyframes journey-swim-kick-near { 0%,100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+@keyframes journey-swim-knee { 0%,100% { transform: rotate(0); } 50% { transform: rotate(12deg); } }
+@keyframes journey-swim-knee-near { 0%,100% { transform: rotate(12deg); } 50% { transform: rotate(0); } }
 .walker-card { border: 1px solid var(--line); border-radius: 22px; background: var(--surface); box-shadow: none; }
 .w-goal { font: 700 20px/1.3 'Onest',sans-serif; overflow-wrap: anywhere; }
 #screen-marathon .w-scene { height: auto; aspect-ratio: 320/180; }

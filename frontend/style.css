@@ -2283,6 +2283,7 @@ dialog button:focus-visible { outline: 2px solid var(--primary); outline-offset:
 .field-input.small { width: 92px; }
 
 .count-fields { display: flex; gap: var(--sp-2); align-items: center; }
+#count-fields { margin-top: 12px; }
 .suffix { color: var(--text-2); font-size: 14px; }
 .hint { font-size: 12px; color: var(--text-3); margin-top: 8px; line-height: 1.5; }
 
