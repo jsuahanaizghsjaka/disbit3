@@ -165,9 +165,21 @@ test('proof upload ownership, date, MIME and completion after quota is exhausted
   assert.equal((await upload('beta-check','2000-01-01')).status,403);
   assert.equal((await upload('beta-check',day,'application/octet-stream')).status,415);
   assert.equal((await fetch(base+`/proofs?habitId=beta-check&day=${day}`,{method:'POST',headers:{Authorization:'Bearer '+'1'.repeat(64),'Content-Type':'image/png'},body:'not an image'})).status,415);
-  assert.equal((await upload('beta-check',day)).status,201);
+  const beforeBits=(await (await request('GET','/habits/skips/quota')).json()).trustedBits;
+  const uploaded=await upload('beta-check',day);
+  assert.equal(uploaded.status,201);
+  const proofId=(await uploaded.json()).id;
   assert.equal((await request('PUT',`/habits/beta-check/day/${day}`,{done:true})).status,200);
-  assert((await (await request('GET','/habits/skips/quota')).json()).trustedBits >= 1);
+  assert.equal((await (await request('GET','/habits/skips/quota')).json()).trustedBits,beforeBits,
+    'pending media must not mint spendable bits');
+  const decision=status=>fetch(base+`/proofs/${proofId}/decision`,{
+    method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':'fixture-only-proof-admin-key-123456'},
+    body:JSON.stringify({status})
+  });
+  assert.equal((await decision('approved')).status,200);
+  assert.equal((await (await request('GET','/habits/skips/quota')).json()).trustedBits,beforeBits+1);
+  assert.equal((await decision('rejected')).status,200);
+  assert.equal((await (await request('GET','/habits/skips/quota')).json()).trustedBits,beforeBits);
   assert.equal((await (await request('GET','/proofs/quota')).json()).used,5);
 });
 

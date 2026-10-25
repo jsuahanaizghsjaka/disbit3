@@ -59,6 +59,14 @@ export function syncTrustedBitAward(db, userId, habitId, day, completed) {
   db.prepare('UPDATE trusted_bits SET balance=balance+? WHERE user_id=?').run(completed ? 1 : -1,userId);
 }
 
+export function trustedCompletionEligible(db, userId, habitId, day) {
+  const habit = db.prepare('SELECT goal_type,goal_target FROM habits WHERE id=? AND user_id=?').get(habitId,userId);
+  const mark = db.prepare('SELECT done,skip,count FROM completions WHERE habit_id=? AND day=?').get(habitId,day);
+  if (!habit || !mark || mark.skip || !(mark.done || (habit.goal_type==='count' && mark.count>=habit.goal_target))) return false;
+  return !!db.prepare('SELECT 1 FROM proof_skips WHERE user_id=? AND habit_id=? AND day=?').get(userId,habitId,day) ||
+    !!db.prepare("SELECT 1 FROM proofs WHERE user_id=? AND habit_id=? AND day=? AND status='approved'").get(userId,habitId,day);
+}
+
 export function revokeHabitBitAwards(db, userId, habitId) {
   const count = db.prepare('SELECT COUNT(*) AS n FROM trusted_bit_awards WHERE user_id=? AND habit_id=?').get(userId,habitId).n;
   if (!count) return;
