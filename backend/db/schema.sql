@@ -185,6 +185,35 @@ CREATE TABLE IF NOT EXISTS money_ledger (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_money_ledger_user ON money_ledger(user_id,id DESC);
+
+-- YooKassa test-shop payments are display-only. Their balance cannot enter the
+-- real money_* ledger, the historical manual wallet, or penalty settlement.
+CREATE TABLE IF NOT EXISTS sandbox_accounts (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE RESTRICT,
+  balance INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0)
+);
+CREATE TABLE IF NOT EXISTS sandbox_payment_intents (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  request_id TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK(amount BETWEEN 5000 AND 5000000),
+  idempotency_key TEXT NOT NULL UNIQUE,
+  provider_payment_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'created' CHECK(status IN ('created','pending','succeeded','canceled')),
+  confirmation_url TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id,request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sandbox_intents_user ON sandbox_payment_intents(user_id,created_at);
+CREATE TABLE IF NOT EXISTS sandbox_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  source_key TEXT NOT NULL UNIQUE,
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  balance_after INTEGER NOT NULL CHECK(balance_after >= 0),
+  provider_payment_id TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 -- A real penalty needs a fresh, explicitly accepted version of the terms.
 -- Legacy promises receive no implicit consent and cannot be charged here.
 CREATE TABLE IF NOT EXISTS money_terms (
