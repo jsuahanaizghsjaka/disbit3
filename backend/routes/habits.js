@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { db, rowToHabit, habitToParams } from '../db/db.js';
 import { accountDay, proofSatisfied } from '../proof-policy.js';
 import { transaction, promiseSkipQuota, recordPromiseSkip, purchasePromiseSkip,
-  syncTrustedBitAward, revokeHabitBitAwards } from '../lib/promise-skips.js';
+  syncTrustedBitAward, trustedCompletionEligible, revokeHabitBitAwards } from '../lib/promise-skips.js';
 
 const router = Router();
 const uid = req => req.userId;
@@ -154,8 +154,8 @@ router.put('/:id/day/:day', (req, res) => {
         INSERT INTO completions (habit_id, day, count, done, skip, minimum) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done, skip = excluded.skip, minimum = excluded.minimum
       `).run(req.params.id, req.params.day, count, done, skip, done && req.body.minimum ? 1 : 0);
-      const completed = !skip && (done || (exists.goal_type === 'count' && count >= exists.goal_target));
-      syncTrustedBitAward(db,uid(req),req.params.id,req.params.day,!!completed);
+      syncTrustedBitAward(db,uid(req),req.params.id,req.params.day,
+        trustedCompletionEligible(db,uid(req),req.params.id,req.params.day));
       return promiseSkipQuota(db,uid(req),req.params.day);
     });
     res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count, quota });

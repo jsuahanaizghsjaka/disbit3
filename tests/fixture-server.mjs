@@ -7,6 +7,7 @@ process.env.DB_PATH = path.join(directory, 'test.db');
 process.env.PROOFS_DIR = path.join(directory, 'proofs');
 process.env.PORT ||= '3337';
 process.env.PAYMENTS_PROVIDER = 'manual'; // Never create a real payment in browser tests.
+process.env.ADMIN_KEY = 'fixture-only-proof-admin-key-123456';
 const { db } = await import('../backend/db/db.js');
 const today = new Date().toLocaleDateString('en-CA');
 const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('en-CA');
