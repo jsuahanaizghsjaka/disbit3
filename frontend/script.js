@@ -427,6 +427,7 @@ async function bootstrapData() {
     }
     await loadFriends();     // друзья живут на сервере, не в localStorage
     await loadWallet();      // депозит: сколько денег реально на кону
+    await refreshPromiseSkipQuota();
   }
   render();
   renderFriends();
@@ -475,12 +476,27 @@ let skips = (() => {
   return freshSkips();
 })();
 function skipsLeft() {
+  if (API && authToken && trustedSkipBits !== null) return skips.left;
   if (skips.month !== monthKey()) { skips = freshSkips(); saveSkips(); }
   return skips.left;
 }
 function saveSkips() {
   localStorage.setItem(SKIPS_KEY, JSON.stringify(skips));
   if (!applyingRemote) { touchStateTs(); scheduleStatePush(); }
+}
+let trustedSkipBits = null;
+function applyPromiseSkipQuota(quota) {
+  if (!quota || typeof quota.remaining !== 'number') return;
+  skips = { month: quota.month, left: quota.remaining, bought: quota.bought };
+  trustedSkipBits = quota.trustedBits;
+  saveSkips();
+  renderGrace();
+}
+async function refreshPromiseSkipQuota() {
+  if (!API || !authToken) return;
+  const owner = authToken;
+  const quota = await apiCallStrict('GET', '/habits/skips/quota');
+  if (owner === authToken && !quota.error) applyPromiseSkipQuota(quota);
 }
 
 /* ---------- ЛОГИКА ОБЕЩАНИЙ ---------- */
@@ -642,6 +658,7 @@ let skippingDay = false;
 async function skipHabitDay(id) {
   const h = habits.find(x => x.id === id);
   if (!h || h.archived || skippingDay || !isEditableDay(TODAY) || isDoneToday(h) || isSkipOn(h, TODAY)) return;
+  if (API && authToken) await refreshPromiseSkipQuota();
   if (skipsLeft() <= 0) { toast('Грэйс-дни закончились'); return; }
   if (!(await confirmAction('Пропустить сегодня?',
     `«${h.name}»: используем 1 грэйс-день. Серия сохранится, но шаг марафона и бит не начислятся. Это не отменяет уже зафиксированные списания.`, 'Пропустить день'))) return;
@@ -651,10 +668,12 @@ async function skipHabitDay(id) {
     if (API && authToken) {
       const result = await apiCallStrict('PUT', `/habits/${id}/day/${TODAY}`, { skip: true, done: false, count: 0 });
       if (result.error) { toast(result.error); return; }
+      applyPromiseSkipQuota(result.quota);
     }
     h.history[TODAY] = 'skip';
     h.counts[TODAY] = 0;
-    skips.left--; saveSkips(); save();
+    if (!API || !authToken) { skips.left--; saveSkips(); }
+    save();
     render(); renderHabitStats();
     toast('День пропущен — серия сохранена');
   } finally { skippingDay = false; }
@@ -683,6 +702,7 @@ async function toggleHabit(id) {
       pendingHabitMarks.delete(id); habitMarkErrors.set(id, result.error);
       renderHabits(); return;
     }
+    applyPromiseSkipQuota(result.quota);
   }
   pendingHabitMarks.delete(id);
   if (h.goal.type === 'count') {
@@ -3302,12 +3322,11 @@ async function logout() {
 }
 
 
-/* ---------- BIT — внутренняя валюта ----------
-   Копится за выполненные обещания, тратится на косметику. Купить за деньги
-   НЕЛЬЗЯ и продать нельзя: это просто счётчик прогресса, поэтому он не
-   попадает ни под требования сторов к платежам, ни под финансовое право.
-   Живёт в profile — значит уезжает на сервер вместе с остальным стейтом. */
-const BIT_PRICE = { theme: 40, scene: 120, gear: 60, icon: 25, grace: 30, mark: 80 };
+/* ---------- BIT — игровая валюта ----------
+   Старый баланс profile.bit используется только для косметики. Покупка
+   пропусков с денежными последствиями проверяет отдельные серверные биты.
+   Правовую и store-квалификацию этой механики проверяем перед live-релизом. */
+const BIT_PRICE = { theme: 40, scene: 120, gear: 60, icon: 25, grace: 20, mark: 80 };
 const BIT_FREE  = { theme: ['blue'], scene: ['desert', 'ocean'], gear: ['', 'hat', 'cap', 'goggles'], icon: [], mark: [] };
 
 /* Знаки — картинки-аватары вместо фото/эмодзи/монограммы. Это НЕ иконка
@@ -3446,9 +3465,8 @@ function renderIconShop() {
   });
 }
 
-/* Грэйс-дни: покупка ДОБАВЛЯЕТ пропуск в тот же счётчик, которым пользуется
-   баннер пруфа (skips). Потолок GRACE_MAX_BOUGHT не даёт откупиться от штрафов
-   совсем — иначе смысл приложения ломается. */
+/* Грэйс-дни отдельно от пропусков пруфа. Сервер определяет покупку и лимит;
+   локальный счётчик служит только для показа доступных дней. */
 function renderGrace() {
   const left = document.getElementById('grace-left');
   const sub = document.getElementById('grace-sub');
@@ -3457,38 +3475,46 @@ function renderGrace() {
   const canBuy = (skips.bought || 0) < GRACE_MAX_BOUGHT;
   left.textContent = skipsLeft();
   sub.textContent = canBuy
-    ? `осталось в этом месяце · открыто ${skips.bought || 0} из ${GRACE_MAX_BOUGHT}`
+    ? `осталось в этом месяце · куплено ${skips.bought || 0} из ${GRACE_MAX_BOUGHT}${trustedSkipBits === null ? '' : ` · доступно ${trustedSkipBits} подтверждённых битов`}`
     : 'осталось в этом месяце · больше в этом месяце не открыть';
   btn.disabled = !canBuy;
-  btn.textContent = canBuy ? `Открыть за ${BIT_PRICE.grace}` : 'Лимит месяца';
+  btn.textContent = canBuy ? `Купить за ${BIT_PRICE.grace} бит` : 'Лимит месяца';
 }
 let graceBuying = false;
+const GRACE_PURCHASE_KEY = 'disbit_grace_purchase_pending_v1';
 async function buyGrace() {
   if (graceBuying) return;
-  skipsLeft();
+  if (!API || !authToken) { toast('Для покупки пропуска нужен аккаунт и связь с сервером'); return; }
+  await refreshPromiseSkipQuota();
+  const owner = localStorage.getItem(OWNER_KEY);
+  let pending;
+  try { pending = JSON.parse(localStorage.getItem(GRACE_PURCHASE_KEY)); } catch {}
+  if (pending?.owner !== owner || pending?.month !== skips.month) pending = null;
   if ((skips.bought || 0) >= GRACE_MAX_BOUGHT) {
+    localStorage.removeItem(GRACE_PURCHASE_KEY);
     toast('В этом месяце больше грэйс-дней не открыть');
     return;
   }
-  if (profile.bit < BIT_PRICE.grace) {
-    toast(`Нужно ${BIT_PRICE.grace} бит, у тебя ${profile.bit}. Выполняй обещания 💪`);
+  if (trustedSkipBits === null) { toast('Не удалось проверить биты на сервере'); return; }
+  if (!pending && trustedSkipBits < BIT_PRICE.grace) {
+    toast(`Нужно ${BIT_PRICE.grace} подтверждённых битов, доступно ${trustedSkipBits}`);
     return;
   }
   graceBuying = true;
-  const owner = localStorage.getItem(OWNER_KEY);
-  const accepted = await confirmAction('Открыть грэйс-день?', `Стоимость: ${BIT_PRICE.grace} бит. У тебя ${profile.bit} бит. Уже зафиксированный штраф не отменяется.`, 'Открыть', cosmeticPreview('grace'));
-  graceBuying = false;
+  const accepted = await confirmAction('Открыть грэйс-день?', `Стоимость: ${BIT_PRICE.grace} подтверждённых битов. Доступно ${trustedSkipBits}. Уже зафиксированный штраф не отменяется.`, 'Открыть', cosmeticPreview('grace'));
   skipsLeft();
-  if (!accepted || owner !== localStorage.getItem(OWNER_KEY) || profile.bit < BIT_PRICE.grace || (skips.bought || 0) >= GRACE_MAX_BOUGHT) return;
-  profile.bit -= BIT_PRICE.grace;
-  saveJson(PROFILE_KEY, profile);
-  skipsLeft();                       // на случай смены месяца — сбросит счётчик
-  skips.left++;
-  skips.bought = (skips.bought || 0) + 1;
-  saveSkips();
-  renderBit();
-  renderGrace();
-  toast('Грэйс-день открыт');
+  if (!accepted || owner !== localStorage.getItem(OWNER_KEY) || (skips.bought || 0) >= GRACE_MAX_BOUGHT) { graceBuying = false; return; }
+  const requestId = pending?.requestId || crypto.randomUUID();
+  localStorage.setItem(GRACE_PURCHASE_KEY, JSON.stringify({ owner, month: skips.month, requestId }));
+  const quota = await apiCallStrict('POST', '/habits/skips/purchase', { requestId });
+  graceBuying = false;
+  if (quota.error) {
+    if (quota.status === 409) localStorage.removeItem(GRACE_PURCHASE_KEY);
+    toast(quota.error); await refreshPromiseSkipQuota(); return;
+  }
+  localStorage.removeItem(GRACE_PURCHASE_KEY);
+  applyPromiseSkipQuota(quota);
+  toast(quota.duplicate ? 'Покупка уже учтена' : 'Грэйс-день открыт');
 }
 
 function applyTheme() {

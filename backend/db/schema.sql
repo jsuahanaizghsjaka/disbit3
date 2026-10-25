@@ -138,6 +138,91 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, id DESC);
 
+-- Real-money preparation. Kept separate from the historical manual wallet so
+-- simulated balances can never become withdrawable or finance a real penalty.
+-- No route may use these tables until the merchant/legal release gate opens.
+CREATE TABLE IF NOT EXISTS money_accounts (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE RESTRICT,
+  balance INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0),
+  reserved INTEGER NOT NULL DEFAULT 0 CHECK(reserved >= 0 AND reserved <= balance)
+);
+CREATE TABLE IF NOT EXISTS money_payment_intents (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  provider TEXT NOT NULL CHECK(provider = 'yookassa'),
+  idempotency_key TEXT NOT NULL UNIQUE,
+  provider_payment_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'created' CHECK(status IN ('created','pending','succeeded','canceled')),
+  confirmation_url TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_money_payment_user ON money_payment_intents(user_id,id);
+CREATE TABLE IF NOT EXISTS money_refund_requests (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','succeeded','failed','partial')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS money_refund_parts (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL REFERENCES money_refund_requests(id) ON DELETE RESTRICT,
+  payment_intent_id TEXT NOT NULL REFERENCES money_payment_intents(id) ON DELETE RESTRICT,
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  idempotency_key TEXT NOT NULL UNIQUE,
+  provider_refund_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'reserved' CHECK(status IN ('reserved','pending','succeeded','failed'))
+);
+CREATE INDEX IF NOT EXISTS idx_money_refund_payment ON money_refund_parts(payment_intent_id,status);
+CREATE TABLE IF NOT EXISTS money_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  type TEXT NOT NULL CHECK(type IN ('topup','penalty','refund','correction')),
+  source_key TEXT NOT NULL UNIQUE,
+  amount INTEGER NOT NULL CHECK(amount <> 0),
+  balance_after INTEGER NOT NULL CHECK(balance_after >= 0),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_money_ledger_user ON money_ledger(user_id,id DESC);
+-- A real penalty needs a fresh, explicitly accepted version of the terms.
+-- Legacy promises receive no implicit consent and cannot be charged here.
+CREATE TABLE IF NOT EXISTS money_terms (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  habit_id TEXT NOT NULL,
+  effective_day TEXT NOT NULL,
+  schedule TEXT NOT NULL,
+  week_target INTEGER NOT NULL,
+  goal_type TEXT NOT NULL CHECK(goal_type IN ('check','count')),
+  goal_target INTEGER NOT NULL CHECK(goal_target >= 1),
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  recipient TEXT NOT NULL CHECK(recipient = 'creators'),
+  agreement_version TEXT NOT NULL,
+  agreement_hash TEXT NOT NULL,
+  accepted_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id,habit_id,effective_day)
+);
+CREATE TABLE IF NOT EXISTS money_penalties (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  habit_id TEXT NOT NULL,
+  day TEXT NOT NULL,
+  terms_id TEXT NOT NULL REFERENCES money_terms(id),
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  status TEXT NOT NULL CHECK(status IN ('paid','insufficient','deferred')),
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id,habit_id,day)
+);
+CREATE INDEX IF NOT EXISTS idx_money_penalties_user ON money_penalties(user_id,day);
+CREATE TABLE IF NOT EXISTS money_settlement_cursors (
+  user_id INTEGER NOT NULL,
+  habit_id TEXT NOT NULL,
+  last_day TEXT NOT NULL,
+  PRIMARY KEY(user_id,habit_id)
+);
+
 -- Друзья: настоящая связь между аккаунтами (не локальный список).
 -- Дружба взаимная — при добавлении создаём ОБЕ строки, чтобы каждый видел другого.
 CREATE TABLE IF NOT EXISTS friendships (
@@ -157,6 +242,28 @@ CREATE TABLE IF NOT EXISTS proof_skips (
   PRIMARY KEY (user_id, habit_id, day)
 );
 CREATE INDEX IF NOT EXISTS idx_proof_skips_month ON proof_skips(user_id, month);
+
+-- Promise-day skips are separate from proof skips. A receipt is never refunded
+-- by undoing a mark or deleting a promise.
+CREATE TABLE IF NOT EXISTS promise_day_skips (
+  user_id INTEGER NOT NULL, habit_id TEXT NOT NULL, day TEXT NOT NULL,
+  month TEXT NOT NULL, PRIMARY KEY(user_id,habit_id,day)
+);
+CREATE INDEX IF NOT EXISTS idx_promise_day_skips_month ON promise_day_skips(user_id,month);
+CREATE TABLE IF NOT EXISTS promise_skip_purchases (
+  id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, month TEXT NOT NULL,
+  cost_bits INTEGER NOT NULL CHECK(cost_bits=20), created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_promise_skip_purchases_month ON promise_skip_purchases(user_id,month);
+-- Only server-verified completions mint spendable bits. Historical local profile
+-- bits remain cosmetic and cannot waive a real-money penalty.
+CREATE TABLE IF NOT EXISTS trusted_bits (
+  user_id INTEGER PRIMARY KEY, balance INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS trusted_bit_awards (
+  user_id INTEGER NOT NULL, habit_id TEXT NOT NULL, day TEXT NOT NULL,
+  PRIMARY KEY(user_id,habit_id,day)
+);
 
 -- Приглашения «делать обещание вместе»: короткий код → ссылка/QR.
 -- payload — снимок обещания (название, иконка, расписание…), чтобы у друга

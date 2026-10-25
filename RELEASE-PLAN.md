@@ -2,7 +2,7 @@
 
 Дата: 5 октября 2026. Статус: план, не отчёт о выполненных работах.
 
-Обновление 24 октября: текущее выполнение ближайших пунктов 1–3, проверки и внешние блокеры описаны в [RELEASE-FOUNDATION-REPORT.md](RELEASE-FOUNDATION-REPORT.md). Исходный аудит ниже исторический: например, `npm test` уже не заглушка, редизайн реализован локально. Денежные условия вынесены в [RELEASE-RF-RULES.md](RELEASE-RF-RULES.md), эксплуатация — в [ops/README.md](ops/README.md).
+Обновление 25 октября: текущее выполнение ближайших пунктов 1–3, проверки и внешние блокеры описаны в [RELEASE-FOUNDATION-REPORT.md](RELEASE-FOUNDATION-REPORT.md). Исходный аудит ниже исторический: например, `npm test` уже не заглушка, редизайн развёрнут на сервере. Денежные условия вынесены в [RELEASE-RF-RULES.md](RELEASE-RF-RULES.md), закрытая интеграция ЮKassa и условия её открытия — в [FINANCIAL-INTEGRATION.md](FINANCIAL-INTEGRATION.md), эксплуатация — в [ops/README.md](ops/README.md).
 
 ## 0. Цель, границы и исходные решения
 

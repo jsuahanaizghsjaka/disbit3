@@ -1,5 +1,6 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { randomUUID } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 let server;
@@ -113,6 +114,15 @@ test('deletion respects ownership and removes completion history', async () => {
   assert.equal((await (await request('GET', '/habits')).json()).some(h => h.id === 'import-test'), false);
 });
 
+test('accepted money terms prevent silent edits and deletion; archive remains available', async () => {
+  const today=new Date().toLocaleDateString('en-CA');
+  const row=(await (await request('GET','/habits')).json()).find(h=>h.id==='beta-accepted-money');
+  assert(row);
+  assert.equal((await request('PUT','/habits/beta-accepted-money',{...row,stake:{mode:'money',amount:99,recipient:'creators'}})).status,409);
+  assert.equal((await request('DELETE','/habits/beta-accepted-money')).status,409);
+  assert.equal((await request('PUT','/habits/beta-accepted-money/archive',{archived:true,day:today})).status,200);
+});
+
 test('past and future days are read-only; count cannot bypass proof requirement', async () => {
   const today=new Date().toLocaleDateString('en-CA');
   for(const offset of [-2,-1,1]) {
@@ -157,6 +167,7 @@ test('proof upload ownership, date, MIME and completion after quota is exhausted
   assert.equal((await fetch(base+`/proofs?habitId=beta-check&day=${day}`,{method:'POST',headers:{Authorization:'Bearer '+'1'.repeat(64),'Content-Type':'image/png'},body:'not an image'})).status,415);
   assert.equal((await upload('beta-check',day)).status,201);
   assert.equal((await request('PUT',`/habits/beta-check/day/${day}`,{done:true})).status,200);
+  assert((await (await request('GET','/habits/skips/quota')).json()).trustedBits >= 1);
   assert.equal((await (await request('GET','/proofs/quota')).json()).used,5);
 });
 
@@ -178,4 +189,35 @@ test('invitation acceptance still creates a promise after minimum schema migrati
   const response=await request('POST',`/invites/${invitation.code}/accept`,{},'2'.repeat(64));
   assert.equal(response.status,200);
   const result=await response.json();assert.equal(result.habit.min,source.min);assert.deepEqual(result.habit.history,{});
+});
+
+test('promise-day skips are capped per account, idempotent and cannot be bought with local profile bits', async()=>{
+  const token='2'.repeat(64);
+  const day=new Date().toLocaleDateString('en-CA');
+  for(let i=0;i<6;i++) {
+    assert.equal((await request('POST','/habits',{id:`day-skip-${i}`,name:`Skip ${i}`},token)).status,201);
+  }
+  for(let i=0;i<5;i++) assert.equal((await request('PUT',`/habits/day-skip-${i}/day/${day}`,{skip:true},token)).status,200);
+  assert.equal((await request('PUT',`/habits/day-skip-0/day/${day}`,{skip:true},token)).status,200);
+  const quota=await (await request('GET','/habits/skips/quota',undefined,token)).json();
+  assert.equal(quota.remaining,0); assert.equal(quota.used,5); assert.equal(quota.costBits,20);
+  assert.equal((await request('PUT',`/habits/day-skip-5/day/${day}`,{skip:true},token)).status,409);
+  assert.equal((await request('POST','/habits/skips/purchase',{requestId:randomUUID()},token)).status,409);
+  assert.equal((await (await request('GET','/habits/skips/quota')).json()).remaining,5);
+});
+
+test('three server-bit purchases are capped through the API', async()=>{
+  const token='3'.repeat(64);
+  for(let i=0;i<3;i++) {
+    const requestId=randomUUID();
+    const response=await request('POST','/habits/skips/purchase',{requestId},token);
+    assert.equal(response.status,200);
+    const quota=await response.json();
+    assert.equal(quota.bought,i+1); assert.equal(quota.trustedBits,60-(i+1)*20);
+    const repeated=await (await request('POST','/habits/skips/purchase',{requestId},token)).json();
+    assert.equal(repeated.duplicate,true);
+  }
+  assert.equal((await request('POST','/habits/skips/purchase',{requestId:randomUUID()},token)).status,409);
+  const final=await (await request('GET','/habits/skips/quota',undefined,token)).json();
+  assert.equal(final.remaining,8); assert.equal(final.trustedBits,0);
 });
