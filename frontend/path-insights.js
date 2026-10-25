@@ -130,11 +130,13 @@ function renderWallet() {
   balance.textContent=signed&&wallet?rub(wallet.balance):signed?'Загружаем…':'Нужен аккаунт';
   balance.classList.toggle('wallet-skeleton',signed&&!wallet&&walletLoading);
   if(signed&&!wallet&&!walletLoading) balance.textContent='Баланс недоступен';
-  document.getElementById('wallet-sub').textContent=!signed?'Войди, чтобы открыть депозит':wallet?`Списано штрафов: ${rub(wallet.charged || 0)}`:'Подключись к сети и обнови депозит';
   const simulated=!!wallet?.payments?.simulated;
-  document.getElementById('wallet-sim').hidden=!signed||!simulated;
-  document.getElementById('wallet-mode').textContent=!signed?'Рубли, отдельно от битов':!wallet?'Режим уточняется':simulated?'Тестовый депозит':'Платёжный провайдер: '+(wallet.payments?.provider || 'не указан');
-  const topup=document.getElementById('btn-topup'); topup.textContent=signed?'Пополнить':'Войти'; topup.disabled=signed&&(!wallet||walletLoading||!!walletError||topupBusy||topupUncertain||!!pendingPayment());
+  const unavailable=!!wallet&&wallet.payments?.available!==true;
+  document.getElementById('wallet-sub').textContent=!signed?'Войди, чтобы открыть депозит':wallet?`${unavailable?'Учтено условных штрафов':'Списано штрафов'}: ${rub(wallet.charged || 0)}`:'Подключись к сети и обнови депозит';
+  document.getElementById('wallet-sim').hidden=!signed||!(simulated||unavailable);
+  document.getElementById('wallet-mode').textContent=!signed?'Рубли, отдельно от битов':!wallet?'Режим уточняется':unavailable?'Пополнение и возврат пока недоступны':simulated?'Тестовый депозит':'Платёжный провайдер подключён';
+  const topup=document.getElementById('btn-topup'); topup.textContent=!signed?'Войти':!wallet?'Загружаем депозит…':unavailable?'Пополнение недоступно':'Пополнить'; topup.disabled=signed&&(unavailable||!wallet||walletLoading||!!walletError||topupBusy||topupUncertain||!!pendingPayment());
+  topup.setAttribute('aria-describedby','wallet-mode wallet-state');
   const state=document.getElementById('wallet-state');
   state.textContent=walletLoading?'Обновляем депозит…':walletError?(wallet?'Не удалось обновить. Показаны последние загруженные данные. ':'')+walletError:topupUncertain?'Ответ на пополнение не получен. Не создавай новый платёж, пока результат не уточнён. Обнови историю.':pendingPayment()?'Платёж ещё не подтверждён. Возвращение со страницы оплаты само по себе не означает зачисление.':paymentReturnNotice;
   document.getElementById('wallet-retry').hidden=!signed;
@@ -142,7 +144,7 @@ function renderWallet() {
   const box=document.getElementById('wallet-history');
   box.innerHTML=!signed||!wallet?'':wallet.history.length?wallet.history.map((op,index)=>`<button class="ledger-row operation-row" data-operation="${index}"><span class="ledger-main"><span class="ledger-name">${operationName(op)}</span><span class="ledger-day">${escapeHtml(op.meta?.name || '')}</span><span class="ledger-day">${operationDate(op.created_at)}</span><span class="operation-status">${operationStatus(op)}</span></span><span class="ledger-amount ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</span></button>`).join(''):'<p class="hint">Операций пока нет. Пополнение появится здесь после подтверждения.</p>';
   box.querySelectorAll('[data-operation]').forEach(b=>b.onclick=()=>openOperation(wallet.history[Number(b.dataset.operation)]));
-  document.querySelectorAll('[data-payment-note]').forEach(el=>el.textContent=!signed?'Локальный журнал. Реальные деньги не списываются.':!wallet?'Режим платежей ещё не загружен.':simulated?'Тестовый режим. Реальные деньги не списываются.':'Журнал штрафов. Статус списания смотри в депозите.');
+  document.querySelectorAll('[data-payment-note]').forEach(el=>el.textContent=!signed?'Локальный журнал. Реальные деньги не списываются.':!wallet?'Режим платежей ещё не загружен.':unavailable||simulated?'Реальные деньги не списываются. Суммы показаны для внутреннего учёта.':'Журнал штрафов. Статус списания смотри в депозите.');
 }
 function openOperation(op) {
   document.getElementById('operation-title').textContent=operationName(op);
@@ -151,7 +153,7 @@ function openOperation(op) {
 }
 function openTopupSheet() {
   if(!API||!authToken) { openAuthSheet('login'); return; }
-  if(!wallet||walletError||topupBusy||topupUncertain||pendingPayment()) return;
+  if(!wallet||wallet.payments?.available!==true||walletError||topupBusy||topupUncertain||pendingPayment()) return;
   document.getElementById('topup-error').hidden=true;
   document.getElementById('topup-custom').value='';
   document.getElementById('topup-mode').textContent=wallet.payments?.simulated?'Тестовое пополнение. С карты ничего не спишется.':'Перейдёшь к платёжному провайдеру. Зачисление появится после подтверждения.';
@@ -159,7 +161,7 @@ function openTopupSheet() {
   openSheet('topup-overlay');
 }
 async function doTopup() {
-  if(topupBusy||topupUncertain||pendingPayment()||!authToken) return;
+  if(topupBusy||topupUncertain||pendingPayment()||!authToken||wallet?.payments?.available!==true) return;
   const input=document.getElementById('topup-custom'), raw=input.value;
   const kop=raw!==''?Math.round(Number(raw)*100):Number(document.querySelector('#topup-amounts .on')?.dataset.sum || 30000);
   const err=document.getElementById('topup-error');
@@ -185,7 +187,7 @@ async function doTopup() {
     closeSheet('topup-overlay');await loadWallet();
     toast(result.simulated?`Зачислено ${rub(kop)} в тестовом режиме`:'Пополнение подтверждено');
   } catch {topupUncertain=true;err.textContent='Не удалось получить результат. Проверь историю перед новой попыткой.';err.hidden=false;}
-  finally {topupBusy=false;btn.disabled=topupUncertain||!!pendingPayment();btn.removeAttribute('aria-busy');btn.textContent=wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';renderWallet();}
+  finally {topupBusy=false;btn.disabled=wallet?.payments?.available!==true||topupUncertain||!!pendingPayment();btn.removeAttribute('aria-busy');btn.textContent=wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';renderWallet();}
 }
 
 function wireInsightsUI() {
