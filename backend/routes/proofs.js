@@ -16,6 +16,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db } from '../db/db.js';
 import { accountDay, proofSatisfied, proofQuota } from '../proof-policy.js';
+import { transaction, syncTrustedBitAward, trustedCompletionEligible } from '../lib/promise-skips.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -73,6 +74,7 @@ router.post('/skip', authRequired, (req, res) => {
       }
       db.prepare('INSERT INTO proof_skips (user_id,habit_id,day,month) VALUES (?,?,?,?)').run(uid(req), habit.id, day, day.slice(0,7));
     }
+    syncTrustedBitAward(db,uid(req),habit.id,day,trustedCompletionEligible(db,uid(req),habit.id,day));
     db.exec('COMMIT');
     res.json({ ok:true, ...proofQuota(uid(req), day) });
   } catch (error) { db.exec('ROLLBACK'); throw error; }
@@ -180,8 +182,15 @@ router.post('/:id/decision', express.json(), adminOnly, (req, res) => {
   if (!['approved', 'rejected'].includes(status)) {
     return res.status(400).json({ error: 'status должен быть approved или rejected' });
   }
-  const info = db.prepare('UPDATE proofs SET status = ? WHERE id = ?').run(status, req.params.id);
-  if (!info.changes) return res.status(404).json({ error: 'Пруф не найден' });
+  const updated = transaction(db, () => {
+    const proof = db.prepare('SELECT user_id,habit_id,day FROM proofs WHERE id=?').get(req.params.id);
+    if (!proof) return false;
+    db.prepare('UPDATE proofs SET status=? WHERE id=?').run(status,req.params.id);
+    syncTrustedBitAward(db,proof.user_id,proof.habit_id,proof.day,
+      trustedCompletionEligible(db,proof.user_id,proof.habit_id,proof.day));
+    return true;
+  });
+  if (!updated) return res.status(404).json({ error: 'Пруф не найден' });
   res.json({ ok: true, id: Number(req.params.id), status });
 });
 

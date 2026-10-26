@@ -95,7 +95,7 @@ let topupUncertain=false, paymentReturnNotice='';
 function paymentKey() { return `disbit-payment:${authUser?.id || authUser?.login || 'local'}`; }
 function pendingPayment() { try { return JSON.parse(sessionStorage.getItem(paymentKey())); } catch { return null; } }
 function operationStatus(op) {
-  return ({done:'Проведено',pending:'Ожидает подтверждения',failed:'Не выполнено',cancelled:'Отменено',canceled:'Отменено'})[op.status] || 'Статус не получен';
+  return ({done:'Проведено',succeeded:'Проведено',created:'Создано',pending:'Ожидает подтверждения',failed:'Не выполнено',cancelled:'Отменено',canceled:'Отменено'})[op.status] || 'Статус не получен';
 }
 function operationDate(value) {
   if(!value) return 'Дата не получена';
@@ -107,6 +107,20 @@ async function loadWallet() {
   const request=++walletRequest, token=authToken;
   if(!API || !token) { wallet=null; walletLoading=false; walletError=''; renderWallet(); return; }
   walletLoading=true; walletError=''; renderWallet();
+  const waiting=pendingPayment();
+  if(waiting?.mode==='sandbox') {
+    const check=waiting.providerId
+      ? await apiCallStrict('GET',`/wallet/sandbox/status/${encodeURIComponent(waiting.intentId)}`)
+      : await apiCallStrict('POST','/wallet/sandbox/topup',{amount:waiting.amount,requestId:waiting.requestId});
+    if(request!==walletRequest || token!==authToken) return;
+    if(!check.error) {
+      topupUncertain=false;
+      if(['succeeded','canceled'].includes(check.status)) {
+        sessionStorage.removeItem(paymentKey());topupUncertain=false;
+        paymentReturnNotice=check.status==='succeeded'?'Тестовый платёж подтверждён ЮKassa':'Тестовый платёж отменён';
+      } else sessionStorage.setItem(paymentKey(),JSON.stringify({...waiting,intentId:check.id,providerId:check.providerId,url:check.url}));
+    } else if(check.status===404) sessionStorage.removeItem(paymentKey());
+  }
   const result=await apiCallStrict('GET','/wallet');
   if(request!==walletRequest || token!==authToken) return;
   walletLoading=false;
@@ -114,7 +128,7 @@ async function loadWallet() {
   else {
     wallet=result;
     const pending=pendingPayment();
-    const matched=pending?.providerId && wallet.history.find(op=>op.provider_id===pending.providerId);
+    const matched=pending?.mode!=='sandbox' && pending?.providerId && wallet.history.find(op=>op.provider_id===pending.providerId);
     if(matched && ['done','failed','cancelled','canceled'].includes(matched.status)) {
       sessionStorage.removeItem(paymentKey());
       paymentReturnNotice=matched.status==='done'?'Пополнение подтверждено сервером':`Пополнение: ${operationStatus(matched).toLowerCase()}`;
@@ -127,52 +141,76 @@ function renderWallet() {
   const card=document.getElementById('wallet-card'); if(!card) return;
   card.hidden=false; card.setAttribute('aria-busy',String(walletLoading));
   const signed=!!(API&&authToken), balance=document.getElementById('wallet-balance');
-  balance.textContent=signed&&wallet?rub(wallet.balance):signed?'Загружаем…':'Нужен аккаунт';
+  const sandboxMode=!!wallet?.sandbox?.available;
+  const shownBalance=sandboxMode?wallet.sandbox.balance:wallet?.balance;
+  balance.textContent=signed&&wallet?rub(shownBalance):signed?'Загружаем…':'Нужен аккаунт';
   balance.classList.toggle('wallet-skeleton',signed&&!wallet&&walletLoading);
   if(signed&&!wallet&&!walletLoading) balance.textContent='Баланс недоступен';
-  const simulated=!!wallet?.payments?.simulated;
-  const unavailable=!!wallet&&wallet.payments?.available!==true;
-  document.getElementById('wallet-sub').textContent=!signed?'Войди, чтобы открыть депозит':wallet?`${unavailable?'Учтено условных штрафов':'Списано штрафов'}: ${rub(wallet.charged || 0)}`:'Подключись к сети и обнови депозит';
-  document.getElementById('wallet-sim').hidden=!signed||!(simulated||unavailable);
-  document.getElementById('wallet-mode').textContent=!signed?'Рубли, отдельно от битов':!wallet?'Режим уточняется':unavailable?'Пополнение и возврат пока недоступны':simulated?'Тестовый депозит':'Платёжный провайдер подключён';
-  const topup=document.getElementById('btn-topup'); topup.textContent=!signed?'Войти':!wallet?'Загружаем депозит…':unavailable?'Пополнение недоступно':'Пополнить'; topup.disabled=signed&&(unavailable||!wallet||walletLoading||!!walletError||topupBusy||topupUncertain||!!pendingPayment());
+  const simulated=!!wallet?.payments?.simulated || sandboxMode;
+  const unavailable=!!wallet&&!sandboxMode&&wallet.payments?.available!==true;
+  document.getElementById('wallet-sub').textContent=!signed?'Войди, чтобы открыть депозит':sandboxMode?'Тестовые ₽ не покрывают штрафы':wallet?`${unavailable?'Учтено условных штрафов':'Списано штрафов'}: ${rub(wallet.charged || 0)}`:'Подключись к сети и обнови депозит';
+  const simNote=document.getElementById('wallet-sim');
+  simNote.hidden=!signed||!(simulated||unavailable);
+  if(sandboxMode) simNote.textContent='Тестовый магазин ЮKassa: реальные деньги не списываются. Этот остаток нельзя вывести или использовать для настоящих штрафов.';
+  else simNote.textContent='Реальные платежи пока не подключены. Показанные суммы — внутренние записи приложения.';
+  document.getElementById('wallet-mode').textContent=!signed?'Рубли, отдельно от битов':!wallet?'Режим уточняется':sandboxMode?'Тестовый депозит ЮKassa':unavailable?'Пополнение и возврат пока недоступны':simulated?'Тестовый депозит':'Платёжный провайдер подключён';
+  const pending=pendingPayment();
+  const canResume=sandboxMode&&pending?.mode==='sandbox'&&!!pending.url;
+  const topup=document.getElementById('btn-topup'); topup.textContent=!signed?'Войти':!wallet?'Загружаем депозит…':unavailable?'Пополнение недоступно':canResume?'Продолжить оплату':sandboxMode?'Тестовое пополнение':'Пополнить'; topup.disabled=signed&&(unavailable||!wallet||walletLoading||!!walletError||topupBusy||topupUncertain|| (!!pending&&!canResume));
   topup.setAttribute('aria-describedby','wallet-mode wallet-state');
   const state=document.getElementById('wallet-state');
-  state.textContent=walletLoading?'Обновляем депозит…':walletError?(wallet?'Не удалось обновить. Показаны последние загруженные данные. ':'')+walletError:topupUncertain?'Ответ на пополнение не получен. Не создавай новый платёж, пока результат не уточнён. Обнови историю.':pendingPayment()?'Платёж ещё не подтверждён. Возвращение со страницы оплаты само по себе не означает зачисление.':paymentReturnNotice;
+  state.textContent=walletLoading?'Обновляем депозит…':walletError?(wallet?'Не удалось обновить. Показаны последние загруженные данные. ':'')+walletError:topupUncertain?'Ответ на пополнение не получен. Не создавай новый платёж, пока результат не уточнён. Обнови историю.':pending?'Платёж ещё не подтверждён. Возвращение со страницы оплаты само по себе не означает зачисление.':paymentReturnNotice;
   document.getElementById('wallet-retry').hidden=!signed;
   document.getElementById('wallet-retry').disabled=walletLoading;
   const box=document.getElementById('wallet-history');
-  box.innerHTML=!signed||!wallet?'':wallet.history.length?wallet.history.map((op,index)=>`<button class="ledger-row operation-row" data-operation="${index}"><span class="ledger-main"><span class="ledger-name">${operationName(op)}</span><span class="ledger-day">${escapeHtml(op.meta?.name || '')}</span><span class="ledger-day">${operationDate(op.created_at)}</span><span class="operation-status">${operationStatus(op)}</span></span><span class="ledger-amount ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</span></button>`).join(''):'<p class="hint">Операций пока нет. Пополнение появится здесь после подтверждения.</p>';
-  box.querySelectorAll('[data-operation]').forEach(b=>b.onclick=()=>openOperation(wallet.history[Number(b.dataset.operation)]));
+  const shownHistory=sandboxMode?wallet.sandbox.history:wallet?.history || [];
+  box.innerHTML=!signed||!wallet?'':shownHistory.length?shownHistory.map((op,index)=>`<button class="ledger-row operation-row" data-operation="${index}"><span class="ledger-main"><span class="ledger-name">${operationName(op)}</span><span class="ledger-day">${escapeHtml(op.meta?.name || '')}</span><span class="ledger-day">${operationDate(op.created_at)}</span><span class="operation-status">${operationStatus(op)}</span></span><span class="ledger-amount ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</span></button>`).join(''):'<p class="hint">Операций пока нет. Пополнение появится здесь после подтверждения.</p>';
+  box.querySelectorAll('[data-operation]').forEach(b=>b.onclick=()=>openOperation(shownHistory[Number(b.dataset.operation)]));
   document.querySelectorAll('[data-payment-note]').forEach(el=>el.textContent=!signed?'Локальный журнал. Реальные деньги не списываются.':!wallet?'Режим платежей ещё не загружен.':unavailable||simulated?'Реальные деньги не списываются. Суммы показаны для внутреннего учёта.':'Журнал штрафов. Статус списания смотри в депозите.');
 }
 function openOperation(op) {
   document.getElementById('operation-title').textContent=operationName(op);
-  document.getElementById('operation-body').innerHTML=`<p class="operation-total ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</p><dl class="operation-details"><dt>Статус</dt><dd>${operationStatus(op)}</dd><dt>Дата</dt><dd>${operationDate(op.created_at)}</dd><dt>Обещание</dt><dd>${escapeHtml(op.meta?.name || 'Не связано с обещанием')}</dd><dt>После операции</dt><dd>${rub(op.balance_after)}</dd><dt>Режим</dt><dd>${op.meta?.test||op.provider==='manual'?'Тестовый, без реальных денег':escapeHtml(op.provider || 'Списание с депозита')}</dd></dl><p class="hint">${op.type==='charge'?'Штраф за невыполнение. Изменение отметки не отменяет зафиксированную операцию.':'Пополнение отображается по данным сервера, а не по возвращению со страницы оплаты.'}</p>`;
+  document.getElementById('operation-body').innerHTML=`<p class="operation-total ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</p><dl class="operation-details"><dt>Статус</dt><dd>${operationStatus(op)}</dd><dt>Дата</dt><dd>${operationDate(op.created_at)}</dd><dt>Обещание</dt><dd>${escapeHtml(op.meta?.name || 'Не связано с обещанием')}</dd><dt>После операции</dt><dd>${op.balance_after==null?'Ожидается':rub(op.balance_after)}</dd><dt>Режим</dt><dd>${op.meta?.test||op.provider==='manual'?'Тестовый, без реальных денег':escapeHtml(op.provider || 'Списание с депозита')}</dd></dl><p class="hint">${op.type==='charge'?'Штраф за невыполнение. Изменение отметки не отменяет зафиксированную операцию.':'Пополнение отображается по данным сервера, а не по возвращению со страницы оплаты.'}</p>`;
   openSheet('operation-overlay');
 }
 function openTopupSheet() {
   if(!API||!authToken) { openAuthSheet('login'); return; }
-  if(!wallet||wallet.payments?.available!==true||walletError||topupBusy||topupUncertain||pendingPayment()) return;
+  const sandboxMode=!!wallet?.sandbox?.available;
+  const pending=pendingPayment();
+  if(sandboxMode&&pending?.mode==='sandbox'&&pending.url) {
+    try { const url=new URL(pending.url);if(url.protocol==='https:') location.assign(url.href); }
+    catch { toast('Ссылка тестовой оплаты недоступна. Обнови депозит.'); }
+    return;
+  }
+  if(!wallet||(!sandboxMode&&wallet.payments?.available!==true)||walletError||topupBusy||topupUncertain||pending) return;
   document.getElementById('topup-error').hidden=true;
   document.getElementById('topup-custom').value='';
-  document.getElementById('topup-mode').textContent=wallet.payments?.simulated?'Тестовое пополнение. С карты ничего не спишется.':'Перейдёшь к платёжному провайдеру. Зачисление появится после подтверждения.';
-  document.getElementById('topup-go').textContent=wallet.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';
+  document.getElementById('topup-custom').removeAttribute('aria-invalid');
+  document.getElementById('topup-title').textContent=sandboxMode?'Тестовое пополнение':'Пополнить депозит';
+  document.getElementById('topup-help').textContent=sandboxMode?'ЮKassa откроет тестовую платёжную страницу. Реальные деньги не спишутся; остаток нельзя вывести или использовать для настоящих штрафов.':'Штрафы списываются с депозита — карта не привязывается, деньги сами не уходят. Остаток всегда виден.';
+  document.getElementById('topup-mode').textContent=sandboxMode?'Тестовый магазин ЮKassa':wallet.payments?.simulated?'Тестовое пополнение. С карты ничего не спишется.':'Перейдёшь к платёжному провайдеру. Зачисление появится после подтверждения.';
+  document.getElementById('topup-go').textContent=sandboxMode?'Перейти к тестовой оплате':wallet.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';
   openSheet('topup-overlay');
 }
 async function doTopup() {
-  if(topupBusy||topupUncertain||pendingPayment()||!authToken||wallet?.payments?.available!==true) return;
+  const sandboxMode=!!wallet?.sandbox?.available;
+  if(topupBusy||topupUncertain||pendingPayment()||!authToken||(!sandboxMode&&wallet?.payments?.available!==true)) return;
   const input=document.getElementById('topup-custom'), raw=input.value;
   const kop=raw!==''?Math.round(Number(raw)*100):Number(document.querySelector('#topup-amounts .on')?.dataset.sum || 30000);
   const err=document.getElementById('topup-error');
   err.hidden=true;
+  input.removeAttribute('aria-invalid');
   if(!Number.isFinite(kop)||kop<5000||kop>5000000) {err.textContent='Введи сумму от 50 до 50 000 ₽';err.hidden=false;input.setAttribute('aria-invalid','true');input.focus();return;}
   topupBusy=true; const owner=authToken, btn=document.getElementById('topup-go');
   btn.disabled=true;btn.textContent='Отправляем…';btn.setAttribute('aria-busy','true');
   try {
-    const result=await apiCallStrict('POST','/wallet/topup',{amount:kop});
+    const requestId=sandboxMode?crypto.randomUUID():null;
+    if(sandboxMode) sessionStorage.setItem(paymentKey(),JSON.stringify({mode:'sandbox',requestId,amount:kop}));
+    const result=await apiCallStrict('POST',sandboxMode?'/wallet/sandbox/topup':'/wallet/topup',
+      sandboxMode?{amount:kop,requestId}:{amount:kop});
     if(owner!==authToken) return;
     if(result.error) {
+      if(sandboxMode&&result.status&&result.status<500) sessionStorage.removeItem(paymentKey());
       // A missing response is not proof that a payment was never created.
       topupUncertain=!result.notSent && (!result.status || result.status>=500);
       err.textContent=result.error+(topupUncertain?' Не повторяй платёж, пока не проверишь историю.':'');err.hidden=false;return;
@@ -180,14 +218,22 @@ async function doTopup() {
     if(result.url) {
       const url=new URL(result.url);
       if(url.protocol!=='https:') {err.textContent='Ссылка оплаты недоступна. Проверь историю перед новой попыткой.';err.hidden=false;topupUncertain=true;return;}
-      sessionStorage.setItem(paymentKey(),JSON.stringify({providerId:result.providerId,amount:kop}));
+      sessionStorage.setItem(paymentKey(),JSON.stringify(sandboxMode
+        ? {mode:'sandbox',requestId,intentId:result.id,providerId:result.providerId,url:result.url,amount:kop}
+        : {providerId:result.providerId,amount:kop}));
       location.assign(url.href);return;
+    }
+    if(sandboxMode&&result.status==='succeeded') {
+      sessionStorage.removeItem(paymentKey());
+      closeSheet('topup-overlay');await loadWallet();
+      toast('Тестовый платёж подтверждён ЮKassa');
+      return;
     }
     if(!result.instant) {topupUncertain=true;err.textContent='Ожидаем подтверждение. Проверь историю депозита.';err.hidden=false;return;}
     closeSheet('topup-overlay');await loadWallet();
     toast(result.simulated?`Зачислено ${rub(kop)} в тестовом режиме`:'Пополнение подтверждено');
   } catch {topupUncertain=true;err.textContent='Не удалось получить результат. Проверь историю перед новой попыткой.';err.hidden=false;}
-  finally {topupBusy=false;btn.disabled=wallet?.payments?.available!==true||topupUncertain||!!pendingPayment();btn.removeAttribute('aria-busy');btn.textContent=wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';renderWallet();}
+  finally {topupBusy=false;btn.disabled=(!sandboxMode&&wallet?.payments?.available!==true)||topupUncertain||!!pendingPayment();btn.removeAttribute('aria-busy');btn.textContent=sandboxMode?'Перейти к тестовой оплате':wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';renderWallet();}
 }
 
 function wireInsightsUI() {

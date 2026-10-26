@@ -198,6 +198,16 @@ button:disabled { cursor: default; }
   border-radius: 4px;
 }
 
+/* The landmark receives focus after tab navigation, but its full-page ring
+   obscures the screen. Keep a smaller visible focus cue on its heading. */
+.screen:focus-visible { outline: none; }
+.screen:focus-visible > .screen-title {
+  text-decoration: underline;
+  text-decoration-color: var(--primary);
+  text-decoration-thickness: 2px;
+  text-underline-offset: .12em;
+}
+
 .ic {
   width: 24px; height: 24px;
   fill: none;
@@ -1283,8 +1293,10 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 
 /* грэйс-дни */
 .grace-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.grace-row > div { min-width: 0; }
+.grace-row .btn-primary { flex-shrink: 0; }
 .grace-left { font-size: 30px; font-weight: 900; line-height: 1; }
-.grace-sub { margin-top: 4px; font-size: 12px; color: var(--text-3); font-weight: 700; }
+.grace-sub { margin-top: 4px; font-size: 12px; color: var(--text-3); font-weight: 700; overflow-wrap: anywhere; }
 .grace-row .btn-primary:disabled { opacity: 0.45; }
 
 /* аватар-шторка: каталог эмодзи */

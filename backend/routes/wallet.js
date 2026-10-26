@@ -8,11 +8,19 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { getBalance, credit, history, chargedTotal } from '../lib/wallet.js';
 import { createTopup, parseWebhook, paymentsInfo } from '../lib/payments.js';
+import { db } from '../db/db.js';
+import { createYooKassaClient } from '../lib/yookassa-client.js';
+import { sandboxConfig, sandboxAllowed, sandboxSnapshot, createSandboxService } from '../lib/sandbox-deposit.js';
 
 const router = Router();
 
 const MIN_TOPUP = 5000;        // 50 ₽ — меньше нет смысла: съест комиссия
 const MAX_TOPUP = 5000000;     // 50 000 ₽ за раз
+const testShop = sandboxConfig();
+const sandbox = testShop.enabled
+  ? createSandboxService(db,createYooKassaClient({shopId:testShop.shopId,secretKey:testShop.secretKey}),testShop.shopId)
+  : null;
+const testAllowed = userId => sandboxAllowed(db,userId,testShop);
 
 function authRequired(req, res, next) {
   if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
@@ -26,8 +34,47 @@ router.get('/', authRequired, (req, res) => {
     balance, currency,
     charged: chargedTotal(req.userId),
     payments: paymentsInfo(),
-    history: history(req.userId, 30)
+    history: history(req.userId, 30),
+    sandbox: testAllowed(req.userId) ? sandboxSnapshot(db,req.userId) : null
   });
+});
+
+// Test-shop flows never write to wallets/transactions or the real money_* tables.
+router.post('/sandbox/topup', authRequired, express.json(), async (req, res) => {
+  if (!testAllowed(req.userId)) return res.status(404).json({ error: 'Тестовый депозит недоступен' });
+  const amount = req.body?.amount;
+  const requestId = req.body?.requestId;
+  if (!Number.isSafeInteger(amount) || amount < MIN_TOPUP || amount > MAX_TOPUP ||
+      typeof requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(requestId))
+    return res.status(400).json({ error: 'Нужны сумма от 50 до 50 000 ₽ и ID запроса' });
+  try {
+    const result = await sandbox.start(req.userId,amount,requestId,new URL('/?sandbox_paid=1',process.env.PUBLIC_URL).href);
+    res.json({ ok:true, sandbox:true, ...result });
+  } catch (error) {
+    console.error('[sandbox] create failed:', error.message);
+    res.status(502).json({ error: 'Не удалось создать тестовый платёж. Повтори с тем же запросом.' });
+  }
+});
+
+router.get('/sandbox/status/:id', authRequired, async (req, res) => {
+  if (!testAllowed(req.userId)) return res.status(404).json({ error: 'Тестовый депозит недоступен' });
+  try {
+    const result = await sandbox.status(req.userId,req.params.id);
+    if (!result) return res.status(404).json({ error: 'Тестовый платёж не найден' });
+    res.json({ sandbox:true, ...result });
+  } catch (error) {
+    console.error('[sandbox] status failed:', error.message);
+    res.status(502).json({ error: 'Не удалось проверить тестовый платёж' });
+  }
+});
+
+router.post('/sandbox/webhook', express.json(), async (req, res) => {
+  if (!sandbox) return res.status(404).json({ error: 'Тестовый магазин выключен' });
+  try { await sandbox.notification(req.body); res.json({ ok:true }); }
+  catch (error) {
+    console.error('[sandbox] notification failed:', error.message);
+    res.status(503).json({ error: 'Тестовый платёж пока не проверен' });
+  }
 });
 
 // POST /api/wallet/topup { amount } — amount в КОПЕЙКАХ

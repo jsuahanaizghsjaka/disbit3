@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { db } from '../db/db.js';
 import { debit, getBalance } from '../lib/wallet.js';
+import { paymentsInfo } from '../lib/payments.js';
 
 const router = Router();
 
@@ -65,6 +66,10 @@ function maxAllowedDay() {
 }
 
 router.post('/', (req, res) => {
+  // Legacy client auto-settlement uses the historical manual wallet only.
+  // Once real payments are approved, only the server-owned money settlement
+  // may debit the separate real wallet. Never accept a phone-supplied day.
+  if (paymentsInfo().live) return res.status(410).json({ error:'Штрафы рассчитываются сервером, отправка дат с телефона отключена' });
   const entries = Array.isArray(req.body) ? req.body : [req.body];
   if (entries.length > MAX_ENTRIES) {
     return res.status(413).json({ error: 'Слишком много записей за раз' });
@@ -120,7 +125,7 @@ router.post('/', (req, res) => {
     }
   }
   res.status(201).json({
-    ok: true, added,
+    ok: true, simulated: true, realMoney: false, added,
     skipped,                           // отброшено: чужое/удалённое обещание или кривой день
     charged: chargedKop,               // сколько реально ушло с депозита (копейки)
     unpaid,                            // не хватило денег — показать пользователю
