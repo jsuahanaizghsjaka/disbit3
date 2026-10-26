@@ -26,20 +26,21 @@ function payment(intent, shopId='1234567') {
     confirmation:{confirmation_url:'https://yoomoney.ru/test-payment'} };
 }
 
-test('test-shop configuration requires test key, HTTPS origin and explicit allowlist', async () => {
+test('test-shop configuration requires test key and HTTPS origin; all registered accounts can use it', async () => {
   const config={YOOKASSA_TEST_ENABLED:'1',YOOKASSA_TEST_SHOP_ID:'1234567',
-    YOOKASSA_TEST_SECRET_KEY:'test_'+'x'.repeat(30),YOOKASSA_TEST_ALLOWED_LOGINS:'tester',PUBLIC_URL:'https://disbit.ru/'};
+    YOOKASSA_TEST_SECRET_KEY:'test_'+'x'.repeat(30),PUBLIC_URL:'https://disbit.ru/'};
   sandbox ||= await import('../backend/lib/sandbox-deposit.js');
   assert.equal(sandbox.sandboxConfig({}).enabled,false);
   assert.throws(()=>sandbox.sandboxConfig({...config,YOOKASSA_TEST_SECRET_KEY:'live_'+'x'.repeat(30)}),/Test-shop/);
-  assert.throws(()=>sandbox.sandboxConfig({...config,YOOKASSA_TEST_ALLOWED_LOGINS:''}),/Test-shop/);
   assert.throws(()=>sandbox.sandboxConfig({...config,PUBLIC_URL:'http://disbit.ru/'}),/HTTPS/);
   assert.throws(()=>sandbox.sandboxConfig({...config,PUBLIC_URL:'https://user:pass@disbit.ru/'}),/HTTPS/);
   const db=await fixture();
   try {
     const c=sandbox.sandboxConfig(config);
     assert.equal(sandbox.sandboxAllowed(db,1,c),true);
-    assert.equal(sandbox.sandboxAllowed(db,2,c),false);
+    assert.equal(sandbox.sandboxAllowed(db,2,c),true);
+    assert.equal(sandbox.sandboxAllowed(db,999,c),false);
+    assert.equal(sandbox.sandboxAllowed(db,1,sandbox.sandboxConfig({})),false);
   } finally { db.close(); }
 });
 
