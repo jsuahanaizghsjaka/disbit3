@@ -44,6 +44,27 @@ test('test-shop configuration requires test key and HTTPS origin; all registered
   } finally { db.close(); }
 });
 
+test('test deposit history pages through every operation without mixing accounts', async () => {
+  const db=await fixture();
+  try {
+    const insert=db.prepare('INSERT INTO sandbox_payment_intents(id,user_id,request_id,amount,idempotency_key) VALUES (?,?,?,?,?)');
+    for(let i=0;i<35;i++) {
+      const id=randomUUID();
+      insert.run(id,1,randomUUID(),5000,`history-${id}`);
+    }
+    const other=randomUUID();
+    insert.run(other,2,randomUUID(),5000,`history-${other}`);
+    const first=sandbox.sandboxHistory(db,1,30,0);
+    const second=sandbox.sandboxHistory(db,1,30,30);
+    assert.equal(sandbox.sandboxSnapshot(db,1).history.length,30);
+    assert.equal(first.length,30);
+    assert.equal(second.length,5);
+    assert.equal(new Set([...first,...second].map(row=>row.id)).size,35);
+    assert.equal(sandbox.sandboxHistory(db,2,30,0).length,1);
+    assert.ok(![...first,...second].some(row=>row.id===other));
+  } finally { db.close(); }
+});
+
 test('verified test payment credits only sandbox once; forged webhook and live object cannot credit', async () => {
   const db=await fixture();
   try {

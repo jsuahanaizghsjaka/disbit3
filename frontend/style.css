@@ -190,6 +190,7 @@ button {
   touch-action: manipulation;
   cursor: pointer;
 }
+a[href], summary { touch-action: manipulation; }
 button:disabled { cursor: default; }
 
 :focus-visible {

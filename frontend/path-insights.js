@@ -103,6 +103,65 @@ function operationDate(value) {
   return Number.isNaN(d.valueOf())?'Дата не получена':d.toLocaleString('ru-RU',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 function operationName(op) { return op.type==='topup'?'Пополнение':op.type==='charge'?'Штраф':op.type==='refund'?'Возврат':'Операция'; }
+function operationRow(op,index,detailed=false) {
+  return `<button class="ledger-row operation-row" type="button" data-operation="${index}" aria-label="${operationName(op)}, ${op.amount>0?'плюс':'минус'} ${rub(Math.abs(op.amount))}, ${operationDate(op.created_at)}, ${operationStatus(op)}. Подробнее">
+    <span class="ledger-main"><span class="ledger-name">${operationName(op)}</span>
+    ${op.meta?.name?`<span class="ledger-day">${escapeHtml(op.meta.name)}</span>`:''}
+    <span class="ledger-day">${operationDate(op.created_at)}</span>
+    <span class="operation-status">${operationStatus(op)}${detailed&&op.balance_after!=null?' · Остаток '+rub(op.balance_after):''}</span></span>
+    <span class="ledger-amount ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</span></button>`;
+}
+let operationHistory=[], operationHistoryOffset=0, operationHistoryHasMore=false;
+let operationHistoryLoading=false, operationHistoryError='', operationHistoryRequest=0, operationHistorySandbox=false;
+let operationHistoryRendered=0;
+function renderOperationHistory() {
+  const list=document.getElementById('operations-list'); if(!list) return;
+  const signed=!!(API&&authToken);
+  document.getElementById('operations-mode').textContent=!signed?'Войди в аккаунт, чтобы увидеть историю':operationHistorySandbox?'Тестовый депозит ЮKassa':'Депозит';
+  if(operationHistoryRendered>operationHistory.length) {
+    list.replaceChildren(); operationHistoryRendered=0;
+  }
+  if(operationHistoryRendered<operationHistory.length) {
+    list.insertAdjacentHTML('beforeend',operationHistory.slice(operationHistoryRendered)
+      .map((op,index)=>operationRow(op,operationHistoryRendered+index,true)).join(''));
+    operationHistoryRendered=operationHistory.length;
+  }
+  list.setAttribute('aria-busy',String(operationHistoryLoading));
+  const state=!signed?'История доступна после входа.'
+    :operationHistoryError|| (operationHistoryLoading?'Загружаем операции…'
+      :operationHistoryHasMore?'Есть более ранние операции.'
+      :operationHistory.length?'Показаны все операции.':'Операций пока нет.');
+  document.getElementById('operations-state').textContent=state;
+  const more=document.getElementById('operations-more');
+  more.hidden=!signed||(!operationHistoryHasMore&&!operationHistoryError);
+  more.disabled=operationHistoryLoading;
+  more.textContent=operationHistoryError?'Повторить загрузку':'Показать ещё';
+}
+async function loadOperationHistory(reset=false) {
+  if(reset) {
+    operationHistoryRequest++;
+    operationHistory=[]; operationHistoryOffset=0; operationHistoryHasMore=false;
+    operationHistoryError=''; operationHistoryLoading=false;
+    operationHistorySandbox=!!wallet?.sandbox?.available;
+  }
+  if(!API||!authToken||operationHistoryLoading) { renderOperationHistory(); return; }
+  const request=++operationHistoryRequest, token=authToken;
+  operationHistoryLoading=true; operationHistoryError=''; renderOperationHistory();
+  const result=await apiCallStrict('GET',`/wallet/history?offset=${operationHistoryOffset}`);
+  if(request!==operationHistoryRequest||token!==authToken) return;
+  operationHistoryLoading=false;
+  if(result.error||!Array.isArray(result.history)) operationHistoryError=result.error||'Не удалось загрузить историю. Повтори попытку.';
+  else {
+    const known=new Set(operationHistory.map(op=>String(op.id)));
+    for(const op of result.history) if(!known.has(String(op.id))) {
+      operationHistory.push(op); known.add(String(op.id));
+    }
+    operationHistoryOffset=result.offset;
+    operationHistoryHasMore=!!result.hasMore;
+    operationHistorySandbox=!!result.sandbox;
+  }
+  renderOperationHistory();
+}
 async function loadWallet() {
   const request=++walletRequest, token=authToken;
   if(!API || !token) { wallet=null; walletLoading=false; walletError=''; renderWallet(); return; }
@@ -164,13 +223,13 @@ function renderWallet() {
   document.getElementById('wallet-retry').disabled=walletLoading;
   const box=document.getElementById('wallet-history');
   const shownHistory=sandboxMode?wallet.sandbox.history:wallet?.history || [];
-  box.innerHTML=!signed||!wallet?'':shownHistory.length?shownHistory.map((op,index)=>`<button class="ledger-row operation-row" data-operation="${index}"><span class="ledger-main"><span class="ledger-name">${operationName(op)}</span><span class="ledger-day">${escapeHtml(op.meta?.name || '')}</span><span class="ledger-day">${operationDate(op.created_at)}</span><span class="operation-status">${operationStatus(op)}</span></span><span class="ledger-amount ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</span></button>`).join(''):'<p class="hint">Операций пока нет. Пополнение появится здесь после подтверждения.</p>';
+  box.innerHTML=!signed||!wallet?'':shownHistory.length?shownHistory.slice(0,2).map((op,index)=>operationRow(op,index)).join(''):'<p class="hint">Операций пока нет. Пополнение появится здесь после подтверждения.</p>';
   box.querySelectorAll('[data-operation]').forEach(b=>b.onclick=()=>openOperation(shownHistory[Number(b.dataset.operation)]));
   document.querySelectorAll('[data-payment-note]').forEach(el=>el.textContent=!signed?'Локальный журнал. Реальные деньги не списываются.':!wallet?'Режим платежей ещё не загружен.':unavailable||simulated?'Реальные деньги не списываются. Суммы показаны для внутреннего учёта.':'Журнал штрафов. Статус списания смотри в депозите.');
 }
 function openOperation(op) {
   document.getElementById('operation-title').textContent=operationName(op);
-  document.getElementById('operation-body').innerHTML=`<p class="operation-total ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</p><dl class="operation-details"><dt>Статус</dt><dd>${operationStatus(op)}</dd><dt>Дата</dt><dd>${operationDate(op.created_at)}</dd><dt>Обещание</dt><dd>${escapeHtml(op.meta?.name || 'Не связано с обещанием')}</dd><dt>После операции</dt><dd>${op.balance_after==null?'Ожидается':rub(op.balance_after)}</dd><dt>Режим</dt><dd>${op.meta?.test||op.provider==='manual'?'Тестовый, без реальных денег':escapeHtml(op.provider || 'Списание с депозита')}</dd></dl><p class="hint">${op.type==='charge'?'Штраф за невыполнение. Изменение отметки не отменяет зафиксированную операцию.':'Пополнение отображается по данным сервера, а не по возвращению со страницы оплаты.'}</p>`;
+  document.getElementById('operation-body').innerHTML=`<p class="operation-total ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</p><dl class="operation-details"><dt>Статус</dt><dd>${operationStatus(op)}</dd><dt>Дата</dt><dd>${operationDate(op.created_at)}</dd><dt>Обещание</dt><dd>${escapeHtml(op.meta?.name || 'Не связано с обещанием')}</dd><dt>После операции</dt><dd>${op.balance_after==null?'Ожидается':rub(op.balance_after)}</dd><dt>Режим</dt><dd>${op.meta?.test||op.provider==='manual'||op.provider==='yookassa-test'?'Тестовый, без реальных денег':escapeHtml(op.provider || 'Списание с депозита')}</dd>${op.provider_id?`<dt>ID платежа</dt><dd>${escapeHtml(String(op.provider_id))}</dd>`:''}</dl><p class="hint">${op.type==='charge'?'Штраф за невыполнение. Изменение отметки не отменяет зафиксированную операцию.':op.type==='refund'?'Возврат остатка по данным сервера.':'Пополнение отображается по данным сервера, а не по возвращению со страницы оплаты.'}</p>`;
   openSheet('operation-overlay');
 }
 function openTopupSheet() {
@@ -249,6 +308,17 @@ function wireInsightsUI() {
   });
   ['btn-open-stats','btn-open-calendar'].forEach(id=>{const card=$(id).closest('section');card.querySelectorAll('h3,p').forEach(el=>el.remove());});
   $('wallet-retry').onclick=loadWallet;
+  $('operations-more').onclick=()=>loadOperationHistory();
+  $('operations-list').addEventListener('click',event=>{
+    const button=event.target.closest('[data-operation]');
+    if(button&&$('operations-list').contains(button)) openOperation(operationHistory[Number(button.dataset.operation)]);
+  });
+  [['.history-link','operations'],['.history-back','profile']].forEach(([selector,screen])=>{
+    $(screen==='operations'?'screen-profile':'screen-operations').querySelector(selector).addEventListener('click',event=>{
+      if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey) return;
+      event.preventDefault(); switchScreen(screen);
+    });
+  });
   $('operation-close').onclick=()=>closeSheet('operation-overlay');
   $('topup-custom').addEventListener('input',()=>{$('topup-custom').removeAttribute('aria-invalid');$('topup-error').hidden=true;});
   document.querySelectorAll('#topup-amounts button').forEach(b=>b.addEventListener('click',()=>queueMicrotask(()=>document.querySelectorAll('#topup-amounts button').forEach(c=>c.setAttribute('aria-pressed',String(c.classList.contains('on')))))));

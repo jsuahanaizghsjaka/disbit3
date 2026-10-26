@@ -1,5 +1,5 @@
 /* Visual spec 21–25. Native CSS; Light Glass remains confined to the dock. */
-:root { --ease-out: cubic-bezier(.23,1,.32,1); --ease-in-out: cubic-bezier(.77,0,.175,1); --motion-press: 140ms; --motion-ui: 220ms; --ease:var(--ease-out); --t-fast:var(--motion-press); --t-med:var(--motion-ui); }
+:root { --ease-out: cubic-bezier(.23,1,.32,1); --ease-in-out: cubic-bezier(.77,0,.175,1); --motion-press: 140ms; --motion-ui: 180ms; --ease:var(--ease-out); --t-fast:var(--motion-press); --t-med:var(--motion-ui); }
 .setting-row { gap:16px; min-height:56px; }
 .setting-row > :first-child { min-width:0; overflow-wrap:anywhere; }
 .setting-row select { max-width:54%; min-height:44px; padding:8px; color:var(--text); background:var(--surface-2); border:1px solid var(--line); border-radius:10px; font:inherit; }

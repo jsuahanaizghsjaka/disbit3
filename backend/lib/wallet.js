@@ -89,11 +89,11 @@ export function debit(userId, amount, opts = {}) {
   }
 }
 
-export function history(userId, limit = 50) {
+export function history(userId, limit = 50, offset = 0) {
   return db.prepare(`
     SELECT id, type, amount, balance_after, status, provider, provider_id, meta, created_at
-    FROM transactions WHERE user_id = ? ORDER BY id DESC LIMIT ?
-  `).all(userId, limit).map(r => ({
+    FROM transactions WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?
+  `).all(userId, limit, offset).map(r => ({
     ...r,
     meta: (() => { try { return r.meta ? JSON.parse(r.meta) : null; } catch { return null; } })()
   }));

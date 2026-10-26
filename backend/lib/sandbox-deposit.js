@@ -47,14 +47,18 @@ function publicIntent(intent) {
     url: intent.confirmation_url, amount: intent.amount };
 }
 
-export function sandboxSnapshot(db, userId) {
-  const balance = db.prepare('SELECT balance FROM sandbox_accounts WHERE user_id=?').get(userId)?.balance || 0;
-  const history = db.prepare(`SELECT i.id,i.amount,i.status,i.provider_payment_id,i.created_at,l.balance_after
+export function sandboxHistory(db, userId, limit = 30, offset = 0) {
+  return db.prepare(`SELECT i.id,i.amount,i.status,i.provider_payment_id,i.created_at,l.balance_after
     FROM sandbox_payment_intents i LEFT JOIN sandbox_ledger l ON l.source_key='sandbox-topup:'||i.id
-    WHERE i.user_id=? ORDER BY i.created_at DESC,i.id DESC LIMIT 30`).all(userId)
+    WHERE i.user_id=? ORDER BY i.created_at DESC,i.id DESC LIMIT ? OFFSET ?`).all(userId,limit,offset)
     .map(row => ({ id: row.id, type: 'topup', amount: row.amount, status: row.status,
       provider_id: row.provider_payment_id, created_at: row.created_at, balance_after: row.balance_after,
       provider: 'yookassa-test', meta: { test: true } }));
+}
+
+export function sandboxSnapshot(db, userId) {
+  const balance = db.prepare('SELECT balance FROM sandbox_accounts WHERE user_id=?').get(userId)?.balance || 0;
+  const history = sandboxHistory(db,userId);
   return { available: true, simulated: true, balance, currency: 'RUB', history };
 }
 
