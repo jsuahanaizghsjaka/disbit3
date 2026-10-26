@@ -10,7 +10,7 @@ import { getBalance, credit, history, chargedTotal } from '../lib/wallet.js';
 import { createTopup, parseWebhook, paymentsInfo } from '../lib/payments.js';
 import { db } from '../db/db.js';
 import { createYooKassaClient } from '../lib/yookassa-client.js';
-import { sandboxConfig, sandboxAllowed, sandboxSnapshot, createSandboxService } from '../lib/sandbox-deposit.js';
+import { sandboxConfig, sandboxAllowed, sandboxSnapshot, sandboxHistory, createSandboxService } from '../lib/sandbox-deposit.js';
 
 const router = Router();
 
@@ -37,6 +37,19 @@ router.get('/', authRequired, (req, res) => {
     history: history(req.userId, 30),
     sandbox: testAllowed(req.userId) ? sandboxSnapshot(db,req.userId) : null
   });
+});
+
+// The profile gets a short preview; the separate history screen can page through every operation.
+router.get('/history', authRequired, (req, res) => {
+  const offset = Number(req.query.offset ?? 0);
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1000000)
+    return res.status(400).json({ error: 'Неверная страница истории' });
+  const limit = 30;
+  const sandboxMode = testAllowed(req.userId);
+  const rows = sandboxMode
+    ? sandboxHistory(db,req.userId,limit + 1,offset)
+    : history(req.userId,limit + 1,offset);
+  res.json({ history: rows.slice(0,limit), hasMore: rows.length > limit, offset: offset + Math.min(rows.length,limit), sandbox: sandboxMode });
 });
 
 // Test-shop flows never write to wallets/transactions or the real money_* tables.

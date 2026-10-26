@@ -120,7 +120,7 @@ const DAY_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 // общая статистика осталась отдельным экраном — вход из профиля
 // calendar остался экраном, но ушёл из дока — его слот занял «Аватар»,
 // вход в календарь теперь из профиля (как раньше сделали со статистикой)
-const SCREENS = ['today','marathon','calendar','avatar','friends','stats','medals','profile'];
+const SCREENS = ['today','marathon','calendar','avatar','friends','stats','medals','profile','operations'];
 
 // темы приложения: id → цвет свотча (name — для витрины бит)
 const THEMES = [
@@ -875,7 +875,6 @@ function showSettleModal(entries) {
 function render() {
   renderRewardBanner();
   renderMarathonPromo();
-  renderWalker();
   renderWeek();
   renderHabits();
   renderProgress();
@@ -3755,11 +3754,12 @@ function switchScreen(name, updateHash = true) {
   if (!SCREENS.includes(name)) name = 'today';
   const previous = document.querySelector('.screen.active')?.id.slice(7);
   const changed = document.querySelector('.screen.active')?.id !== 'screen-' + name;
+  if (!changed) return;
   if (changed && previous) pathScroll.set(previous, window.scrollY);
   document.querySelectorAll('.screen').forEach(s =>
     s.classList.toggle('active', s.id === 'screen-' + name));
   document.querySelectorAll('.nav-item[data-screen]').forEach(b => {
-    const parent = name === 'avatar' ? 'marathon' : ['stats','calendar','medals'].includes(name) ? 'profile' : name;
+    const parent = name === 'avatar' ? 'marathon' : ['stats','calendar','medals','operations'].includes(name) ? 'profile' : name;
     b.classList.toggle('active', b.dataset.screen === parent);
     if (b.dataset.screen === parent) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
@@ -3777,10 +3777,11 @@ function switchScreen(name, updateHash = true) {
   }
   if (name === 'medals') renderMedalsScreen();
   if (name === 'profile') renderProfile();
+  if (name === 'operations' && changed) loadOperationHistory(true);
   syncPathNavigation(name);
   if (changed) {
     window.scrollTo({ top: pathScroll.get(name) || 0, behavior: 'instant' });
-    if (updateHash) document.getElementById('screen-' + name).focus({ preventScroll: true });
+    if (updateHash || name === 'operations') document.getElementById('screen-' + name).focus({ preventScroll: true });
   }
 }
 

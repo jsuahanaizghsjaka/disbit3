@@ -150,6 +150,15 @@ body > .aura, .intro .aura { display: none; }
 #dock .dock-item:active { background: rgb(78 120 255 / .2); }
 #dock .dock-item:focus-visible { outline: 2px solid #19335B; outline-offset: -3px; }
 body.kb-open #dock, body:has(.proof-overlay:not([hidden])) #dock { display: none; }
+/* Keep the light glass dock while reducing full-screen blur work on touch GPUs. */
+@media (pointer: coarse) {
+  #dock { backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%); }
+  .row-btn:not(:disabled), .journey-habit:not(:disabled), .operation-row:not(:disabled), .history-link, .history-back, summary {
+    transition: opacity 120ms var(--ease);
+  }
+  .row-btn:not(:disabled):active, .journey-habit:not(:disabled):active, .operation-row:not(:disabled):active,
+  .history-link:active, .history-back:active, summary:active { opacity: .72; }
+}
 .proof-overlay { z-index: 100; background: var(--bg); padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); overflow-y: auto; }
 .proof-inner { position: relative; width: 100%; max-width: 420px; margin: auto; }
 .proof-title { padding-right: 44px; }

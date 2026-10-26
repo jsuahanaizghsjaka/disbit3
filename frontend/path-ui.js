@@ -139,9 +139,17 @@ async function sharePromiseCard(h) {
 }
 
 function syncPathNavigation(name) {
+  // The journey artwork is needed only on its two visible screens. Rebuilding
+  // and moving its SVG on every profile/friends tap blocked the next paint.
+  if (name !== 'today' && name !== 'marathon') return;
   const walker = document.getElementById('walker');
-  if (name === 'marathon') document.getElementById('marathon-walker-slot').append(walker);
-  else document.getElementById('all-marathons').before(walker);
+  if (name === 'marathon') {
+    const slot = document.getElementById('marathon-walker-slot');
+    if (walker.parentElement !== slot) slot.append(walker);
+  } else {
+    const anchor = document.getElementById('all-marathons');
+    if (walker.nextElementSibling !== anchor) anchor.before(walker);
+  }
   renderWalker();
   const scene = walker.querySelector('.w-scene');
   if (scene) {
@@ -151,7 +159,7 @@ function syncPathNavigation(name) {
     scene.querySelector('.journey-figure')?.setAttribute('transform', name === 'marathon' ? 'scale(1.7)' : 'scale(1)');
   }
   document.getElementById('all-marathons').hidden = !goals.some(isMarathon);
-  renderJourneyLinks();
+  if (name === 'marathon') renderJourneyLinks();
 }
 
 function wirePathUI() {

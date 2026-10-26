@@ -472,7 +472,7 @@
         <p id="wallet-state" class="hint" role="status"></p>
         <button class="btn-ghost" id="wallet-retry">Обновить депозит</button>
         <details class="refund-info"><summary>Возврат остатка</summary><p class="hint">Возврат на исходный способ оплаты пока не подключён. Заявку отправить нельзя.</p><label class="field-label" for="refund-amount">Сумма возврата, ₽</label><input id="refund-amount" class="field-input" type="number" disabled aria-describedby="refund-status"><p id="refund-status" class="hint">Недоступно. Деньги не перемещаются.</p></details>
-        <h4 class="history-heading">Последние операции</h4>
+        <div class="wallet-history-heading"><h4 class="history-heading">Последние операции</h4><a class="history-link" href="#operations">История</a></div>
         <div id="wallet-history"></div>
       </section>
 
@@ -586,6 +586,19 @@
       </section>
 
       <p class="about-note">Режим платежей указан в депозите. Блокировка приложений пока недоступна.</p>
+    </main>
+
+    <!-- ================= ЭКРАН: ИСТОРИЯ ДЕПОЗИТА ================= -->
+    <main class="screen" id="screen-operations">
+      <a class="history-back" href="#profile">← Профиль</a>
+      <h1 class="screen-title">История операций</h1>
+      <p class="hint">Все операции по депозиту. Нажми запись, чтобы увидеть подробности.</p>
+      <section class="card" aria-label="Операции по депозиту">
+        <p class="wallet-mode" id="operations-mode"></p>
+        <div id="operations-list"></div>
+        <p class="hint" id="operations-state" role="status"></p>
+        <button class="btn-ghost full" id="operations-more" hidden>Показать ещё</button>
+      </section>
     </main>
 
     <!-- ПЛАВАЮЩИЙ GLASS-ДОК (по мотивам dock.tsx: гауссова магнификация) -->

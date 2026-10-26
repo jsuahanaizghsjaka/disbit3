@@ -4,6 +4,7 @@
  * Attribution: vendor/KOKONUTUI-NOTICE.md. */
 'use strict';
 
+const motionUiMs = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-ui')) || 180;
 function motionReduced() {
   return settings.motion === 'reduce' || document.documentElement.dataset.motion === 'reduce' ||
     matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -12,7 +13,7 @@ function motionEnter(node, direction = 1, pointer = true) {
   node.getAnimations().forEach(a => a.cancel());
   if (!pointer || motionReduced()) return;
   node.animate([{opacity: 0, transform: `translateX(${direction * 16}px)`},
-    {opacity: 1, transform: 'translateX(0)'}], {duration: 220, easing: 'cubic-bezier(.23,1,.32,1)'});
+    {opacity: 1, transform: 'translateX(0)'}], {duration: motionUiMs, easing: 'cubic-bezier(.23,1,.32,1)'});
 }
 
 function buildProfileMotion() {
