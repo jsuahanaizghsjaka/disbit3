@@ -9,25 +9,22 @@ function tx(db, work) {
 }
 
 export function sandboxConfig(env = process.env) {
-  if (env.YOOKASSA_TEST_ENABLED !== '1') return { enabled: false, allowedLogins: [] };
+  if (env.YOOKASSA_TEST_ENABLED !== '1') return { enabled: false };
   const shopId = String(env.YOOKASSA_TEST_SHOP_ID || '');
   const secretKey = String(env.YOOKASSA_TEST_SECRET_KEY || '');
-  const allowedLogins = String(env.YOOKASSA_TEST_ALLOWED_LOGINS || '')
-    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-  if (!/^\d{5,12}$/.test(shopId) || !secretKey.startsWith('test_') || secretKey.length < 24 || !allowedLogins.length)
-    throw Error('Test-shop configuration requires shop ID, test key and an explicit login allowlist');
+  if (!/^\d{5,12}$/.test(shopId) || !secretKey.startsWith('test_') || secretKey.length < 24)
+    throw Error('Test-shop configuration requires shop ID and test key');
   let returnUrl;
   try { returnUrl = new URL(env.PUBLIC_URL); } catch { throw Error('Test shop needs an HTTPS PUBLIC_URL'); }
   if (returnUrl.protocol !== 'https:' || !returnUrl.hostname || returnUrl.username || returnUrl.password ||
       returnUrl.pathname !== '/' || returnUrl.search || returnUrl.hash)
     throw Error('Test shop needs an HTTPS PUBLIC_URL origin');
-  return { enabled: true, shopId, secretKey, allowedLogins };
+  return { enabled: true, shopId, secretKey };
 }
 
 export function sandboxAllowed(db, userId, config) {
   if (!config.enabled) return false;
-  const login = db.prepare('SELECT login FROM users WHERE id=?').get(userId)?.login;
-  return !!login && config.allowedLogins.includes(login.toLowerCase());
+  return !!db.prepare('SELECT 1 FROM users WHERE id=?').get(userId);
 }
 
 function moneyFromProvider(value) {
