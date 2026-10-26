@@ -6,6 +6,8 @@
 import { Router } from 'express';
 import { db, rowToHabit, habitToParams } from '../db/db.js';
 import { accountDay, proofSatisfied } from '../proof-policy.js';
+import { transaction, promiseSkipQuota, recordPromiseSkip, purchasePromiseSkip,
+  syncTrustedBitAward, trustedCompletionEligible, revokeHabitBitAwards } from '../lib/promise-skips.js';
 
 const router = Router();
 const uid = req => req.userId;
@@ -19,6 +21,12 @@ function authRequired(req, res, next) {
   next();
 }
 router.use(authRequired);
+
+router.get('/skips/quota', (req, res) => res.json(promiseSkipQuota(db, uid(req), accountDay(req))));
+router.post('/skips/purchase', (req, res) => {
+  try { res.json(purchasePromiseSkip(db, uid(req), accountDay(req), req.body?.requestId)); }
+  catch (error) { res.status(409).json({ error: error.message }); }
+});
 
 function getHabit(id, userId) {
   const row = db.prepare(
@@ -89,7 +97,7 @@ router.put('/:id/archive', (req, res) => {
 // PUT /api/habits/:id — обновить обещание (прогресс не трогаем)
 router.put('/:id', (req, res) => {
   const exists = db.prepare(
-    'SELECT id, stake_mode FROM habits WHERE id = ? AND user_id = ?'
+    'SELECT * FROM habits WHERE id = ? AND user_id = ?'
   ).get(req.params.id, uid(req));
   if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
   if (req.body?.stake?.mode === 'lock' && exists.stake_mode !== 'lock') {
@@ -97,6 +105,12 @@ router.put('/:id', (req, res) => {
   }
 
   const p = habitToParams({ ...req.body, id: req.params.id });
+  if (db.prepare('SELECT 1 FROM money_terms WHERE user_id=? AND habit_id=? LIMIT 1').get(uid(req),req.params.id)) {
+    const fixed=['schedule','week_target','goal_type','goal_target','stake_mode','stake_amount','stake_recipient','minimum_action','created_day'];
+    if (fixed.some(key=>String(p[key])!==String(exists[key]))) {
+      return res.status(409).json({ error: 'Денежные условия приняты. Для изменения расписания, цели или штрафа нужен новый явный договор' });
+    }
+  }
   db.prepare(`
     UPDATE habits SET
       name = :name, icon = :icon, color = :color, schedule = :schedule, week_target = :week_target, buddy = :buddy, pinned = :pinned,
@@ -133,18 +147,30 @@ router.put('/:id/day/:day', (req, res) => {
       !proofSatisfied(uid(req), exists.id, req.params.day)) {
     return res.status(409).json({ error: 'Нужно фото/видео или один из пяти пропусков пруфа за месяц' });
   }
-  db.prepare(`
-    INSERT INTO completions (habit_id, day, count, done, skip, minimum) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done, skip = excluded.skip, minimum = excluded.minimum
-  `).run(req.params.id, req.params.day, count, done, skip, done && req.body.minimum ? 1 : 0);
-
-  res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count });
+  try {
+    const quota = transaction(db, () => {
+      if (skip) recordPromiseSkip(db,uid(req),req.params.id,req.params.day);
+      db.prepare(`
+        INSERT INTO completions (habit_id, day, count, done, skip, minimum) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done, skip = excluded.skip, minimum = excluded.minimum
+      `).run(req.params.id, req.params.day, count, done, skip, done && req.body.minimum ? 1 : 0);
+      syncTrustedBitAward(db,uid(req),req.params.id,req.params.day,
+        trustedCompletionEligible(db,uid(req),req.params.id,req.params.day));
+      return promiseSkipQuota(db,uid(req),req.params.day);
+    });
+    res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count, quota });
+  } catch (error) { res.status(409).json({ error: error.message }); }
 });
 
 // DELETE /api/habits/:id — удалить обещание (отметки — каскадом)
 router.delete('/:id', (req, res) => {
-  const info = db.prepare('DELETE FROM habits WHERE id = ? AND user_id = ?')
-    .run(req.params.id, uid(req));
+  if (db.prepare('SELECT 1 FROM money_terms WHERE user_id=? AND habit_id=? LIMIT 1').get(uid(req),req.params.id)) {
+    return res.status(409).json({ error: 'Обещание с принятыми денежными условиями можно только архивировать; история обязательств сохраняется' });
+  }
+  const info = transaction(db, () => {
+    revokeHabitBitAwards(db,uid(req),req.params.id);
+    return db.prepare('DELETE FROM habits WHERE id = ? AND user_id = ?').run(req.params.id, uid(req));
+  });
   // Чужое обещание фильтр по user_id и так не тронет, но раньше ответ был 204
   // «удалено» — клиент не отличал успех от промаха. PUT и отметка дня в этом
   // случае отвечают 404; делаем так же.
