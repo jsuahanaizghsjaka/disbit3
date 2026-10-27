@@ -103,13 +103,20 @@ function operationDate(value) {
   return Number.isNaN(d.valueOf())?'Дата не получена':d.toLocaleString('ru-RU',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 function operationName(op) { return op.type==='topup'?'Пополнение':op.type==='charge'?'Штраф':op.type==='refund'?'Возврат':'Операция'; }
+function operationSettled(op) { return op.status==='done'||op.status==='succeeded'; }
+function operationAmount(op) {
+  const amount=rub(Math.abs(op.amount));
+  if(!operationSettled(op)) return `Запрос: ${amount}`;
+  return `${op.amount>0?'+':op.amount<0?'−':''}${amount}`;
+}
+function operationAmountClass(op) { return !operationSettled(op)?'neutral':op.amount>0?'plus':''; }
 function operationRow(op,index,detailed=false) {
-  return `<button class="ledger-row operation-row" type="button" data-operation="${index}" aria-label="${operationName(op)}, ${op.amount>0?'плюс':'минус'} ${rub(Math.abs(op.amount))}, ${operationDate(op.created_at)}, ${operationStatus(op)}. Подробнее">
+  return `<button class="ledger-row operation-row" type="button" data-operation="${index}" aria-label="${operationName(op)}, ${operationAmount(op)}, ${operationDate(op.created_at)}, ${operationStatus(op)}. Подробнее">
     <span class="ledger-main"><span class="ledger-name">${operationName(op)}</span>
     ${op.meta?.name?`<span class="ledger-day">${escapeHtml(op.meta.name)}</span>`:''}
     <span class="ledger-day">${operationDate(op.created_at)}</span>
     <span class="operation-status">${operationStatus(op)}${detailed&&op.balance_after!=null?' · Остаток '+rub(op.balance_after):''}</span></span>
-    <span class="ledger-amount ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</span></button>`;
+    <span class="ledger-amount ${operationAmountClass(op)}">${operationAmount(op)}</span></button>`;
 }
 let operationHistory=[], operationHistoryOffset=0, operationHistoryHasMore=false;
 let operationHistoryLoading=false, operationHistoryError='', operationHistoryRequest=0, operationHistorySandbox=false;
@@ -229,7 +236,7 @@ function renderWallet() {
 }
 function openOperation(op) {
   document.getElementById('operation-title').textContent=operationName(op);
-  document.getElementById('operation-body').innerHTML=`<p class="operation-total ${op.amount>0?'plus':''}">${op.amount>0?'+':'−'}${rub(Math.abs(op.amount))}</p><dl class="operation-details"><dt>Статус</dt><dd>${operationStatus(op)}</dd><dt>Дата</dt><dd>${operationDate(op.created_at)}</dd><dt>Обещание</dt><dd>${escapeHtml(op.meta?.name || 'Не связано с обещанием')}</dd><dt>После операции</dt><dd>${op.balance_after==null?'Ожидается':rub(op.balance_after)}</dd><dt>Режим</dt><dd>${op.meta?.test||op.provider==='manual'||op.provider==='yookassa-test'?'Тестовый, без реальных денег':escapeHtml(op.provider || 'Списание с депозита')}</dd>${op.provider_id?`<dt>ID платежа</dt><dd>${escapeHtml(String(op.provider_id))}</dd>`:''}</dl><p class="hint">${op.type==='charge'?'Штраф за невыполнение. Изменение отметки не отменяет зафиксированную операцию.':op.type==='refund'?'Возврат остатка по данным сервера.':'Пополнение отображается по данным сервера, а не по возвращению со страницы оплаты.'}</p>`;
+  document.getElementById('operation-body').innerHTML=`<p class="operation-total ${operationAmountClass(op)}">${operationAmount(op)}</p><dl class="operation-details"><dt>Статус</dt><dd>${operationStatus(op)}</dd><dt>Дата</dt><dd>${operationDate(op.created_at)}</dd><dt>Обещание</dt><dd>${escapeHtml(op.meta?.name || 'Не связано с обещанием')}</dd><dt>После операции</dt><dd>${op.balance_after==null?(operationSettled(op)?'Не указан':'Не проведена') :rub(op.balance_after)}</dd><dt>Режим</dt><dd>${op.meta?.test||op.provider==='manual'||op.provider==='yookassa-test'?'Тестовый, без реальных денег':escapeHtml(op.provider || 'Списание с депозита')}</dd>${op.provider_id?`<dt>ID платежа</dt><dd>${escapeHtml(String(op.provider_id))}</dd>`:''}</dl><p class="hint">${op.type==='charge'?'Штраф за невыполнение. Изменение отметки не отменяет зафиксированную операцию.':op.type==='refund'?'Возврат остатка по данным сервера.':'Пополнение отображается по данным сервера, а не по возвращению со страницы оплаты.'}</p>`;
   openSheet('operation-overlay');
 }
 function openTopupSheet() {

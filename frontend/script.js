@@ -4841,6 +4841,10 @@ async function applyStatusBar() {
   const bg = getComputedStyle(document.documentElement)
     .getPropertyValue('--bg').trim() || '#0C1422';
   try {
+    // На Android не прокручиваем содержимое под системные часы и индикаторы.
+    if (window.Capacitor?.getPlatform?.() === 'android') {
+      await SB.setOverlaysWebView({ overlay: false });
+    }
     await SB.setBackgroundColor({ color: bg });
     // У плагина 'DARK' означает СВЕТЛЫЙ текст (для тёмного фона), 'LIGHT' —
     // тёмный. Названия от фона, а не от текста: легко перепутать наоборот.

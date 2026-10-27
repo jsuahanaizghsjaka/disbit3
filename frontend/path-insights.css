@@ -101,6 +101,7 @@
 .ledger-name { white-space:normal; overflow-wrap:anywhere; }
 .ledger-amount { color:var(--bad); white-space:normal; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; max-width:50%; }
 .ledger-amount.plus,.operation-total.plus { color:var(--good); }
+.ledger-amount.neutral,.operation-total.neutral { color:var(--text-2); }
 .operation-total { font-size:32px; color:var(--bad); overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
 .operation-details { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1.5fr); gap:12px; }
 .operation-details dt { color:var(--text-2); }
