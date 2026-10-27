@@ -33,6 +33,8 @@ if (process.env.DISBIT_HISTORY_FIXTURE === '1') {
     intent.run(id,1,randomUUID(),5000,`fixture-${id}`,providerId,'succeeded',`2026-10-26 20:${String(i).padStart(2,'0')}:00`);
     ledger.run(1,`sandbox-topup:${id}`,5000,(i+1)*5000,providerId);
   }
+  const canceledId=randomUUID();
+  intent.run(canceledId,1,randomUUID(),5000,`fixture-${canceledId}`,'fixture-canceled','canceled','2026-10-26 21:00:00');
 }
 db.close();
 await import('../backend/server.js');
