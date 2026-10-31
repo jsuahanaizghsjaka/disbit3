@@ -184,7 +184,8 @@ export function settleMoneyPenalty(db, { userId, habitId, day, today }) {
     if (!habit) return { ignored:true, reason:'deleted-habit' };
     if (JSON.parse(habit.archive_periods||'[]').some(p=>day>=p.from&&(!p.to||day<p.to))) return { ignored:true, reason:'archived' };
     const completion = db.prepare('SELECT done,skip,count FROM completions WHERE habit_id=? AND day=?').get(habitId,day);
-    if (db.prepare('SELECT 1 FROM promise_day_skips WHERE user_id=? AND habit_id=? AND day=?').get(userId,habitId,day))
+    if (db.prepare('SELECT 1 FROM promise_full_day_skips WHERE user_id=? AND day=?').get(userId,day) ||
+        db.prepare('SELECT 1 FROM promise_day_skips WHERE user_id=? AND habit_id=? AND day=?').get(userId,habitId,day))
       return { ignored:true, reason:'completed-or-skipped' };
     const proof=proofState(db,userId,habitId,day);
     if (proof==='pending') return { ignored:true, reason:'proof-pending' };

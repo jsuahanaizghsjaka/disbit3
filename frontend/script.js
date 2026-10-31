@@ -57,6 +57,11 @@ try { authUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { auth
 let authMode = 'login';   // 'login' | 'register'
 
 function setAuth(token, user) {
+  if (authToken !== token) {
+    ++friendsRequest;
+    serverFriends = []; myLogin = null; friendsLoading = false; friendsError = '';
+    friendsCacheOwner = null; friendsLoadedAt = 0;
+  }
   authToken = token;
   readCoordinator.cancelExcept(token || null);
   authUser = user;
@@ -698,22 +703,30 @@ function confirmUndo(h) {
 let skippingDay = false;
 async function skipHabitDay(id) {
   const h = habits.find(x => x.id === id);
+  const owner = authToken;
   if (!h || h.archived || skippingDay || !isEditableDay(TODAY) || isDoneToday(h) || isSkipOn(h, TODAY)) return;
   if (API && authToken) await refreshPromiseSkipQuota();
+  if (owner !== authToken) return;
   if (skipsLeft() <= 0) { toast('Грэйс-дни закончились'); return; }
   if (!(await confirmAction('Пропустить сегодня?',
-    `«${h.name}»: используем 1 грэйс-день. Серия сохранится, но шаг марафона и бит не начислятся. Это не отменяет уже зафиксированные списания.`, 'Пропустить день'))) return;
-  if (!habits.includes(h) || isDoneToday(h) || isSkipOn(h, TODAY) || skippingDay) return;
+    'Используем 1 пропуск для всех невыполненных обещаний на сегодня. Серии сохранятся; шаги и биты за пропущенные обещания не начислятся. Уже выполненные обещания сохранятся.', 'Пропустить день'))) return;
+  if (owner !== authToken || !habits.includes(h) || isDoneToday(h) || isSkipOn(h, TODAY) || skippingDay) return;
   skippingDay = true;
   try {
     if (API && authToken) {
       const result = await apiCallStrict('PUT', `/habits/${id}/day/${TODAY}`, { skip: true, done: false, count: 0 });
+      if (owner !== authToken) return;
       if (result.error) { toast(result.error); return; }
       applyPromiseSkipQuota(result.quota);
+      if (!Array.isArray(result.habits)) { toast('Не удалось обновить обещания. Обнови приложение.'); return; }
+      habits = result.habits;
+      habits.forEach(migrate);
+    } else {
+      for (const habit of habits) {
+        if (!habit.archived && isScheduledToday(habit) && !isDoneToday(habit)) habit.history[TODAY] = 'skip';
+      }
+      skips.left--; saveSkips();
     }
-    h.history[TODAY] = 'skip';
-    h.counts[TODAY] = 0;
-    if (!API || !authToken) { skips.left--; saveSkips(); }
     save();
     render(); renderHabitStats();
     toast('День пропущен — серия сохранена');
@@ -2859,17 +2872,21 @@ function saveReward() {
 let serverFriends = [];
 let myLogin = null;
 let friendsLoading = false, friendsError = '', friendsRequest = 0;
+let friendsCacheOwner = null, friendsLoadedAt = 0;
 
-async function loadFriends() {
+async function loadFriends(force = false) {
+  if (!force && authToken && friendsCacheOwner === authToken && !friendsError &&
+      Date.now() - friendsLoadedAt < 15000) return;
   const request = ++friendsRequest;
-  if (!API || !authToken) { serverFriends = []; myLogin = null; friendsLoading = false; friendsError = ''; return; }
+  if (!API || !authToken) { serverFriends = []; myLogin = null; friendsLoading = false; friendsError = ''; friendsCacheOwner = null; friendsLoadedAt = 0; return; }
   const token = authToken;
+  if (force) readCoordinator.cancelResource(API + '/friends');
   friendsLoading = true; friendsError = ''; renderFriends();
   const r = await apiCallStrict('GET', '/friends');
   if (request !== friendsRequest || token !== authToken) return;
   friendsLoading = false;
   if (r.error || !Array.isArray(r.friends)) friendsError = r.error || 'Не удалось загрузить друзей';
-  else { serverFriends = r.friends; myLogin = r.me || null; }
+  else { serverFriends = r.friends; myLogin = r.me || null; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
   renderFriends(); renderFriendsBoard();
 }
 
@@ -2904,16 +2921,19 @@ function renderFriends() {
         ${habits.filter(h => h.buddy === f.login).map(h => `<button data-shared-habit="${h.id}">${escapeHtml(h.name)}<small>${isDoneToday(h) ? 'Ты выполнил' : 'У тебя не выполнено'}</small></button>`).join('') || '<p class="hint">Открой детали обещания и выбери «Делать вместе», чтобы связать его с другом.</p>'}
       </details>
     </article>`).join('');
-  box.querySelector('#friends-retry')?.addEventListener('click', loadFriends);
+  box.querySelector('#friends-retry')?.addEventListener('click', () => loadFriends(true));
   if (friendsError && serverFriends.length) box.insertAdjacentHTML('afterbegin', '<p class="hint">Показаны последние загруженные данные. Они могут быть устаревшими.</p>');
   box.querySelectorAll('[data-shared-habit]').forEach(b => b.onclick = () => openHabitStats(b.dataset.sharedHabit));
   box.querySelectorAll('[data-fdel]').forEach(b =>
     b.addEventListener('click', async () => {
+      const owner = authToken;
       if (!(await confirmAction('Удалить друга?', `@${b.dataset.fdel} исчезнет из списка друзей.`, 'Удалить'))) return;
+      if (owner !== authToken) return;
       b.disabled = true;
       const r = await apiCallStrict('DELETE', '/friends/' + encodeURIComponent(b.dataset.fdel));
+      if (owner !== authToken) return;
       if (r.error) { b.disabled = false; toast(r.error); return; }
-      await loadFriends();
+      await loadFriends(true);
       renderFriends();
       renderFriendsBoard();
     }));
@@ -3044,16 +3064,19 @@ async function handleJoinLink() {
 async function acceptJoin() {
   if (!joinCode) return;
   const code = joinCode;
+  const owner = authToken;
   joinCode = null;
   closeSheet('join-overlay');
 
   const r = await apiCallStrict('POST', `/invites/${encodeURIComponent(code)}/accept`);
+  if (owner !== authToken) return;
   if (r?.error) { toast(r.error); return; }
 
   // подтягиваем свежие обещания и друзей — обещание уже создано на сервере
   const remote = await apiCall('GET', '/habits?includeArchived=1');
+  if (owner !== authToken) return;
   if (Array.isArray(remote)) { habits = remote; habits.forEach(migrate); save(); }
-  await loadFriends();
+  await loadFriends(true);
   render();
   switchScreen('today');
   const nm = r.habit?.name || 'обещание';
@@ -3120,11 +3143,13 @@ async function addFriendByLogin(login, silent = false) {
   if (mine && login === mine) return show('Это твой собственный логин');
 
   button.disabled = true;
+  const owner = authToken;
   const r = await apiCallStrict('POST', '/friends', { login });
   button.disabled = false;
+  if (owner !== authToken) return;
   if (r?.error) return show(r.error);
 
-  await loadFriends();
+  await loadFriends(true);
   renderFriends();
   renderFriendsBoard();
   if (!silent) closeSheet('friend-overlay');
@@ -3306,7 +3331,7 @@ async function submitAuth() {
       : `Аккаунт создан. Привет, ${res.user.login}!`);
     renderAccount();
     apiBootstrap();   // подтянуть/залить данные аккаунта
-    if (res.needVerify) openVerifySheet(res.user?.email);
+    if (res.needVerify) openVerifySheet(res.user?.email, res.verificationEmailSent);
   } finally {
     btn.disabled = false;
     setAuthMode(authMode);
@@ -3316,13 +3341,19 @@ async function submitAuth() {
    После регистрации на почту уходит код из 6 цифр. Подтверждение не блокирует
    работу приложения (можно «Позже»), но пока почта не подтверждена — восстановить
    доступ к аккаунту будет нечем, поэтому мягко напоминаем. */
-function openVerifySheet(email) {
+function openVerifySheet(email, emailSent = null) {
   const err = document.getElementById('verify-error');
   if (err) err.hidden = true;
   const input = document.getElementById('verify-code');
   if (input) input.value = '';
   const mail = document.getElementById('verify-email');
   if (mail) mail.textContent = email || authUser?.email || '';
+  const instruction = document.getElementById('verify-instruction');
+  if (instruction) instruction.textContent = emailSent === true
+    ? 'Мы отправили код из 6 цифр. Введи его ниже.'
+    : emailSent === false
+      ? 'Не удалось отправить письмо. Попробуй запросить код позже.'
+      : 'Введи код из письма или запроси его повторно.';
   openSheet('verify-overlay');
   setTimeout(() => input?.focus(), 100);
 }
@@ -3833,7 +3864,7 @@ function switchScreen(name, updateHash = true) {
   if (name === 'friends') {
     renderFriends(); renderFriendsBoard();
     // подтягиваем свежие серии друзей при каждом заходе на вкладку
-    loadFriends().then(() => { renderFriends(); renderFriendsBoard(); });
+    loadFriends();
   }
   if (name === 'medals') renderMedalsScreen();
   if (name === 'profile') renderProfile();

@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { Router } from 'express';
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { db } from '../db/db.js';
 import { isEmailFormatValid, domainAcceptsMail, sendMail, verifyCodeHtml, mailConfigured } from '../lib/email.js';
 
@@ -17,7 +17,7 @@ const RESEND_COOLDOWN_MS = 60 * 1000;    // не чаще раза в минут
 const MAX_ATTEMPTS = 6;                  // защита от перебора
 
 function issueCode(userId) {
-  const code = String(Math.floor(100000 + Math.random() * 900000));   // 6 цифр
+  const code = String(randomInt(100000, 1000000));   // 6 цифр из криптографического генератора
   db.prepare(`
     INSERT INTO email_codes (user_id, code, expires_at, attempts, sent_at)
     VALUES (?, ?, ?, 0, ?)
@@ -108,10 +108,11 @@ router.post('/register', async (req, res) => {
 
   // шлём код подтверждения; письмо не должно ронять регистрацию
   const code = issueCode(user.id);
-  try { await sendMail(email, 'disbit — код подтверждения', verifyCodeHtml(code)); }
+  let verificationEmailSent = false;
+  try { verificationEmailSent = (await sendMail(email, 'disbit — код подтверждения', verifyCodeHtml(code))).sent === true; }
   catch (e) { console.error('[mail] не удалось отправить:', e.message); }
 
-  res.status(201).json({ token, user: publicUser(user), needVerify: true });
+  res.status(201).json({ token, user: publicUser(user), needVerify: true, verificationEmailSent });
 });
 
 /* POST /api/auth/verify — { code } подтвердить почту */

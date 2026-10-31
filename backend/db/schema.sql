@@ -279,6 +279,13 @@ CREATE TABLE IF NOT EXISTS promise_day_skips (
   month TEXT NOT NULL, PRIMARY KEY(user_id,habit_id,day)
 );
 CREATE INDEX IF NOT EXISTS idx_promise_day_skips_month ON promise_day_skips(user_id,month);
+-- New full-day entitlement. Legacy per-promise receipts remain separate so
+-- historical waivers never silently expand to other promises.
+CREATE TABLE IF NOT EXISTS promise_full_day_skips (
+  user_id INTEGER NOT NULL, day TEXT NOT NULL, month TEXT NOT NULL,
+  PRIMARY KEY(user_id,day)
+);
+CREATE INDEX IF NOT EXISTS idx_promise_full_day_skips_month ON promise_full_day_skips(user_id,month);
 CREATE TABLE IF NOT EXISTS promise_skip_purchases (
   id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, month TEXT NOT NULL,
   cost_bits INTEGER NOT NULL CHECK(cost_bits=20), created_at TEXT DEFAULT (datetime('now'))

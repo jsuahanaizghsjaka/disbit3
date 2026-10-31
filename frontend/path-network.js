@@ -10,6 +10,18 @@
       for (const entry of pending.values()) {
         if (entry.owner !== owner) {
           entry.cancelReason = 'stale';
+          clearTimeout(entry.timer);
+          entry.controller.abort();
+          pending.delete(entry.key);
+        }
+      }
+    }
+
+    function cancelResource(url) {
+      for (const entry of pending.values()) {
+        if (entry.owner === (getOwner() || null) && entry.url === url) {
+          entry.cancelReason = 'stale';
+          clearTimeout(entry.timer);
           entry.controller.abort();
           pending.delete(entry.key);
         }
@@ -25,11 +37,12 @@
       const existing = pending.get(key);
       if (existing) return existing.promise;
       const controller = new AbortController();
-      const entry = { key, owner, controller, cancelReason: null, promise: null };
+      const entry = { key, owner, url, controller, cancelReason: null, promise: null };
       const timer = setTimeout(() => {
         entry.cancelReason = 'timeout';
         controller.abort();
       }, timeoutMs);
+      entry.timer = timer;
       const headers = { 'Content-Type': 'application/json', 'X-Time-Zone': timeZone };
       if (owner) headers.Authorization = 'Bearer ' + owner;
       entry.promise = (async () => {
@@ -54,7 +67,7 @@
       return entry.promise;
     }
 
-    return { read, cancelExcept };
+    return { read, cancelExcept, cancelResource };
   }
 
   root.createDisbitReadCoordinator = createReadCoordinator;

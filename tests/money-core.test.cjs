@@ -181,6 +181,38 @@ test('a forged skip mark without a quota receipt cannot waive a money penalty', 
   } finally { db.close(); }
 });
 
+test('full-day skip uses one allowance and covers every accepted promise without expanding legacy receipts', async () => {
+  const { recordFullDaySkip, recordPromiseSkip, promiseSkipQuota, transaction }=await import('../backend/lib/promise-skips.js');
+  const db=await fixture();
+  try {
+    const day='2026-10-02';
+    fund(db,5000,'payment-88888888888888888888');
+    settlement.acceptMoneyTerms(db,{userId:1,habitId:'habit-1',...agreement,now:new Date('2026-10-01T12:00:00Z')});
+    transaction(db,()=>recordPromiseSkip(db,1,'other-habit',day));
+    assert.equal(promiseSkipQuota(db,1,day).remaining,4);
+    // A legacy receipt for another promise must not waive this one.
+    assert.equal(db.prepare('SELECT count(*) AS n FROM promise_full_day_skips').get().n,0);
+    transaction(db,()=>recordFullDaySkip(db,1,day));
+    transaction(db,()=>recordFullDaySkip(db,1,day));
+    assert.equal(promiseSkipQuota(db,1,day).remaining,3);
+    assert.equal(core.settleMoneyPenalty(db,{userId:1,habitId:'habit-1',day,today:'2026-10-03'}).reason,'completed-or-skipped');
+    assert.equal(core.moneyBalance(db,1).balance,5000);
+  } finally {db.close();}
+});
+
+test('full-day quota is per account and month; the sixth new day is rejected', async () => {
+  const {recordFullDaySkip,promiseSkipQuota,transaction}=await import('../backend/lib/promise-skips.js');
+  const db=await fixture();
+  try {
+    for(let i=1;i<=5;i++) transaction(db,()=>recordFullDaySkip(db,1,`2026-10-0${i}`));
+    assert.equal(promiseSkipQuota(db,1,'2026-10-06').remaining,0);
+    assert.throws(()=>transaction(db,()=>recordFullDaySkip(db,1,'2026-10-06')),/Лимит/);
+    assert.equal(transaction(db,()=>recordFullDaySkip(db,1,'2026-10-01')).remaining,0);
+    assert.equal(promiseSkipQuota(db,2,'2026-10-06').remaining,5);
+    assert.equal(promiseSkipQuota(db,1,'2026-11-01').remaining,5);
+  } finally {db.close();}
+});
+
 test('YooKassa adapter sends stable keys and reads original provider objects', async () => {
   const { createYooKassaClient }=await import('../backend/lib/yookassa-client.js');
   const calls=[];
