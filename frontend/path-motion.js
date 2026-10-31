@@ -138,7 +138,8 @@ function enhanceHoldButton(button, enabled = true) {
     if (!active || button.disabled || timer) return;
     button.classList.add('is-holding');
     fill = document.createElement('span'); fill.className = 'hold-fill'; fill.setAttribute('aria-hidden', 'true'); button.append(fill);
-    progress = fill.animate([{transform: 'scaleX(0)'}, {transform: 'scaleX(1)'}], {duration: 1000, easing: 'linear', fill: 'forwards'});
+    if (motionReduced()) fill.style.transform = 'scaleX(1)';
+    else progress = fill.animate([{transform: 'scaleX(0)'}, {transform: 'scaleX(1)'}], {duration: 1000, easing: 'linear', fill: 'forwards'});
     timer = setTimeout(commit, 1000);
   }
   button.addEventListener('click', event => {
@@ -205,28 +206,53 @@ function openDisbitWheel(input, title) {
     drum.setAttribute('role', 'spinbutton'); drum.setAttribute('aria-label', label);
     const strip = document.createElement('div'); strip.className = 'motion-wheel-strip'; drum.append(strip);
     col.append(name, up, drum, down); box.append(col);
-    let drag = null, offset = 0;
+    let drag = null, offset = 0, pendingY = null, frame = 0, lastValue, lastMax, lastReduced;
+    const rows = Array.from({length: 5}, (_, i) => {
+      const row = document.createElement('span');
+      row.setAttribute('aria-hidden', 'true'); row.className = i === 2 ? 'is-selected' : '';
+      strip.append(row); return row;
+    });
+    function visibleOffset() {
+      if (!strip.getAnimations().length) return offset;
+      const transform = getComputedStyle(strip).transform;
+      return transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42;
+    }
+    function stopAnimation() {
+      const current = visibleOffset();
+      strip.getAnimations().forEach(a => a.cancel());
+      offset = current; strip.style.transform = `translateY(${offset}px)`;
+      return current;
+    }
+    function settle(from, animate = true) {
+      offset = 0; strip.style.transform = 'translateY(0px)';
+      if (animate && !motionReduced() && Math.abs(from) > 0.1) {
+        strip.animate([{transform: `translateY(${from}px)`}, {transform: 'translateY(0px)'}],
+          {duration: 180, easing: 'cubic-bezier(.23,1,.32,1)'});
+      }
+    }
     function draw() {
-      draft[index] = Math.max(min, Math.min(max(), draft[index]));
-      drum.setAttribute('aria-valuemin', min); drum.setAttribute('aria-valuemax', max()); drum.setAttribute('aria-valuenow', draft[index]);
-      up.disabled = draft[index] <= min; down.disabled = draft[index] >= max();
-      strip.replaceChildren();
-      for (let delta = -2; delta <= 2; delta++) {
-        const value = draft[index] + delta;
-        const row = document.createElement('span'); row.textContent = value < min || value > max() ? '' : String(value).padStart(time ? 2 : 1, '0');
-        row.setAttribute('aria-hidden', 'true'); row.className = delta === 0 ? 'is-selected' : '';
-        row.style.transform = motionReduced() ? 'none' : `rotateX(${-delta * 18}deg) scale(${1 - Math.abs(delta) * .08})`;
-        strip.append(row);
+      const ceiling = max(), reduced = motionReduced();
+      draft[index] = Math.max(min, Math.min(ceiling, draft[index]));
+      if (lastValue !== draft[index] || lastMax !== ceiling || lastReduced !== reduced) {
+        drum.setAttribute('aria-valuemin', min); drum.setAttribute('aria-valuemax', ceiling); drum.setAttribute('aria-valuenow', draft[index]);
+        up.disabled = draft[index] <= min; down.disabled = draft[index] >= ceiling;
+        rows.forEach((row, i) => {
+          const delta = i - 2, value = draft[index] + delta;
+          row.textContent = value < min || value > ceiling ? '' : String(value).padStart(time ? 2 : 1, '0');
+          row.style.transform = reduced ? 'none' : `rotateX(${-delta * 18}deg) scale(${1 - Math.abs(delta) * .08})`;
+        });
+        lastValue = draft[index]; lastMax = ceiling; lastReduced = reduced;
       }
       strip.style.transform = `translateY(${offset}px)`;
     }
+    function updateDependencies() {
+      if (date && index !== 2) wheels.find(w => w.index === 2)?.draw();
+    }
     function change(value, pointer = true) {
-      const before = draft[index]; draft[index] = Math.round(Math.max(min, Math.min(max(), value))); offset = 0;
-      wheels.forEach(w => w.draw());
-      if (pointer && !motionReduced() && before !== draft[index]) {
-        strip.getAnimations().forEach(a => a.cancel());
-        strip.animate([{transform: `translateY(${Math.sign(draft[index] - before) * 40}px)`}, {transform: 'translateY(0)'}], {duration: 180, easing: 'cubic-bezier(.23,1,.32,1)'});
-      }
+      const current = stopAnimation(), before = draft[index];
+      draft[index] = Math.round(Math.max(min, Math.min(max(), value))); offset = 0;
+      draw(); updateDependencies();
+      settle(current + (before !== draft[index] ? Math.sign(draft[index] - before) * 40 : 0), pointer);
     }
     up.onclick = e => change(draft[index] - 1, e.detail !== 0); down.onclick = e => change(draft[index] + 1, e.detail !== 0);
     drum.onkeydown = e => {
@@ -240,19 +266,36 @@ function openDisbitWheel(input, title) {
     }, {passive: false});
     drum.onpointerdown = e => {
       if (e.button !== 0) return;
-      strip.getAnimations().forEach(a => a.cancel());
-      drag = {id: e.pointerId, y: e.clientY, initial: draft[index]}; drum.setPointerCapture(e.pointerId);
+      const initialOffset = stopAnimation();
+      drag = {id: e.pointerId, y: e.clientY, initial: draft[index], initialOffset}; drum.setPointerCapture(e.pointerId);
     };
-    drum.onpointermove = e => {
-      if (!drag || e.pointerId !== drag.id) return;
-      const displacement = (drag.y - e.clientY) / 40;
+    function applyDrag() {
+      frame = 0;
+      if (!drag || pendingY === null) return;
+      const displacement = (drag.y - pendingY - drag.initialOffset) / 40;
+      pendingY = null;
       const value = Math.max(min, Math.min(max(), Math.round(drag.initial + displacement)));
       draft[index] = value; offset = Math.max(-18, Math.min(18, (value - drag.initial - displacement) * 40));
-      wheels.forEach(w => w.draw());
+      draw(); updateDependencies();
+    }
+    drum.onpointermove = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      pendingY = e.clientY;
+      if (!frame) frame = requestAnimationFrame(applyDrag);
     };
-    const release = () => { if (!drag) return; drag = null; offset = 0; draw(); };
+    const release = () => {
+      if (frame) { cancelAnimationFrame(frame); frame = 0; applyDrag(); }
+      if (!drag) return;
+      drag = null; pendingY = null; const from = offset; draw(); settle(from);
+    };
     drum.onpointerup = release; drum.onpointercancel = release; drum.onlostpointercapture = release;
-    cleanups.push(release); wheels.push({draw}); draw();
+    cleanups.push(() => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0; const captured = drag?.id; drag = null; pendingY = null;
+      if (captured !== undefined && drum.hasPointerCapture(captured)) drum.releasePointerCapture(captured);
+      strip.getAnimations().forEach(a => a.cancel()); offset = 0; strip.style.transform = 'translateY(0px)';
+    });
+    wheels.push({draw, index, release}); draw();
   });
   wheelDialog.querySelector('[data-wheel-cancel]').onclick = () => wheelDialog.close('cancel');
   wheelDialog.querySelector('[data-wheel-clear]')?.remove();
@@ -263,13 +306,15 @@ function openDisbitWheel(input, title) {
     wheelDialog.querySelector('.dialog-actions').prepend(clear);
   }
   wheelDialog.querySelector('[data-wheel-apply]').onclick = () => {
-    wheels.forEach(w => w.draw());
+    wheels.forEach(w => { w.release(); w.draw(); });
     input.value = date ? `${draft[0]}-${String(draft[1]).padStart(2, '0')}-${String(draft[2]).padStart(2, '0')}` :
       time ? draft.map(n => String(n).padStart(2, '0')).join(':') : String(draft[0]);
     input.dispatchEvent(new Event('input', {bubbles: true})); input.dispatchEvent(new Event('change', {bubbles: true}));
     wheelDialog.close('apply');
   };
-  wheelDialog.addEventListener('close', () => { cleanups.forEach(fn => fn()); }, {once: true});
+  const suspend = () => { if (document.hidden) cleanups.forEach(fn => fn()); };
+  document.addEventListener('visibilitychange', suspend);
+  wheelDialog.addEventListener('close', () => { document.removeEventListener('visibilitychange', suspend); cleanups.forEach(fn => fn()); }, {once: true});
   wheelDialog.showModal();
 }
 

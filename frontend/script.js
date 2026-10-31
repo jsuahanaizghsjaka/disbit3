@@ -35,15 +35,30 @@ const sameOrigin = !isNativeApp && location.protocol.startsWith('http');
 const API_HOST = sameOrigin ? '' : BACKEND;   // приложение — на фиксированный BACKEND
 // на file:// (без сервера) API недоступен; в приложении и по http — доступен
 const API = (isNativeApp || location.protocol.startsWith('http')) ? API_HOST + '/api' : null;
+let clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+function refreshClientTimeZone() {
+  const current = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (current !== clientTimeZone) {
+    clientTimeZone = current;
+    dayLabelFormatter = createDayLabelFormatter();
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshClientTimeZone(); });
 
 /* ---------- АККАУНТ (Bearer-токен) ---------- */
 let authToken = localStorage.getItem(TOKEN_KEY) || null;
+const readCoordinator = createDisbitReadCoordinator({
+  fetchImpl: (...args) => fetch(...args),
+  getOwner: () => authToken,
+  getTimeZone: () => clientTimeZone
+});
 let authUser = null;
 try { authUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { authUser = null; }
 let authMode = 'login';   // 'login' | 'register'
 
 function setAuth(token, user) {
   authToken = token;
+  readCoordinator.cancelExcept(token || null);
   authUser = user;
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
@@ -337,7 +352,15 @@ function saveLedger() { localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger))
 /* ---------- API (best-effort) ---------- */
 function apiCall(method, path, body) {
   if (!API) return Promise.resolve(null);
-  const headers = { 'Content-Type': 'application/json', 'X-Time-Zone': Intl.DateTimeFormat().resolvedOptions().timeZone };
+  if (method === 'GET' && !path.startsWith('/wallet')) {
+    const owner = authToken;
+    return readCoordinator.read(API + path).then(result => {
+      if (result.kind === 'ok') return result.data;
+      if (result.kind !== 'stale' && owner && owner === authToken) syncFailure();
+      return null;
+    });
+  }
+  const headers = { 'Content-Type': 'application/json', 'X-Time-Zone': clientTimeZone };
   if (authToken) headers.Authorization = 'Bearer ' + authToken;
   return fetch(API + path, {
     method,
@@ -351,12 +374,22 @@ function apiCall(method, path, body) {
 async function apiCallStrict(method, path, body) {
   if (!API) return { error: 'Аккаунты работают при запуске с сервером disbit' };
   if (!navigator.onLine) return { error: 'Нет сети. Подключись к интернету и повтори действие.', status: 0, notSent: true };
+  // A wallet refresh after a payment must never reuse a read that started
+  // before that payment was confirmed.
+  if (method === 'GET' && !path.startsWith('/wallet')) {
+    const result = await readCoordinator.read(API + path);
+    if (result.kind === 'ok') return result.data;
+    if (result.kind === 'stale') return { error: 'Запрос отменён', stale: true };
+    if (result.kind === 'http') return { error: result.data?.error || ('Ошибка ' + result.status), status: result.status };
+    if (result.kind === 'timeout') return { error: 'Сервер не отвечает — проверь связь и попробуй ещё раз' };
+    return { error: 'Сервер недоступен. Проверь связь и попробуй ещё раз.' };
+  }
   // без таймаута fetch может зависнуть на плохой сети на десятки секунд, не
   // упав в catch — тогда форма входа просто молчит, вместо честной ошибки
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    const headers = { 'Content-Type': 'application/json', 'X-Time-Zone': Intl.DateTimeFormat().resolvedOptions().timeZone };
+    const headers = { 'Content-Type': 'application/json', 'X-Time-Zone': clientTimeZone };
     if (authToken) headers.Authorization = 'Bearer ' + authToken;
     const r = await fetch(API + path, {
       method, headers,
@@ -400,7 +433,13 @@ async function bootstrapData() {
     }
     renderAccount();
   }
-  const remote = await apiCall('GET', '/habits?includeArchived=1');
+  // Independent reads begin only after identity is verified. Each consumer
+  // still checks its captured owner before applying a result.
+  const habitsRead = apiCall('GET', '/habits?includeArchived=1');
+  const chargesRead = apiCall('GET', '/charges');
+  const stateRead = apiCall('GET', '/state');
+  const secondaryReads = Promise.allSettled([loadFriends(), loadWallet()]);
+  const remote = await habitsRead;
   if (bootstrapOwner !== authToken) return;
   if (Array.isArray(remote) && remote.length) {
     habits = remote;
@@ -409,7 +448,8 @@ async function bootstrapData() {
   } else if (Array.isArray(remote) && habits.length) {
     habits.forEach(h => apiCall('POST', '/habits', h));
   }
-  const remoteLedger = await apiCall('GET', '/charges');
+  render();
+  const remoteLedger = await chargesRead;
   if (bootstrapOwner !== authToken) return;
   if (Array.isArray(remoteLedger) && remoteLedger.length) {
     ledger = remoteLedger;
@@ -417,7 +457,7 @@ async function bootstrapData() {
   }
   // стейт профиля: применяем серверный, только если он новее локального
   if (authToken) {
-    const st = await apiCall('GET', '/state');
+    const st = await stateRead;
     if (bootstrapOwner !== authToken) return;
     const localTs = Number(localStorage.getItem(STATE_TS_KEY)) || 0;
     if (st?.data && Number(st.updatedAt) > localTs) {
@@ -425,10 +465,11 @@ async function bootstrapData() {
     } else if (st) {
       scheduleStatePush();   // на сервере пусто/старее — заливаем своё
     }
-    await loadFriends();     // друзья живут на сервере, не в localStorage
-    await loadWallet();      // депозит: сколько денег реально на кону
-    await refreshPromiseSkipQuota();
+    // Quota persistence touches the state timestamp: apply the remote state
+    // first so an earlier quota response cannot hide newer server settings.
+    await Promise.all([secondaryReads, refreshPromiseSkipQuota()]);
   }
+  if (bootstrapOwner !== authToken) return;
   render();
   renderFriends();
   renderFriendsBoard();
@@ -873,17 +914,26 @@ function showSettleModal(entries) {
 
 /* ---------- ОБЩИЙ РЕНДЕР ---------- */
 function render() {
+  const screen = document.querySelector('.screen.active')?.id.slice(7) || 'today';
+  // Hidden screens are refreshed when entered, so changes never require
+  // rebuilding their calendars, charts or profile while the user is elsewhere.
+  if (screen === 'today') renderToday();
+  else if (screen === 'marathon') renderGoals();
+  else if (screen === 'calendar') { renderCalendar(); renderBacklog(); }
+  else if (screen === 'stats') renderStats();
+  else if (screen === 'profile') renderProfile();
+  else if (screen === 'medals') renderMedalsScreen();
+  else if (screen === 'avatar') renderAvatar();
+  else if (screen === 'friends') { renderFriends(); renderFriendsBoard(); }
+  syncPathNavigation(screen);
+}
+
+function renderToday() {
   renderRewardBanner();
   renderMarathonPromo();
   renderWeek();
   renderHabits();
   renderProgress();
-  renderCalendar();
-  renderGoals();
-  renderBacklog();
-  renderStats();
-  renderProfile();
-  syncPathNavigation(document.querySelector('.screen.active')?.id.slice(7) || 'today');
 }
 
 /* ---------- БАННЕР НАГРАДЫ ---------- */
@@ -1481,7 +1531,7 @@ function renderWalkerCard(g, box, index) {
   const sc = sceneOf(g);
   const total = g.steps;
   const done = Math.min(stepsDone(g), total);
-  const finished = goalPct(g) >= 100;
+  const finished = Math.round((done / total) * 100) >= 100;
 
   // сцена пересобирается, только если сменилась цель, фон ИЛИ снаряжение:
   // экипировка нарисована прямо в фигурке, без неё в проверке путник оставался
@@ -2426,7 +2476,7 @@ function renderProfile() {
   const offdaySw = document.getElementById('set-offday');
   if (offdaySw) {
     offdaySw.setAttribute('aria-checked', String(!!settings.showOffday));
-    offdaySw.style.setProperty('--as-x', (settings.showOffday ? SWITCH_TRAVEL : 0) + 'px');
+    setSwitchPosition(offdaySw, settings.showOffday ? SWITCH_TRAVEL : 0);
   }
 
   renderRewards();
@@ -2540,19 +2590,27 @@ function renderGoals() {
     box.innerHTML = `<p class="hint" style="margin-bottom:8px">Пока нет больших целей.</p>`;
     return;
   }
-  const ordered = [...goals].sort((a,b) => (goalPct(a) >= 100) - (goalPct(b) >= 100));
-  box.innerHTML = ordered.map((g, index) => {
-    const pct = goalPct(g);
+  // Snapshot progress once for this render. No cache survives a data change,
+  // account switch or a subsequent render.
+  const activeId = activeJourney()?.id;
+  const ordered = goals.map(g => {
+    const done = g.steps > 0 ? stepsDone(g) : 0;
+    const pct = g.steps > 0
+      ? Math.max(0, Math.min(100, Math.round((done / g.steps) * 100)))
+      : Math.max(0, Math.min(100, g.progress || 0));
+    return {g, done, pct};
+  }).sort((a,b) => (a.pct >= 100) - (b.pct >= 100));
+  box.innerHTML = ordered.map(({g, done, pct}, index) => {
     const deadline = g.deadline ? `до ${formatDay(g.deadline)}` : '';
     // с путником прогресс считается сам из выполненных обещаний — крутилки ±5 не нужны
     const walking = g.steps > 0;
     const manual = `
       <button class="mini-btn" data-gminus="${g.id}" aria-label="Минус 5%">−5</button>
       <button class="mini-btn" data-gplus="${g.id}" aria-label="Плюс 5%">+5</button>`;
-    const steps = `<span class="goal-text">${Math.min(stepsDone(g), g.steps)} / ${g.steps} шагов</span>`;
+    const steps = `<span class="goal-text">${Math.min(done, g.steps)} / ${g.steps} шагов</span>`;
     return `
-      ${pct >= 100 && (index === 0 || goalPct(ordered[index-1]) < 100) ? '<h3 class="journey-section-label">Завершено</h3>' : ''}
-      <div class="goal-row${activeJourney()?.id === g.id ? ' selected-route' : ''}">
+      ${pct >= 100 && (index === 0 || ordered[index-1].pct < 100) ? '<h3 class="journey-section-label">Завершено</h3>' : ''}
+      <div class="goal-row${activeId === g.id ? ' selected-route' : ''}">
         <div class="goal-top">
           <span class="g-icon">${iconOf(g.icon)}</span>
           <span class="g-name">${escapeHtml(g.name)}</span>
@@ -2562,7 +2620,7 @@ function renderGoals() {
         <div class="goal-controls">
           <span class="g-pct">${pct}%</span>
           ${walking ? steps : manual}
-          ${walking ? `<button class="mini-btn" data-gselect="${g.id}" aria-pressed="${activeJourney()?.id === g.id}">${activeJourney()?.id === g.id ? 'Выбран' : 'Показать маршрут'}</button>` : ''}
+          ${walking ? `<button class="mini-btn" data-gselect="${g.id}" aria-pressed="${activeId === g.id}">${activeId === g.id ? 'Выбран' : 'Показать маршрут'}</button>` : ''}
           ${walking && pct >= 100 ? `<button class="mini-btn journey-summary-link" data-gresult="${g.id}">Итоги</button>` : ''}
           <button class="mini-btn" data-gedit="${g.id}">изменить</button>
           <button class="mini-btn danger" data-gdel="${g.id}">удалить</button>
@@ -3767,8 +3825,10 @@ function switchScreen(name, updateHash = true) {
   if (updateHash && location.hash !== '#' + name) {
     history.pushState(null, '', '#' + name);
   }
+  if (name === 'today') renderToday();
+  if (name === 'marathon') renderGoals();
   if (name === 'stats') renderStats();
-  if (name === 'calendar') renderCalendar();
+  if (name === 'calendar') { renderCalendar(); renderBacklog(); }
   if (name === 'avatar') renderAvatar();
   if (name === 'friends') {
     renderFriends(); renderFriendsBoard();
@@ -3795,7 +3855,14 @@ function openSheet(id) {
   pathSheetFocus.delete(id); pathSheetFocus.set(id, document.activeElement);
   el.hidden = false;
   if (id === 'add-overlay') { document.getElementById('habit-form-error').hidden = true; updateHabitForm(); }
-  queueMicrotask(() => { if (!el.hidden && !el.contains(document.activeElement)) el.querySelector('input:not([disabled]), button:not([disabled])')?.focus(); });
+  queueMicrotask(() => {
+    if (!el.isConnected || el.hidden || el.inert || el.contains(document.activeElement)) return;
+    const touch = matchMedia('(pointer: coarse)').matches && document.documentElement.dataset.input !== 'keyboard';
+    const target = touch ? (el.querySelector('.sheet-title, .sheet h2, .sheet h3') || el.querySelector('.sheet'))
+      : el.querySelector('input:not([disabled]), button:not([disabled])');
+    if (touch && target && !target.hasAttribute('tabindex')) target.tabIndex = -1;
+    target?.focus({preventScroll: true});
+  });
 }
 function closeSheet(id) {
   if (id === 'auth-overlay' && authGateActive) return;   // гейт не закрывается
@@ -3970,6 +4037,7 @@ function selectedDays() {
    отсутствие камеры/разрешения не ломало приложение (остаётся кнопка «Пропустить»). */
 let proofHabit = null, proofStream = null, proofBlob = null, proofType = 'photo';
 let proofFacing = 'user', proofRecorder = null, proofChunks = [], proofRecTimer = null, proofMirrorRAF = null;
+let proofRecordStream = null;
 let proofSending = false, proofCameraRequest = 0;
 let proofPreviewUrl = null, proofReturnFocus = null;
 
@@ -4050,13 +4118,42 @@ async function startProofCam() {
 }
 function stopProofCam() {
   proofCameraRequest++;
+  if (proofRecordStream && proofRecordStream !== proofStream) {
+    proofRecordStream.getTracks().forEach(t => t.stop());
+  }
+  proofRecordStream = null;
   if (proofStream) { proofStream.getTracks().forEach(t => t.stop()); proofStream = null; }
+  const camera = document.getElementById('proof-cam');
+  if (camera) camera.srcObject = null;
+}
+
+function suspendProofCamera() {
+  // A completed preview (and an in-flight upload) must survive backgrounding.
+  if (!proofHabit || proofBlob) return;
+  if (proofRecorder) {
+    proofRecorder.onstop = null;
+    proofRecorder.ondataavailable = null;
+    if (proofRecorder.state !== 'inactive') { try { proofRecorder.stop(); } catch {} }
+    proofRecorder = null;
+  }
+  clearInterval(proofRecTimer); proofRecTimer = null;
+  cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null;
+  proofChunks = [];
+  stopProofCam();
+  proofShowCapture();
+  document.getElementById('proof-flip').disabled = false;
+  document.getElementById('proof-video').textContent = '● Видео';
+  document.getElementById('proof-cap').hidden = true;
+  document.getElementById('proof-start').hidden = false;
+  document.getElementById('proof-start').textContent = 'Включить камеру';
+  document.getElementById('proof-cam-err').hidden = false;
+  document.getElementById('proof-cam-err').textContent = 'Камера остановлена, пока приложение было в фоне. Включи её снова.';
 }
 
 function proofCapturePhoto() {
   const cam = document.getElementById('proof-cam');
   if (!proofHabit || !cam.videoWidth || proofRecorder?.state === 'recording') return;
-  const currentHabit = proofHabit;
+  const currentHabit = proofHabit, currentRequest = proofCameraRequest;
   const c = document.createElement('canvas');
   c.width = cam.videoWidth; c.height = cam.videoHeight;
   const ctx = c.getContext('2d');
@@ -4064,7 +4161,7 @@ function proofCapturePhoto() {
   if (proofFacing === 'user') { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
   ctx.drawImage(cam, 0, 0);
   c.toBlob(b => {
-    if (proofHabit !== currentHabit) return;
+    if (proofHabit !== currentHabit || proofCameraRequest !== currentRequest) return;
     if (!b) { document.getElementById('proof-cam-err').hidden = false; document.getElementById('proof-cam-err').textContent = 'Не удалось сохранить снимок. Попробуй ещё раз.'; return; }
     proofBlob = b; proofType = 'photo';
     proofShowPreview(URL.createObjectURL(b), 'photo');
@@ -4116,10 +4213,11 @@ async function proofToggleVideo() {
       recordStream = cs;
     } catch { cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null; recordStream = proofStream; }
   }
+  proofRecordStream = recordStream;
 
   proofChunks = [];
   try { proofRecorder = new MediaRecorder(recordStream, { mimeType: proofPickVideoMime() || undefined }); }
-  catch { cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null; document.getElementById('proof-photo').disabled = false; document.getElementById('proof-flip').disabled = false; toast('Запись видео недоступна. Можно сделать фото.'); return; }
+  catch { cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null; if (proofRecordStream !== proofStream) proofRecordStream?.getVideoTracks().forEach(t => t.stop()); proofRecordStream = null; document.getElementById('proof-photo').disabled = false; document.getElementById('proof-flip').disabled = false; toast('Запись видео недоступна. Можно сделать фото.'); return; }
   proofRecorder.ondataavailable = e => { if (e.data && e.data.size) proofChunks.push(e.data); };
   proofRecorder.onstop = () => {
     clearInterval(proofRecTimer);
@@ -4128,6 +4226,8 @@ async function proofToggleVideo() {
     document.getElementById('proof-photo').disabled = false;
     document.getElementById('proof-flip').disabled = false;
     const b = new Blob(proofChunks, { type: proofRecorder.mimeType || 'video/webm' });
+    proofChunks = [];
+    proofRecorder = null;
     proofBlob = b; proofType = 'video';
     proofShowPreview(URL.createObjectURL(b), 'video');
   };
@@ -4144,6 +4244,9 @@ async function proofToggleVideo() {
 }
 
 function proofShowPreview(url, type) {
+  // The captured Blob remains available for retry, but live tracks are no
+  // longer needed while the user reviews it.
+  stopProofCam();
   if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
   proofPreviewUrl = url;
   document.getElementById('proof-upload-error').hidden = true;
@@ -4160,8 +4263,12 @@ function proofRetake() {
   proofBlob = null;
   if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
   proofPreviewUrl = null;
+  const previewVideo = document.getElementById('proof-preview-vid');
+  previewVideo.pause(); previewVideo.removeAttribute('src');
+  document.getElementById('proof-preview').removeAttribute('src');
   document.getElementById('proof-upload-error').hidden = true;
   proofShowCapture();
+  startProofCam();
 }
 
 async function proofSend() {
@@ -4185,7 +4292,7 @@ async function proofSend() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const headers = { 'Content-Type': mime, 'X-Time-Zone': Intl.DateTimeFormat().resolvedOptions().timeZone };
+    const headers = { 'Content-Type': mime, 'X-Time-Zone': clientTimeZone };
     if (authToken) headers.Authorization = 'Bearer ' + authToken;
     const r = await fetch(API + '/proofs?' + q.toString(), { method: 'POST', headers, body: blob, signal: controller.signal });
     if (!r.ok) throw new Error(r.status === 413 ? 'Файл больше 25 МБ.' : (await r.json().catch(() => ({}))).error || 'Не удалось отправить файл.');
@@ -4223,7 +4330,13 @@ function closeProofBanner(authorized = false) {
   stopProofCam();
   if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
   proofPreviewUrl = null;
+  const previewVideo = document.getElementById('proof-preview-vid');
+  previewVideo.pause(); previewVideo.removeAttribute('src');
+  document.getElementById('proof-preview').removeAttribute('src');
+  proofChunks = [];
   proofHabit = null; proofBlob = null; proofRecorder = null;
+  document.getElementById('proof-flip').disabled = false;
+  document.getElementById('proof-video').textContent = '● Видео';
   document.getElementById('proof-overlay').hidden = true;
   if (proofGateResolve) { const resolve = proofGateResolve; proofGateResolve = null; resolve(authorized === true); }
   queueMicrotask(() => { if (proofReturnFocus?.isConnected) proofReturnFocus.focus({ preventScroll: true }); });
@@ -4266,6 +4379,8 @@ function wireProof() {
   $('proof-send').onclick = proofSend;
   $('proof-skip').onclick = proofSkip;
   $('proof-flip').onclick = () => { proofFacing = proofFacing === 'user' ? 'environment' : 'user'; startProofCam(); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) suspendProofCamera(); });
+  window.addEventListener('pagehide', suspendProofCamera);
 }
 
 /* ---------- «НАЧАЛО»: драматичный интро при первом входе ----------
@@ -4396,14 +4511,21 @@ function openOnboarding(done) {
    • клик, который браузер шлёт сразу после перетаскивания, гасим. */
 const SWITCH_TRAVEL = 22;            // 62 − 32 − 4*2, метрики размера md из оригинала
 
+function setSwitchPosition(el, px) {
+  const value = Math.min(SWITCH_TRAVEL, Math.max(0, Number(px) || 0));
+  el._switchPosition = value;
+  const thumb = el.querySelector('.as-thumb');
+  if (thumb) thumb.style.transform = `translate(${value}px, -50%)`;
+}
+
 function initSwitch(el, onChange) {
   if (!el || el.dataset.asWired) return;
   el.dataset.asWired = '1';
 
   let pointerId = null, startX = 0, startThumb = 0, dragging = false, suppressClick = false;
   const isOn = () => el.getAttribute('aria-checked') === 'true';
-  const setX = px => el.style.setProperty('--as-x', px + 'px');
-  const curX = () => parseFloat(el.style.getPropertyValue('--as-x')) || 0;
+  const setX = px => setSwitchPosition(el, px);
+  const curX = () => el._switchPosition || 0;
 
   const apply = (on, notify) => {
     el.setAttribute('aria-checked', String(on));
@@ -4435,7 +4557,7 @@ function initSwitch(el, onChange) {
     setX(Math.min(SWITCH_TRAVEL, Math.max(0, startThumb + dx)));
   });
 
-  const finish = e => {
+  const finish = (e, cancelled = false) => {
     if (pointerId === null) return;
     if (e?.pointerId != null && el.hasPointerCapture?.(e.pointerId)) {
       el.releasePointerCapture(e.pointerId);
@@ -4444,11 +4566,13 @@ function initSwitch(el, onChange) {
     el.classList.remove('grabbing', 'dragging');
     if (!dragging) return;                   // это был обычный клик — обработает click
     dragging = false;
+    if (cancelled) { setX(isOn() ? SWITCH_TRAVEL : 0); return; }
     suppressClick = true;
-    apply(curX() >= SWITCH_TRAVEL / 2, true);
+    const next = curX() >= SWITCH_TRAVEL / 2;
+    apply(next, next !== isOn());
   };
-  el.addEventListener('pointerup', finish);
-  el.addEventListener('pointercancel', finish);
+  el.addEventListener('pointerup', e => finish(e));
+  el.addEventListener('pointercancel', e => finish(e, true));
 
   el.addEventListener('click', () => {
     if (el.disabled) return;
@@ -4813,9 +4937,12 @@ function escapeHtml(s) {
 function safeColor(c) {
   return /^#[0-9a-f]{3,8}$/i.test(String(c || '')) ? String(c) : 'var(--surface-2)';
 }
+function createDayLabelFormatter() {
+  return new Intl.DateTimeFormat('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
+}
+let dayLabelFormatter = createDayLabelFormatter();
 function formatDay(key) {
-  return keyToDate(key).toLocaleDateString('ru-RU',
-    { weekday: 'short', day: 'numeric', month: 'long' });
+  return dayLabelFormatter.format(keyToDate(key));
 }
 
 /* ---------- НАТИВНАЯ ОБОЛОЧКА (Capacitor) ----------
@@ -4885,6 +5012,7 @@ function onBackButton() {
    отметки, автоитог и штрафы. Латать по кусочкам ненадёжно — перезагружаем
    страницу, и день пересчитывается с нуля вместе с settlePastDays(). */
 function onAppResume() {
+  refreshClientTimeZone();
   if (dateKey() !== TODAY) { location.reload(); return; }
   checkNotifPermission();
   scheduleNotifSync();          // расписание тоже могло протухнуть
@@ -5066,11 +5194,11 @@ function renderNotifSettings() {
   const cfg = notifCfg();
   const sw = document.getElementById('set-notif');
   sw.setAttribute('aria-checked', String(!!cfg.on));
-  sw.style.setProperty('--as-x', (cfg.on ? SWITCH_TRAVEL : 0) + 'px');
+  setSwitchPosition(sw, cfg.on ? SWITCH_TRAVEL : 0);
 
   const evSw = document.getElementById('set-notif-evening-on');
   evSw.setAttribute('aria-checked', String(!!cfg.eveningOn));
-  evSw.style.setProperty('--as-x', (cfg.eveningOn ? SWITCH_TRAVEL : 0) + 'px');
+  setSwitchPosition(evSw, cfg.eveningOn ? SWITCH_TRAVEL : 0);
 
   document.getElementById('set-notif-morning').value = cfg.morning;
   document.getElementById('set-notif-evening').value = cfg.evening;

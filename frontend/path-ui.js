@@ -2,30 +2,51 @@
 const pathScroll = new Map();
 const pathSheetFocus = new Map();
 const habitDrafts = new Map();
+const pendingDraftWrites = new Map();
 let habitFormSaving = false;
 const pendingHabitMarks = new Set();
 const habitMarkErrors = new Map();
 function habitDraftStorageKey(key) { return `disbit-path-draft:${localStorage.getItem(OWNER_KEY) || 'local'}:${key}`; }
 function discardHabitDraft(key) {
-  habitDrafts.delete(key);
-  try { sessionStorage.removeItem(habitDraftStorageKey(key)); } catch {}
+  const storageKey = habitDraftStorageKey(key);
+  const pending = pendingDraftWrites.get(storageKey);
+  if (pending) clearTimeout(pending.timer);
+  pendingDraftWrites.delete(storageKey);
+  habitDrafts.delete(storageKey);
+  try { sessionStorage.removeItem(storageKey); } catch {}
+}
+
+function flushHabitDrafts() {
+  for (const [storageKey, pending] of pendingDraftWrites) {
+    clearTimeout(pending.timer);
+    pendingDraftWrites.delete(storageKey);
+    // Do not carry a draft across logout or a change of account.
+    if (storageKey !== habitDraftStorageKey(pending.key) || !habitDrafts.has(storageKey)) continue;
+    try { sessionStorage.setItem(storageKey, JSON.stringify(habitDrafts.get(storageKey))); } catch {}
+  }
 }
 
 function rememberHabitDraft() {
   if (habitFormSaving) return;
-  habitDrafts.set(editingId || 'new', {
+  const key = editingId || 'new';
+  const storageKey = habitDraftStorageKey(key);
+  habitDrafts.set(storageKey, {
     values: Object.fromEntries([...document.querySelectorAll('#add-overlay input')].map(el => [el.id, el.value])),
     icon: document.querySelector('#icon-picker .selected')?.dataset.icon,
     color: document.querySelector('#color-picker .selected')?.dataset.color,
     days: selectedDays(), weekTarget: wtValue,
     goal: segValue('goal-type', 'goal'), stake: segValue('stake-mode', 'stake'), recipient: segValue('recipient', 'rec'),
   });
-  try { sessionStorage.setItem(habitDraftStorageKey(editingId || 'new'), JSON.stringify(habitDrafts.get(editingId || 'new'))); } catch {}
+  const old = pendingDraftWrites.get(storageKey);
+  if (old) clearTimeout(old.timer);
+  const timer = setTimeout(flushHabitDrafts, 300);
+  pendingDraftWrites.set(storageKey, { key, timer });
 }
 
 function restoreHabitDraft(key) {
-  let draft = habitDrafts.get(key);
-  try { draft ||= JSON.parse(sessionStorage.getItem(habitDraftStorageKey(key))); } catch {}
+  const storageKey = habitDraftStorageKey(key);
+  let draft = habitDrafts.get(storageKey);
+  try { draft ||= JSON.parse(sessionStorage.getItem(storageKey)); } catch {}
   if (!draft) return;
   for (const [id, value] of Object.entries(draft.values)) document.getElementById(id).value = value;
   setPickSelected('icon-picker', 'icon', draft.icon);
@@ -188,7 +209,9 @@ function wirePathUI() {
   $('add-overlay').addEventListener('input', e => {
     e.target.removeAttribute('aria-invalid'); $('habit-form-error').hidden = true; updateHabitForm(); rememberHabitDraft();
   });
-  window.addEventListener('pagehide', () => { if (!$('add-overlay').hidden) rememberHabitDraft(); });
+  window.addEventListener('pagehide', () => { if (!$('add-overlay').hidden) rememberHabitDraft(); flushHabitDrafts(); });
+  new MutationObserver(() => { if ($('add-overlay').hidden) flushHabitDrafts(); })
+    .observe($('add-overlay'), { attributes: true, attributeFilter: ['hidden'] });
   $('add-overlay').addEventListener('click', () => queueMicrotask(updateHabitForm));
   $('schedule-mode').querySelectorAll('button').forEach(b => b.onclick = () => setWeekTarget(b.dataset.schedule === 'flex' ? wtValue || 1 : 0));
   $('detail-pin').onclick = () => { togglePin(hstatId); renderHabitStats(); };
