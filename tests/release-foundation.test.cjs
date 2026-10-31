@@ -38,7 +38,19 @@ test('hosted staging starts isolated, rejects topup and fake webhook, preserves 
       const wallet=await (await fetch(base+'/wallet',{headers})).json();
       assert.equal(wallet.balance,0);assert.equal(wallet.payments.available,false);
       assert.equal((await (await fetch(base+'/auth/me',{headers})).json()).user.login,'staging');
-      if(run===0) assert.equal((await fetch(base+'/auth/resend',{method:'POST',headers})).status,502);
+      if(run===0) {
+        assert.equal((await fetch(base+'/auth/resend',{method:'POST',headers})).status,502);
+        // The synthetic staging account has no configured mail provider. Read
+        // its code from the isolated test DB without printing it to the logs.
+        const inspect = new DatabaseSync(database,{readOnly:true});
+        const code = inspect.prepare('SELECT code FROM email_codes WHERE user_id = 1').get().code;
+        inspect.close();
+        assert.match(code,/^[1-9][0-9]{5}$/);
+        const wrong = code === '100000' ? '100001' : '100000';
+        assert.equal((await fetch(base+'/auth/verify',{method:'POST',headers,body:JSON.stringify({code:wrong})})).status,400);
+        assert.equal((await fetch(base+'/auth/verify',{method:'POST',headers,body:JSON.stringify({code})})).status,200);
+        assert.equal((await (await fetch(base+'/auth/me',{headers})).json()).user.emailVerified,true);
+      }
       assert(!logs.includes('[mail:dev]'),'Email verification code leaked to hosted logs');
     } finally {
       const exited = new Promise(resolve=>child.once('exit',resolve));
@@ -63,6 +75,41 @@ test('hosted config fails closed before any DB is opened', async () => {
   const result = spawnSync(process.execPath,['backend/server.js'], {env:{...process.env,...env,DB_PATH:file,PAYMENTS_PROVIDER:'manual'},encoding:'utf8'});
   assert.notEqual(result.status,0);
   assert.equal(fs.existsSync(file),false);
+});
+
+test('mail configuration matches the provider actually selected', () => {
+  const check = overrides => {
+    const env = {...process.env, MAIL_PROVIDER:'resend', RESEND_API_KEY:'', POSTMARK_TOKEN:'', SENDGRID_API_KEY:'', ...overrides};
+    const result = spawnSync(process.execPath,['--input-type=module','-e',"const m=await import('./backend/lib/email.js'); process.stdout.write(String(m.mailConfigured()))"],{env,encoding:'utf8'});
+    assert.equal(result.status,0,result.stderr);
+    return result.stdout;
+  };
+  assert.equal(check({SENDGRID_API_KEY:'test'}),'false');
+  assert.equal(check({MAIL_PROVIDER:'sendgrid',SENDGRID_API_KEY:'test'}),'true');
+  assert.equal(check({POSTMARK_TOKEN:'test'}),'true');
+  assert.equal(check({MAIL_PROVIDER:'sendgrid',POSTMARK_TOKEN:'test'}),'false');
+  assert.equal(check({RESEND_API_KEY:'test'}),'true');
+  assert.equal(check({MAIL_PROVIDER:'rusender',RUSENDER_API_TOKEN:'test',RUSENDER_KEY_ID:'42',MAIL_FROM:'noreply@disbit.ru'}),'true');
+  assert.equal(check({MAIL_PROVIDER:'rusender',RUSENDER_API_TOKEN:'test',RUSENDER_KEY_ID:'../bad',MAIL_FROM:'noreply@disbit.ru'}),'false');
+});
+
+test('RuSender integration sends the expected request and handles provider errors', () => {
+  const env={...process.env,MAIL_PROVIDER:'rusender',RUSENDER_API_TOKEN:'synthetic-token',RUSENDER_KEY_ID:'42',MAIL_FROM:'noreply@disbit.ru'};
+  const script=`
+    let captured;
+    globalThis.fetch=async(url,options)=>{captured={url,options};return {ok:true,status:200}};
+    const {sendMail}=await import('./backend/lib/email.js');
+    const result=await sendMail('user@example.org','Synthetic','<p>test</p>');
+    const body=JSON.parse(captured.options.body);
+    if (!result.sent || captured.url!=='https://api.rusender.ru/api/v1/external-mails/send/42' ||
+        captured.options.headers.Authorization!=='Bearer synthetic-token' || body.mail.from.email!=='noreply@disbit.ru' ||
+        body.mail.to.email!=='user@example.org' || !body.idempotencyKey) throw Error('request mismatch');
+    globalThis.fetch=async()=>({ok:false,status:403});
+    try {await sendMail('user@example.org','Synthetic','test');throw Error('expected failure');}
+    catch(e){if(e.message!=='RuSender: HTTP 403') throw e;}
+  `;
+  const result=spawnSync(process.execPath,['--input-type=module','-e',script],{env,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
 });
 
 test('offline snapshot restores SQLite, WAL data and media; tampering and overwrite rejected', async () => {

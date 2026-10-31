@@ -10,11 +10,24 @@ export function transaction(db, work) {
 
 export function promiseSkipQuota(db, userId, day) {
   const month = day.slice(0, 7);
-  const used = db.prepare('SELECT COUNT(*) AS n FROM promise_day_skips WHERE user_id=? AND month=?').get(userId, month).n;
+  const legacyUsed = db.prepare('SELECT COUNT(*) AS n FROM promise_day_skips WHERE user_id=? AND month=?').get(userId, month).n;
+  const fullDaysUsed = db.prepare('SELECT COUNT(*) AS n FROM promise_full_day_skips WHERE user_id=? AND month=?').get(userId, month).n;
+  const used = legacyUsed + fullDaysUsed;
   const bought = db.prepare('SELECT COUNT(*) AS n FROM promise_skip_purchases WHERE user_id=? AND month=?').get(userId, month).n;
   const balance = db.prepare('SELECT balance FROM trusted_bits WHERE user_id=?').get(userId)?.balance ?? 0;
   return { month, free: FREE_MONTHLY_SKIPS, bought, maxBought: MAX_BOUGHT_SKIPS,
     used, remaining: Math.max(0, FREE_MONTHLY_SKIPS + bought - used), costBits: SKIP_COST_BITS, trustedBits: balance };
+}
+
+// Must be called inside a write transaction after validating the account day.
+// A legacy receipt covers only its original promise; it does not waive the day.
+export function recordFullDaySkip(db, userId, day) {
+  if (db.prepare('SELECT 1 FROM promise_full_day_skips WHERE user_id=? AND day=?').get(userId,day))
+    return promiseSkipQuota(db,userId,day);
+  const quota = promiseSkipQuota(db,userId,day);
+  if (quota.remaining <= 0) throw Error('Лимит пропусков дней на этот месяц исчерпан');
+  db.prepare('INSERT INTO promise_full_day_skips(user_id,day,month) VALUES (?,?,?)').run(userId,day,quota.month);
+  return promiseSkipQuota(db,userId,day);
 }
 
 // Call inside the same write transaction as the completion. Repeating the same

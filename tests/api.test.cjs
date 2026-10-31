@@ -203,17 +203,25 @@ test('invitation acceptance still creates a promise after minimum schema migrati
   const result=await response.json();assert.equal(result.habit.min,source.min);assert.deepEqual(result.habit.history,{});
 });
 
-test('promise-day skips are capped per account, idempotent and cannot be bought with local profile bits', async()=>{
+test('a full-day skip covers scheduled promises once, survives retries and is isolated by account', async()=>{
   const token='2'.repeat(64);
   const day=new Date().toLocaleDateString('en-CA');
   for(let i=0;i<6;i++) {
     assert.equal((await request('POST','/habits',{id:`day-skip-${i}`,name:`Skip ${i}`},token)).status,201);
   }
-  for(let i=0;i<5;i++) assert.equal((await request('PUT',`/habits/day-skip-${i}/day/${day}`,{skip:true},token)).status,200);
-  assert.equal((await request('PUT',`/habits/day-skip-0/day/${day}`,{skip:true},token)).status,200);
+  assert.equal((await request('POST','/habits',{id:'day-skip-completed',name:'Completed'},token)).status,201);
+  assert.equal((await request('POST','/proofs/skip',{habitId:'day-skip-completed',day},token)).status,200);
+  assert.equal((await request('PUT',`/habits/day-skip-completed/day/${day}`,{done:true},token)).status,200);
+  const first=await request('PUT',`/habits/day-skip-0/day/${day}`,{skip:true},token);
+  assert.equal(first.status,200);
+  const result=await first.json();
+  for(let i=0;i<6;i++) assert.equal(result.habits.find(h=>h.id===`day-skip-${i}`).history[day],'skip');
+  assert.equal(result.habits.find(h=>h.id==='day-skip-completed').history[day],true);
+  assert.equal((await request('PUT',`/habits/day-skip-1/day/${day}`,{skip:true},token)).status,200);
   const quota=await (await request('GET','/habits/skips/quota',undefined,token)).json();
-  assert.equal(quota.remaining,0); assert.equal(quota.used,5); assert.equal(quota.costBits,20);
-  assert.equal((await request('PUT',`/habits/day-skip-5/day/${day}`,{skip:true},token)).status,409);
+  assert.equal(quota.remaining,4); assert.equal(quota.used,1); assert.equal(quota.costBits,20);
+  const late=await request('POST','/habits',{id:'day-skip-late',name:'Later'},token);
+  assert.equal(late.status,201); assert.equal((await late.json()).history[day],'skip');
   assert.equal((await request('POST','/habits/skips/purchase',{requestId:randomUUID()},token)).status,409);
   assert.equal((await (await request('GET','/habits/skips/quota')).json()).remaining,5);
 });

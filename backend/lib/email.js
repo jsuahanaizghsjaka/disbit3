@@ -12,6 +12,7 @@
    ============================================================ */
 
 import dns from 'node:dns';
+import { randomUUID } from 'node:crypto';
 import { runtime } from './runtime.js';
 
 const resolver = new dns.promises.Resolver();
@@ -48,7 +49,25 @@ const PROVIDER = (process.env.MAIL_PROVIDER || 'resend').toLowerCase();
 const FROM = process.env.MAIL_FROM || 'disbit <onboarding@resend.dev>';
 
 export function mailConfigured() {
-  return !!(process.env.RESEND_API_KEY || process.env.POSTMARK_TOKEN || process.env.SENDGRID_API_KEY);
+  if (PROVIDER === 'rusender') {
+    return !!process.env.RUSENDER_API_TOKEN && /^\d+$/.test(process.env.RUSENDER_KEY_ID || '') &&
+      isEmailFormatValid(process.env.MAIL_FROM || '');
+  }
+  if (process.env.POSTMARK_TOKEN && PROVIDER !== 'sendgrid') return true;
+  if (process.env.SENDGRID_API_KEY && PROVIDER === 'sendgrid') return true;
+  return !!process.env.RESEND_API_KEY;
+}
+
+async function sendViaRusender(to, subject, html) {
+  const response = await fetch(`https://api.rusender.ru/api/v1/external-mails/send/${process.env.RUSENDER_KEY_ID}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.RUSENDER_API_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idempotencyKey: randomUUID(), mail: {
+      to: { email: to }, from: { email: process.env.MAIL_FROM, name: 'Disbit' }, subject, html
+    }}),
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) throw new Error(`RuSender: HTTP ${response.status}`);
 }
 
 async function sendViaResend(to, subject, html) {
@@ -99,7 +118,8 @@ export async function sendMail(to, subject, html) {
     console.log(`[mail:dev] → ${to} | ${subject}\n${html.replace(/<[^>]+>/g, ' ').trim()}`);
     return { sent: false, dev: true };
   }
-  if (process.env.POSTMARK_TOKEN && PROVIDER !== 'sendgrid') await sendViaPostmark(to, subject, html);
+  if (PROVIDER === 'rusender') await sendViaRusender(to, subject, html);
+  else if (process.env.POSTMARK_TOKEN && PROVIDER !== 'sendgrid') await sendViaPostmark(to, subject, html);
   else if (process.env.SENDGRID_API_KEY && PROVIDER === 'sendgrid') await sendViaSendgrid(to, subject, html);
   else await sendViaResend(to, subject, html);
   return { sent: true };

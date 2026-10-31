@@ -77,6 +77,39 @@ test('timezone change does not reuse or apply a pending read from the old zone',
   assert.deepEqual(seen, ['Europe/Moscow', 'Asia/Tokyo']);
 });
 
+test('forced refresh cancels an older read for that resource only', async () => {
+  const previousResponse = deferred(); let call = 0; let firstSignal;
+  const coordinator = createDisbitReadCoordinator({
+    fetchImpl: (url, options) => {
+      if (++call === 1) { firstSignal = options.signal; return previousResponse.promise; }
+      return Promise.resolve(jsonResponse({ version: 'new' }));
+    },
+    getOwner: () => 'account-a', getTimeZone: () => 'Europe/Moscow'
+  });
+  const old = coordinator.read('/friends');
+  await Promise.resolve();
+  coordinator.cancelResource('/friends');
+  assert.equal(firstSignal.aborted, true);
+  const fresh = coordinator.read('/friends');
+  assert.deepEqual((await fresh).data, { version: 'new' });
+  previousResponse.resolve(jsonResponse({ version: 'old' }));
+  assert.deepEqual(await old, { kind: 'stale' });
+});
+
+test('cancelled stale read cannot become a timeout if a transport ignores abort', async () => {
+  const response = deferred();
+  const coordinator = createDisbitReadCoordinator({
+    fetchImpl: () => response.promise,
+    getOwner: () => 'account-a', getTimeZone: () => 'Europe/Moscow', timeoutMs: 15
+  });
+  const old = coordinator.read('/friends');
+  await Promise.resolve();
+  coordinator.cancelResource('/friends');
+  await new Promise(resolve => setTimeout(resolve, 30));
+  response.resolve(jsonResponse({ version: 'old' }));
+  assert.deepEqual(await old, { kind: 'stale' });
+});
+
 test('hung GET times out, clears in-flight entry and permits a retry', async () => {
   let calls = 0;
   const coordinator = createDisbitReadCoordinator({

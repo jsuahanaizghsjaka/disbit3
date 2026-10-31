@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import { db, rowToHabit, habitToParams } from '../db/db.js';
 import { accountDay, proofSatisfied } from '../proof-policy.js';
-import { transaction, promiseSkipQuota, recordPromiseSkip, purchasePromiseSkip,
+import { transaction, promiseSkipQuota, recordFullDaySkip, purchasePromiseSkip,
   syncTrustedBitAward, trustedCompletionEligible, revokeHabitBitAwards } from '../lib/promise-skips.js';
 
 const router = Router();
@@ -37,6 +37,26 @@ function getHabit(id, userId) {
   return rowToHabit(row, completions);
 }
 
+// A full-day skip covers scheduled, unfinished promises without overwriting a
+// completed mark. The receipt is account-wide and is persisted separately.
+function applyFullDaySkip(userId, day) {
+  const weekday = (new Date(day + 'T12:00:00Z').getUTCDay() + 6) % 7;
+  const weekStart = new Date(Date.parse(day + 'T12:00:00Z') - weekday * 86400000).toISOString().slice(0,10);
+  const rows = db.prepare('SELECT * FROM habits WHERE user_id=? AND archived=0 AND created_day<=?').all(userId,day);
+  for (const row of rows) {
+    if (JSON.parse(row.archive_periods || '[]').some(p=>day>=p.from&&(!p.to||day<p.to))) continue;
+    const marks = db.prepare('SELECT * FROM completions WHERE habit_id=? AND day>=? AND day<=?').all(row.id,weekStart,day);
+    const isDone = mark => !!mark && !mark.skip && (mark.done || (row.goal_type==='count' && mark.count>=row.goal_target));
+    if (isDone(marks.find(m=>m.day===day))) continue;
+    const priorDone = marks.filter(m=>m.day<day && isDone(m)).length;
+    const scheduled = row.week_target > 0 ? priorDone < row.week_target : JSON.parse(row.schedule || '[]').includes(weekday);
+    if (!scheduled) continue;
+    db.prepare(`INSERT INTO completions (habit_id,day,skip) VALUES (?,?,1)
+      ON CONFLICT(habit_id,day) DO UPDATE SET skip=1,done=0,minimum=0`).run(row.id,day);
+    syncTrustedBitAward(db,userId,row.id,day,false);
+  }
+}
+
 // GET /api/habits — список обещаний пользователя с историей
 router.get('/', (req, res) => {
   const rows = db.prepare(
@@ -59,6 +79,7 @@ router.post('/', (req, res) => {
     return res.status(422).json({ error: 'Импорт отметок закрыт. Создай обещание без истории, отмечать можно только сегодня.' });
   }
   try {
+    transaction(db, () => {
     db.prepare(`
       INSERT OR IGNORE INTO habits
         (id, user_id, name, icon, color, schedule, week_target, buddy, pinned, goal_type, goal_target, goal_unit,
@@ -67,6 +88,11 @@ router.post('/', (req, res) => {
         (:id, :user_id, :name, :icon, :color, :schedule, :week_target, :buddy, :pinned, :goal_type, :goal_target, :goal_unit,
          :stake_mode, :stake_amount, :stake_recipient, :stake_apps, :stake_minutes, :created_day, :minimum_action)
     `).run({ ...p, user_id: uid(req) });
+    const today = accountDay(req);
+    if (db.prepare('SELECT 1 FROM promise_full_day_skips WHERE user_id=? AND day=?').get(uid(req),today)) {
+      applyFullDaySkip(uid(req),today);
+    }
+    });
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }
@@ -111,6 +137,7 @@ router.put('/:id', (req, res) => {
       return res.status(409).json({ error: 'Денежные условия приняты. Для изменения расписания, цели или штрафа нужен новый явный договор' });
     }
   }
+  transaction(db, () => {
   db.prepare(`
     UPDATE habits SET
       name = :name, icon = :icon, color = :color, schedule = :schedule, week_target = :week_target, buddy = :buddy, pinned = :pinned,
@@ -120,6 +147,11 @@ router.put('/:id', (req, res) => {
       created_day = :created_day, minimum_action = :minimum_action
     WHERE id = :id
   `).run(p);
+  const today = accountDay(req);
+  if (db.prepare('SELECT 1 FROM promise_full_day_skips WHERE user_id=? AND day=?').get(uid(req),today)) {
+    applyFullDaySkip(uid(req),today);
+  }
+  });
 
   res.json(getHabit(req.params.id, uid(req)));
 });
@@ -149,7 +181,11 @@ router.put('/:id/day/:day', (req, res) => {
   }
   try {
     const quota = transaction(db, () => {
-      if (skip) recordPromiseSkip(db,uid(req),req.params.id,req.params.day);
+      if (skip) {
+        recordFullDaySkip(db,uid(req),req.params.day);
+        applyFullDaySkip(uid(req),req.params.day);
+        return promiseSkipQuota(db,uid(req),req.params.day);
+      }
       db.prepare(`
         INSERT INTO completions (habit_id, day, count, done, skip, minimum) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done, skip = excluded.skip, minimum = excluded.minimum
@@ -158,7 +194,9 @@ router.put('/:id/day/:day', (req, res) => {
         trustedCompletionEligible(db,uid(req),req.params.id,req.params.day));
       return promiseSkipQuota(db,uid(req),req.params.day);
     });
-    res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count, quota });
+    const habits = skip ? db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY created_at').all(uid(req))
+      .map(row=>rowToHabit(row,db.prepare('SELECT * FROM completions WHERE habit_id=?').all(row.id))) : undefined;
+    res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count, quota, ...(skip ? {habits} : {}) });
   } catch (error) { res.status(409).json({ error: error.message }); }
 });
 
