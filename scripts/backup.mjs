@@ -81,7 +81,17 @@ export function createBackup({ database, proofs, destination, offline = false })
 export function restoreBackup(source, destination) {
   verifyBackup(source);
   const target = newDestination(destination, [source]);
-  fs.cpSync(source, target, { recursive: true, errorOnExist: true, force: false });
+  try {
+    for (const relative of files(source).filter(file => file !== 'manifest.json')) {
+      const output = path.join(target, relative);
+      fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
+      fs.copyFileSync(path.join(source, relative), output, fs.constants.COPYFILE_EXCL);
+    }
+    fs.copyFileSync(path.join(source, 'manifest.json'), path.join(target, 'manifest.json'), fs.constants.COPYFILE_EXCL);
+  } catch (error) {
+    fs.rmSync(target, { recursive: true, force: true });
+    throw error;
+  }
   return verifyBackup(target);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
