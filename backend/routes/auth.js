@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { Router } from 'express';
-import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { db } from '../db/db.js';
 import { isEmailFormatValid, domainAcceptsMail, sendMail, verifyCodeHtml, mailConfigured } from '../lib/email.js';
 
@@ -176,6 +176,50 @@ router.post('/login', (req, res) => {
 
   const token = createSession(user.id);
   res.json({ token, user: publicUser(user) });
+});
+
+// Kept behind a feature flag until mail delivery and the client flow are verified.
+router.post('/password-reset/request', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (process.env.PASSWORD_RESET_ENABLED !== '1' || !mailConfigured()) return res.status(503).json({ error: 'Восстановление пароля пока недоступно' });
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const reply = { ok: true, message: 'Если адрес подтверждён, инструкция будет отправлена на почту.' };
+  if (!isEmailFormatValid(email)) return res.json(reply);
+  const user = db.prepare('SELECT id, email FROM users WHERE email = ? AND email_verified = 1').get(email);
+  if (!user) return res.json(reply);
+  const now = Date.now();
+  const existing = db.prepare('SELECT sent_at FROM password_resets WHERE user_id = ?').get(user.id);
+  if (existing && now - existing.sent_at < RESEND_COOLDOWN_MS) return res.json(reply);
+  const token = randomBytes(32).toString('hex');
+  const digest = createHash('sha256').update(token).digest('hex');
+  db.prepare(`INSERT INTO password_resets(user_id,token_hash,expires_at,sent_at) VALUES(?,?,?,?)
+    ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,expires_at=excluded.expires_at,sent_at=excluded.sent_at`)
+    .run(user.id, digest, now + CODE_TTL_MS, now);
+  try {
+    await sendMail(user.email, 'Disbit — восстановление пароля', `<p>Код восстановления Disbit:</p><p>${token}</p><p>Код действует 15 минут. Если запросили не вы, проигнорируйте это письмо.</p>`);
+  } catch (e) { console.error('[mail] password reset:', e.message); }
+  return res.json(reply);
+});
+
+router.post('/password-reset/confirm', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (process.env.PASSWORD_RESET_ENABLED !== '1') return res.status(503).json({ error: 'Восстановление пароля пока недоступно' });
+  const token = String(req.body?.token || '');
+  const password = String(req.body?.password || '');
+  if (!/^[a-f0-9]{64}$/.test(token) || password.length < 6 || password.length > 1024) return res.status(400).json({ error: 'Неверный код или пароль' });
+  const digest = createHash('sha256').update(token).digest('hex');
+  const row = db.prepare('SELECT user_id FROM password_resets WHERE token_hash = ? AND expires_at > ?').get(digest, Date.now());
+  if (!row) return res.status(400).json({ error: 'Код недействителен или истёк' });
+  const { salt, hash } = hashPassword(password);
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const consumed = db.prepare('DELETE FROM password_resets WHERE user_id = ? AND token_hash = ? AND expires_at > ?').run(row.user_id, digest, Date.now());
+    if (!consumed.changes) { db.exec('ROLLBACK'); return res.status(400).json({ error: 'Код недействителен или истёк' }); }
+    db.prepare('UPDATE users SET pass_hash = ?, pass_salt = ? WHERE id = ?').run(hash, salt, row.user_id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.user_id);
+    db.exec('COMMIT');
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  return res.json({ ok: true });
 });
 
 /* GET /api/auth/me — кто я (по Bearer-токену) */

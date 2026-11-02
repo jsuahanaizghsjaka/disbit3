@@ -2,20 +2,29 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 const directory = mkdtempSync(path.join(tmpdir(), 'disbit-beta-'));
 process.env.DB_PATH = path.join(directory, 'test.db');
 process.env.PROOFS_DIR = path.join(directory, 'proofs');
 process.env.PORT ||= '3337';
 process.env.PAYMENTS_PROVIDER = 'manual'; // Never create a real payment in browser tests.
 process.env.ADMIN_KEY = 'fixture-only-proof-admin-key-123456';
+process.env.PASSWORD_RESET_ENABLED = '1';
 const { db } = await import('../backend/db/db.js');
 const today = new Date().toLocaleDateString('en-CA');
 const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('en-CA');
-for (const [id, login] of [[1, 'beta_tester'], [2, 'beta_friend'], [3, 'skip_buyer']]) {
+for (const [id, login] of [[1, 'beta_tester'], [2, 'beta_friend'], [3, 'skip_buyer'], [4, 'verify_test'], [5, 'verify_limit'], [6, 'verify_expired'], [7, 'reset_test'], [8, 'reset_expired']]) {
   db.prepare('INSERT INTO users (id, login, email, pass_hash, pass_salt, email_verified) VALUES (?, ?, ?, ?, ?, 1)')
     .run(id, login, `${login}@example.invalid`, 'no-login', 'no-login');
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
     .run(String(id).repeat(64), id, Date.now() + 3600000);
+}
+for (const [id, token, expires] of [[7, 'a'.repeat(64), Date.now() + 3600000], [8, 'b'.repeat(64), Date.now() - 1000]]) {
+  db.prepare('INSERT INTO password_resets (user_id,token_hash,expires_at,sent_at) VALUES (?,?,?,?)').run(id, createHash('sha256').update(token).digest('hex'), expires, Date.now());
+}
+db.prepare('UPDATE users SET email_verified = 0 WHERE id IN (4,5,6)').run();
+for (const [id, code, expires] of [[4, '123456', Date.now() + 3600000], [5, '654321', Date.now() + 3600000], [6, '112233', Date.now() - 1000]]) {
+  db.prepare('INSERT INTO email_codes (user_id,code,expires_at,attempts,sent_at) VALUES (?,?,?,0,?)').run(id, code, expires, Date.now());
 }
 db.prepare('INSERT INTO trusted_bits(user_id,balance) VALUES (3,60)').run();
 for (const [id, name, color, type, target, mode] of [
