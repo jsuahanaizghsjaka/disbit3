@@ -36,6 +36,31 @@ test('health identifies contract and release; readiness checks the database', as
   assert.equal((await request('POST','/wallet/webhook',{event:'payment.succeeded'})).status,503);
 });
 
+test('email verification is account-bound, expires, and limits guesses', async () => {
+  const token4 = '4'.repeat(64), token5 = '5'.repeat(64), token6 = '6'.repeat(64);
+  assert.equal((await request('POST', '/auth/verify', {code:'123456'}, '0'.repeat(64))).status, 401);
+  assert.equal((await request('POST', '/auth/verify', {code:'123456'}, token5)).status, 400);
+  assert.equal((await request('POST', '/auth/verify', {code:'112233'}, token6)).status, 400);
+  assert.equal((await request('POST', '/auth/verify', {code:'123456'}, token4)).status, 200);
+  assert.equal((await (await request('GET', '/auth/me', undefined, token4)).json()).user.emailVerified, true);
+  assert.equal((await request('POST', '/auth/verify', {code:'123456'}, token4)).status, 400);
+  for (let i = 0; i < 5; i++) assert.equal((await request('POST', '/auth/verify', {code:'000000'}, token5)).status, 400);
+  assert.equal((await request('POST', '/auth/verify', {code:'654321'}, token5)).status, 429);
+  assert.equal((await (await request('GET', '/auth/me', undefined, token5)).json()).user.emailVerified, false);
+});
+
+test('password recovery accepts only an unexpired single-use token and revokes old sessions', async () => {
+  const change = (token, password) => request('POST', '/auth/password-reset/confirm', {token, password});
+  assert.equal((await change('invalid', 'new-password')).status, 400);
+  assert.equal((await change('b'.repeat(64), 'new-password')).status, 400);
+  assert.equal((await change('a'.repeat(64), 'short')).status, 400);
+  assert.equal((await change('a'.repeat(64), 'new-password')).status, 200);
+  assert.equal((await request('GET', '/auth/me', undefined, '7'.repeat(64))).status, 401);
+  assert.equal((await request('GET', '/auth/me', undefined, '8'.repeat(64))).status, 200);
+  assert.equal((await change('a'.repeat(64), 'another-password')).status, 400);
+  assert.equal((await request('POST', '/auth/login', {id:'reset_test',password:'new-password'})).status, 200);
+});
+
 test('completed count survives API reload and explicit undo', async () => {
   const today = new Date().toLocaleDateString('en-CA');
   assert.equal((await request('POST','/proofs/skip',{habitId:'beta-count',day:today})).status,200);
@@ -212,11 +237,17 @@ test('a full-day skip covers scheduled promises once, survives retries and is is
   assert.equal((await request('POST','/habits',{id:'day-skip-completed',name:'Completed'},token)).status,201);
   assert.equal((await request('POST','/proofs/skip',{habitId:'day-skip-completed',day},token)).status,200);
   assert.equal((await request('PUT',`/habits/day-skip-completed/day/${day}`,{done:true},token)).status,200);
+  const weekday=(new Date(day+'T12:00:00Z').getUTCDay()+6)%7;
+  assert.equal((await request('POST','/habits',{id:'day-skip-off',name:'Off schedule',schedule:[(weekday+1)%7]},token)).status,201);
+  assert.equal((await request('POST','/habits',{id:'day-skip-archived',name:'Archived'},token)).status,201);
+  assert.equal((await request('PUT','/habits/day-skip-archived/archive',{archived:true,day},token)).status,200);
   const first=await request('PUT',`/habits/day-skip-0/day/${day}`,{skip:true},token);
   assert.equal(first.status,200);
   const result=await first.json();
   for(let i=0;i<6;i++) assert.equal(result.habits.find(h=>h.id===`day-skip-${i}`).history[day],'skip');
   assert.equal(result.habits.find(h=>h.id==='day-skip-completed').history[day],true);
+  assert.equal(result.habits.find(h=>h.id==='day-skip-off').history[day],undefined);
+  assert.equal(result.habits.find(h=>h.id==='day-skip-archived').history[day],undefined);
   assert.equal((await request('PUT',`/habits/day-skip-1/day/${day}`,{skip:true},token)).status,200);
   const quota=await (await request('GET','/habits/skips/quota',undefined,token)).json();
   assert.equal(quota.remaining,4); assert.equal(quota.used,1); assert.equal(quota.costBits,20);

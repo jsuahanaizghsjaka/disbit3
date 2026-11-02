@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS email_codes (
   sent_at    INTEGER NOT NULL DEFAULT 0        -- чтобы не спамить «отправить ещё раз»
 );
 
+-- Recovery tokens are hashed, short-lived and invalidated after use.
+CREATE TABLE IF NOT EXISTS password_resets (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL
+);
+
 -- Сессии (Bearer-токены). expires_at — мс с эпохи; окно скользящее:
 -- пока пользователь заходит, срок продлевается (см. routes/auth.js).
 CREATE TABLE IF NOT EXISTS sessions (
