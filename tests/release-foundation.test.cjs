@@ -91,6 +91,22 @@ test('mail configuration matches the provider actually selected', () => {
   assert.equal(check({RESEND_API_KEY:'test'}),'true');
   assert.equal(check({MAIL_PROVIDER:'rusender',RUSENDER_API_TOKEN:'test',RUSENDER_KEY_ID:'42',MAIL_FROM:'noreply@disbit.ru'}),'true');
   assert.equal(check({MAIL_PROVIDER:'rusender',RUSENDER_API_TOKEN:'test',RUSENDER_KEY_ID:'../bad',MAIL_FROM:'noreply@disbit.ru'}),'false');
+  assert.equal(check({MAIL_PROVIDER:'timeweb',TIMEWEB_SMTP_USER:'noreply@disbit.ru',TIMEWEB_SMTP_PASSWORD:'test',MAIL_FROM:'noreply@disbit.ru'}),'true');
+  assert.equal(check({MAIL_PROVIDER:'timeweb',TIMEWEB_SMTP_USER:'other@disbit.ru',TIMEWEB_SMTP_PASSWORD:'test',MAIL_FROM:'noreply@disbit.ru'}),'false');
+});
+
+test('Timeweb SMTP uses authenticated TLS and reports failures safely', () => {
+  const env={...process.env,MAIL_PROVIDER:'timeweb',TIMEWEB_SMTP_USER:'noreply@disbit.ru',TIMEWEB_SMTP_PASSWORD:'synthetic-secret',MAIL_FROM:'noreply@disbit.ru'};
+  const script=`
+    const nodemailer=(await import('./backend/node_modules/nodemailer/dist/esm/nodemailer.js')).default;
+    let config, message, fail=false;
+    nodemailer.createTransport=(options)=>{config=options;return {sendMail:async(m)=>{message=m;if(fail)throw Error('synthetic-secret');return {accepted:['user@example.org']}},close(){}}};
+    const {sendMail}=await import('./backend/lib/email.js');
+    if(!(await sendMail('user@example.org','test','<p>ok</p>')).sent || config.host!=='smtp.timeweb.ru' || config.port!==465 || !config.secure || message.to!=='user@example.org')throw Error('SMTP request mismatch');
+    fail=true;try{await sendMail('user@example.org','test','x');throw Error('expected failure')}catch(e){if(e.message!=='Timeweb SMTP delivery failed')throw e}
+  `;
+  const result=spawnSync(process.execPath,['--input-type=module','-e',script],{env,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
 });
 
 test('RuSender integration sends the expected request and handles provider errors', () => {

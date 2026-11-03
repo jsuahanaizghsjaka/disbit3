@@ -3253,6 +3253,9 @@ let authGateActive = false;
 const GATE_KEY = 'disbit_gate_v1';
 
 function openAuthSheet(mode) {
+  document.getElementById('reset-form').hidden = true;
+  document.getElementById('auth-tabs').hidden = false;
+  document.getElementById('auth-overlay').querySelector('.sheet-actions').hidden = false;
   authGateActive = false;
   document.getElementById('auth-cancel').hidden = false;
   document.getElementById('auth-local').hidden = true;
@@ -3287,6 +3290,57 @@ function setAuthMode(mode) {
   document.getElementById('auth-register-form').hidden = mode !== 'register';
   setSegActive('auth-tabs', 'auth', mode);
   document.querySelectorAll('#auth-tabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.auth===mode)));
+}
+let resetStep = 'request';
+function toggleReset(open) {
+  const overlay = document.getElementById('auth-overlay');
+  document.getElementById('reset-form').hidden = !open;
+  document.getElementById('auth-tabs').hidden = open;
+  overlay.querySelector('.sheet-actions').hidden = open;
+  document.getElementById('auth-login-form').hidden = open;
+  document.getElementById('auth-register-form').hidden = true;
+  document.getElementById('auth-title').textContent = open ? 'Восстановление пароля' : 'Вход';
+  document.getElementById('reset-message').hidden = true;
+  if (open) {
+    resetStep = 'request';
+    document.getElementById('reset-confirm-fields').hidden = true;
+    document.getElementById('reset-email-field').hidden = false;
+    document.getElementById('reset-submit').textContent = 'Отправить код';
+    document.getElementById('reset-email').focus();
+  } else {
+    for (const id of ['reset-token','reset-password','reset-password-repeat']) document.getElementById(id).value = '';
+    setAuthMode('login');
+    document.getElementById('li-id').focus();
+  }
+}
+async function submitReset() {
+  const button = document.getElementById('reset-submit');
+  const message = document.getElementById('reset-message');
+  if (button.disabled) return;
+  const email = document.getElementById('reset-email').value.trim();
+  const token = document.getElementById('reset-token').value.trim();
+  const password = document.getElementById('reset-password').value;
+  const repeat = document.getElementById('reset-password-repeat').value;
+  const show = text => { message.textContent = text; message.hidden = false; };
+  if (resetStep === 'request' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return show('Укажите корректную почту.');
+  if (resetStep === 'confirm' && (!/^[a-f0-9]{64}$/.test(token) || password.length < 6 || password !== repeat)) return show('Проверьте код и пароли. Пароль должен содержать не менее 6 символов.');
+  button.disabled = true;
+  try {
+    const result = await apiCallStrict('POST', resetStep === 'request' ? '/auth/password-reset/request' : '/auth/password-reset/confirm', resetStep === 'request' ? {email} : {token,password});
+    if (result.error) return show(result.error);
+    if (resetStep === 'request') {
+      resetStep = 'confirm';
+      document.getElementById('reset-email-field').hidden = true;
+      document.getElementById('reset-confirm-fields').hidden = false;
+      document.getElementById('reset-hint').textContent = 'Если почта подтверждена, код придёт в письме.';
+      button.textContent = 'Сохранить пароль';
+      show('Проверьте почту и папку «Спам».');
+      document.getElementById('reset-token').focus();
+    } else {
+      toggleReset(false);
+      toast('Пароль изменён. Войдите снова.');
+    }
+  } finally { button.disabled = false; }
 }
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
@@ -5382,6 +5436,9 @@ function init() {
 
   // аккаунт: вход/регистрация
   wireSeg('auth-tabs', btn => setAuthMode(btn.dataset.auth));
+  document.getElementById('reset-open').addEventListener('click', () => toggleReset(true));
+  document.getElementById('reset-back').addEventListener('click', () => toggleReset(false));
+  document.getElementById('reset-submit').addEventListener('click', submitReset);
   document.getElementById('auth-submit').addEventListener('click', submitAuth);
   document.getElementById('auth-cancel').addEventListener('click', () => closeSheet('auth-overlay'));
   document.querySelectorAll('.ff-eye').forEach(b =>

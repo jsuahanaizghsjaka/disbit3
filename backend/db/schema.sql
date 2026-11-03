@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS password_resets (
   expires_at INTEGER NOT NULL,
   sent_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS password_reset_limits (
+  bucket TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL
+);
 
 -- Сессии (Bearer-токены). expires_at — мс с эпохи; окно скользящее:
 -- пока пользователь заходит, срок продлевается (см. routes/auth.js).
