@@ -63,8 +63,10 @@ function buildProfileMotion() {
 
 function buildSettingsStack() {
   const card = document.getElementById('set-offday').closest('.card');
-  const original = [...card.children];
+  const password = card.querySelector('#profile-password');
+  const original = [...card.children].filter(node => node !== password);
   const home = document.createElement('div'); home.className = 'settings-stack-home';
+  if (password) home.append(password);
   const body = document.createElement('div'); body.className = 'settings-stack-page'; body.hidden = true;
   const back = document.createElement('button'); back.type = 'button'; back.className = 'row-btn stack-back';
   back.textContent = '← Все настройки';

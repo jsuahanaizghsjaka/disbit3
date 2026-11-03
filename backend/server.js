@@ -26,6 +26,8 @@ import walletRouter from './routes/wallet.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.disable('x-powered-by');
+// Caddy connects locally; never trust forwarding headers from public peers.
+app.set('trust proxy', 'loopback');
 
 app.use(cors());                    // чтобы фронтенд с другого порта мог обращаться
 app.use(express.json({ limit: '1mb' }));
