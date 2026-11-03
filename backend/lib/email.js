@@ -13,6 +13,7 @@
 
 import dns from 'node:dns';
 import { randomUUID } from 'node:crypto';
+import nodemailer from 'nodemailer';
 import { runtime } from './runtime.js';
 
 const resolver = new dns.promises.Resolver();
@@ -49,6 +50,10 @@ const PROVIDER = (process.env.MAIL_PROVIDER || 'resend').toLowerCase();
 const FROM = process.env.MAIL_FROM || 'disbit <onboarding@resend.dev>';
 
 export function mailConfigured() {
+  if (PROVIDER === 'timeweb') {
+    return isEmailFormatValid(process.env.MAIL_FROM || '') &&
+      process.env.TIMEWEB_SMTP_USER === process.env.MAIL_FROM && !!process.env.TIMEWEB_SMTP_PASSWORD;
+  }
   if (PROVIDER === 'rusender') {
     return !!process.env.RUSENDER_API_TOKEN && /^\d+$/.test(process.env.RUSENDER_KEY_ID || '') &&
       isEmailFormatValid(process.env.MAIL_FROM || '');
@@ -118,7 +123,19 @@ export async function sendMail(to, subject, html) {
     console.log(`[mail:dev] → ${to} | ${subject}\n${html.replace(/<[^>]+>/g, ' ').trim()}`);
     return { sent: false, dev: true };
   }
-  if (PROVIDER === 'rusender') await sendViaRusender(to, subject, html);
+  if (PROVIDER === 'timeweb') {
+    const transport = nodemailer.createTransport({
+      host: 'smtp.timeweb.ru', port: 465, secure: true,
+      auth: { user: process.env.TIMEWEB_SMTP_USER, pass: process.env.TIMEWEB_SMTP_PASSWORD },
+      connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 20000
+    });
+    try {
+      const result = await transport.sendMail({ from: { name: 'Disbit', address: process.env.MAIL_FROM }, to, subject, html });
+      if (!result.accepted?.length) throw new Error('Timeweb SMTP did not accept recipient');
+    } catch { throw new Error('Timeweb SMTP delivery failed'); }
+    finally { transport.close(); }
+  }
+  else if (PROVIDER === 'rusender') await sendViaRusender(to, subject, html);
   else if (process.env.POSTMARK_TOKEN && PROVIDER !== 'sendgrid') await sendViaPostmark(to, subject, html);
   else if (process.env.SENDGRID_API_KEY && PROVIDER === 'sendgrid') await sendViaSendgrid(to, subject, html);
   else await sendViaResend(to, subject, html);

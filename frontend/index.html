@@ -1304,6 +1304,23 @@
           <label class="ff-label" for="li-pass">Пароль</label>
           <button type="button" class="ff-eye" data-eye="li-pass" aria-label="Показать пароль">👁</button>
         </div>
+        <button type="button" class="row-btn" id="reset-open">Забыли пароль?</button>
+      </div>
+
+      <div id="reset-form" hidden>
+        <p class="hint" id="reset-hint">Укажите подтверждённую почту аккаунта.</p>
+        <div class="ff" id="reset-email-field">
+          <input class="ff-input" id="reset-email" type="email" placeholder=" " autocomplete="email" />
+          <label class="ff-label" for="reset-email">Почта</label>
+        </div>
+        <div id="reset-confirm-fields" hidden>
+          <div class="ff"><input class="ff-input" id="reset-token" type="text" placeholder=" " autocomplete="one-time-code" autocapitalize="none" spellcheck="false" /><label class="ff-label" for="reset-token">Код из письма</label></div>
+          <div class="ff"><input class="ff-input" id="reset-password" type="password" placeholder=" " autocomplete="new-password" /><label class="ff-label" for="reset-password">Новый пароль</label></div>
+          <div class="ff"><input class="ff-input" id="reset-password-repeat" type="password" placeholder=" " autocomplete="new-password" /><label class="ff-label" for="reset-password-repeat">Повторите пароль</label></div>
+        </div>
+        <p class="auth-error" id="reset-message" role="status" aria-live="polite" hidden></p>
+        <button type="button" class="btn-primary" id="reset-submit">Отправить код</button>
+        <button type="button" class="btn-ghost" id="reset-back">Вернуться ко входу</button>
       </div>
 
       <div id="auth-register-form" hidden>
