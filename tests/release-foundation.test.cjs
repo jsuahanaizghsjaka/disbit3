@@ -6,6 +6,15 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { spawn } = require('node:child_process');
 
+test('backup CLI executes through a release directory symlink', () => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'disbit-backup-cli-'));
+  const link=path.join(dir,'current');
+  fs.symlinkSync(path.resolve(__dirname,'..'),link,process.platform==='win32'?'junction':'dir');
+  const result=spawnSync(process.execPath,[path.join(link,'scripts','backup.mjs'),'verify',path.join(dir,'missing')],{encoding:'utf8'});
+  assert.equal(result.status,1,'CLI must run and reject a missing snapshot, not silently exit 0');
+  assert(result.stderr.length>0);
+});
+
 test('hosted staging starts isolated, rejects topup and fake webhook, preserves data on restart', async () => {
   const { DatabaseSync } = require('node:sqlite');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(),'disbit-staging-'));
