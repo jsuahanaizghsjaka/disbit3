@@ -94,7 +94,7 @@ export function restoreBackup(source, destination) {
   }
   return verifyBackup(target);
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   const [command, ...args] = process.argv.slice(2);
   try {
     let result;

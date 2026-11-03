@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, renameSync, statfsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -62,7 +62,7 @@ export async function runMonitor({stateDir = '/var/lib/disbit-monitor', selfTest
   console.log(JSON.stringify({ok:issues.length===0,issues,notificationSent:notify,disk}));
   return state;
 }
-if(process.argv[1] && import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href) {
+if(process.argv[1] && import.meta.url===pathToFileURL(realpathSync(process.argv[1])).href) {
   runMonitor({selfTest:process.argv.includes('--self-test')}).catch(()=>{
     console.error('[monitor] check or notification failed; inspect configuration and service status');process.exitCode=1;
   });
