@@ -1,0 +1,19 @@
+[Unit]
+Description=Disbit availability, disk, services and mail monitor
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/disbit/current
+EnvironmentFile=/etc/disbit/production.env
+EnvironmentFile=/etc/disbit/timeweb-smtp.env
+EnvironmentFile=/etc/disbit/monitor.env
+ExecStart=/usr/bin/node /srv/disbit/current/scripts/monitor.mjs
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=disbit-monitor
+UMask=0077
+TimeoutStartSec=90

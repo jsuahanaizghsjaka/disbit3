@@ -50,7 +50,7 @@ test('email verification is account-bound, expires, and limits guesses', async (
 });
 
 test('password recovery accepts only an unexpired single-use token and revokes old sessions', async () => {
-  const change = (token, password) => request('POST', '/auth/password-reset/confirm', {token, password});
+  const change = (token, password) => request('POST', '/auth/password-reset/confirm', {token, password, email:'reset_test@example.invalid'}, '');
   assert.equal((await change('invalid', 'new-password')).status, 400);
   assert.equal((await change('b'.repeat(64), 'new-password')).status, 400);
   assert.equal((await change('a'.repeat(64), 'short')).status, 400);

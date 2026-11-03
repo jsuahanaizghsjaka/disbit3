@@ -6,6 +6,7 @@
 
 import { Router } from 'express';
 import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { db } from '../db/db.js';
 import { isEmailFormatValid, domainAcceptsMail, sendMail, verifyCodeHtml, mailConfigured } from '../lib/email.js';
 
@@ -192,38 +193,55 @@ function recoveryLimit(bucket, limit, interval) {
   return true;
 }
 router.post('/password-reset/request', async (req, res) => {
+  const started = Date.now();
   res.set('Cache-Control', 'no-store');
   if (process.env.PASSWORD_RESET_ENABLED !== '1' || !mailConfigured()) return res.status(503).json({ error: 'Восстановление пароля пока недоступно' });
   const email = String(req.body?.email || '').trim().toLowerCase();
   const reply = { ok: true, message: 'Если адрес подтверждён, инструкция будет отправлена на почту.' };
+  // Account existence, cooldown and SMTP latency must not affect the response.
+  const respond = async () => {
+    await delay(Math.max(0, 250 + randomInt(50) - (Date.now() - started)));
+    return res.json(reply);
+  };
+  const ipBucket = createHash('sha256').update(req.ip || '').digest('hex');
   const addressBucket = createHash('sha256').update(email.slice(0, 254)).digest('hex');
-  if (!recoveryLimit('request:global', 100, 15 * 60 * 1000) || !recoveryLimit('request:' + addressBucket, 3, 60 * 60 * 1000)) return res.json(reply);
-  if (!isEmailFormatValid(email)) return res.json(reply);
+  if (!recoveryLimit('request:ip:' + ipBucket, 20, 15 * 60 * 1000) || !recoveryLimit('request:global', 100, 15 * 60 * 1000)) return respond();
+  if (!isEmailFormatValid(email)) return respond();
+  if (!recoveryLimit('request:' + addressBucket, 3, 60 * 60 * 1000)) return respond();
   const user = db.prepare('SELECT id, email FROM users WHERE email = ? AND email_verified = 1').get(email);
-  if (!user) return res.json(reply);
+  if (!user) return respond();
   const now = Date.now();
   const existing = db.prepare('SELECT sent_at FROM password_resets WHERE user_id = ?').get(user.id);
-  if (existing && now - existing.sent_at < RESEND_COOLDOWN_MS) return res.json(reply);
+  if (existing && now - existing.sent_at < RESEND_COOLDOWN_MS) return respond();
   const token = randomBytes(32).toString('hex');
   const digest = createHash('sha256').update(token).digest('hex');
   db.prepare(`INSERT INTO password_resets(user_id,token_hash,expires_at,sent_at) VALUES(?,?,?,?)
     ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,expires_at=excluded.expires_at,sent_at=excluded.sent_at`)
     .run(user.id, digest, now + CODE_TTL_MS, now);
   sendMail(user.email, 'Disbit — восстановление пароля', `<p>Код восстановления Disbit:</p><p>${token}</p><p>Код действует 15 минут. Если запросили не вы, проигнорируйте это письмо.</p>`)
-    .catch(() => console.error('[mail] password reset delivery failed'));
-  return res.json(reply);
+    .then(result => { if (!result.sent) throw new Error('not sent'); })
+    .catch(() => {
+      // Do not invalidate a newer request if an older delivery fails late.
+      db.prepare('DELETE FROM password_resets WHERE user_id = ? AND token_hash = ?').run(user.id, digest);
+      console.error('[mail] password reset delivery failed');
+    });
+  return respond();
 });
 
 router.post('/password-reset/confirm', (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (process.env.PASSWORD_RESET_ENABLED !== '1') return res.status(503).json({ error: 'Восстановление пароля пока недоступно' });
-  if (!recoveryLimit('confirm:global', 300, 15 * 60 * 1000)) return res.status(429).json({ error: 'Слишком много попыток. Попробуйте позже.' });
+  const ipBucket = createHash('sha256').update(req.ip || '').digest('hex');
+  if (!recoveryLimit('confirm:ip:' + ipBucket, 30, 15 * 60 * 1000) || !recoveryLimit('confirm:global', 300, 15 * 60 * 1000)) return res.status(429).json({ error: 'Слишком много попыток. Попробуйте через 15 минут.' });
   const token = String(req.body?.token || '');
+  const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
-  if (!/^[a-f0-9]{64}$/.test(token) || password.length < 6 || password.length > 1024) return res.status(400).json({ error: 'Неверный код или пароль' });
+  if (!isEmailFormatValid(email) || !/^[a-f0-9]{64}$/.test(token) || password.length < 6 || password.length > 1024) return res.status(400).json({ error: 'Проверьте почту, код и пароль (от 6 до 1024 символов).' });
   const digest = createHash('sha256').update(token).digest('hex');
-  const row = db.prepare('SELECT user_id FROM password_resets WHERE token_hash = ? AND expires_at > ?').get(digest, Date.now());
+  const row = db.prepare(`SELECT r.user_id FROM password_resets r JOIN users u ON u.id = r.user_id
+    WHERE r.token_hash = ? AND r.expires_at > ? AND u.email = ? AND u.email_verified = 1`).get(digest, Date.now(), email);
   if (!row) return res.status(400).json({ error: 'Код недействителен или истёк' });
+  if (req.userId && req.userId !== row.user_id) return res.status(400).json({ error: 'Код недействителен или истёк' });
   const { salt, hash } = hashPassword(password);
   db.exec('BEGIN IMMEDIATE');
   try {

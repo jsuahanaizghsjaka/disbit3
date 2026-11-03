@@ -3292,7 +3292,19 @@ function setAuthMode(mode) {
   document.querySelectorAll('#auth-tabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.auth===mode)));
 }
 let resetStep = 'request';
+let resetBusy = false;
+let resetResendAt = 0;
+let resetTimer = null;
+function updateResetResend() {
+  const button = document.getElementById('reset-resend');
+  const seconds = Math.max(0, Math.ceil((resetResendAt - Date.now()) / 1000));
+  button.hidden = resetStep !== 'confirm';
+  button.disabled = resetBusy || seconds > 0;
+  button.textContent = seconds ? `Повторить через ${seconds} с` : 'Отправить код повторно';
+}
 function toggleReset(open) {
+  if (resetBusy) return;
+  clearInterval(resetTimer);
   const overlay = document.getElementById('auth-overlay');
   document.getElementById('reset-form').hidden = !open;
   document.getElementById('auth-tabs').hidden = open;
@@ -3303,6 +3315,14 @@ function toggleReset(open) {
   document.getElementById('reset-message').hidden = true;
   if (open) {
     resetStep = 'request';
+    for (const id of ['reset-token','reset-password','reset-password-repeat']) document.getElementById(id).value = '';
+    document.getElementById('reset-email').readOnly = !!authUser;
+    document.getElementById('reset-email').value = authUser?.email || '';
+    document.getElementById('reset-hint').textContent = authUser
+      ? 'После смены пароля потребуется вход на всех устройствах. Перед сохранением проверим синхронизацию; локальные данные и черновики сохранятся.'
+      : 'Укажите подтверждённую почту аккаунта. После смены пароля потребуется вход на всех устройствах.';
+    document.getElementById('reset-back').textContent = authUser ? 'Вернуться в профиль' : 'Вернуться ко входу';
+    document.getElementById('reset-resend').hidden = true;
     document.getElementById('reset-confirm-fields').hidden = true;
     document.getElementById('reset-email-field').hidden = false;
     document.getElementById('reset-submit').textContent = 'Отправить код';
@@ -3313,34 +3333,73 @@ function toggleReset(open) {
     document.getElementById('li-id').focus();
   }
 }
-async function submitReset() {
+async function submitReset(resend = false) {
   const button = document.getElementById('reset-submit');
   const message = document.getElementById('reset-message');
-  if (button.disabled) return;
-  const email = document.getElementById('reset-email').value.trim();
-  const token = document.getElementById('reset-token').value.trim();
+  if (resetBusy || (resend && Date.now() < resetResendAt)) return;
+  const request = resend || resetStep === 'request';
+  const email = document.getElementById('reset-email').value.trim().toLowerCase();
+  const token = document.getElementById('reset-token').value.trim().toLowerCase();
   const password = document.getElementById('reset-password').value;
   const repeat = document.getElementById('reset-password-repeat').value;
-  const show = text => { message.textContent = text; message.hidden = false; };
-  if (resetStep === 'request' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return show('Укажите корректную почту.');
-  if (resetStep === 'confirm' && (!/^[a-f0-9]{64}$/.test(token) || password.length < 6 || password !== repeat)) return show('Проверьте код и пароли. Пароль должен содержать не менее 6 символов.');
+  const show = (text, error = true) => {
+    message.textContent = text; message.hidden = false;
+    message.classList.toggle('auth-error', error);
+    message.classList.toggle('hint', !error);
+  };
+  const invalid = (id, text) => { show(text); document.getElementById(id).focus(); };
+  if (request && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return invalid('reset-email', 'Укажите корректную почту.');
+  if (!request && !/^[a-f0-9]{64}$/.test(token)) return invalid('reset-token', 'Вставьте полный код из письма: 64 символа.');
+  if (!request && (password.length < 6 || password.length > 1024)) return invalid('reset-password', 'Пароль должен содержать от 6 до 1024 символов.');
+  if (!request && password !== repeat) return invalid('reset-password-repeat', 'Пароли не совпадают. Повторите новый пароль.');
+  resetBusy = true;
   button.disabled = true;
+  button.textContent = request ? 'Отправляем…' : 'Сохраняем…';
+  document.getElementById('reset-form').setAttribute('aria-busy', 'true');
+  document.getElementById('reset-back').disabled = true;
+  document.querySelectorAll('#reset-form input').forEach(input => { input.disabled = true; });
+  updateResetResend();
+  const owner = authToken;
   try {
-    const result = await apiCallStrict('POST', resetStep === 'request' ? '/auth/password-reset/request' : '/auth/password-reset/confirm', resetStep === 'request' ? {email} : {token,password});
+    if (!request && owner) {
+      clearTimeout(statePushTimer);
+      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+      if (!saved?.ok) return show('Не удалось синхронизировать данные. Пароль не изменён. Проверьте связь и повторите сохранение.');
+    }
+    if (owner !== authToken) return;
+    const result = await apiCallStrict('POST', request ? '/auth/password-reset/request' : '/auth/password-reset/confirm', request ? {email} : {email,token,password});
+    if (owner !== authToken) return;
     if (result.error) return show(result.error);
-    if (resetStep === 'request') {
+    if (request) {
       resetStep = 'confirm';
+      resetResendAt = Date.now() + 60000;
+      clearInterval(resetTimer);
+      resetTimer = setInterval(updateResetResend, 1000);
       document.getElementById('reset-email-field').hidden = true;
       document.getElementById('reset-confirm-fields').hidden = false;
-      document.getElementById('reset-hint').textContent = 'Если почта подтверждена, код придёт в письме.';
+      document.getElementById('reset-hint').textContent = `Если ${email} — подтверждённая почта аккаунта, код придёт в письме. Код действует 15 минут. После смены пароля войдите заново на всех устройствах.`;
       button.textContent = 'Сохранить пароль';
-      show('Проверьте почту и папку «Спам».');
-      document.getElementById('reset-token').focus();
+      show('Проверьте входящие и «Спам». Если письма нет, повторите отправку через минуту (не более 3 запросов в час).', false);
     } else {
-      toggleReset(false);
-      toast('Пароль изменён. Войдите снова.');
+      clearInterval(resetTimer);
+      clearTimeout(statePushTimer);
+      // Keep owner-scoped local data and drafts. A different account is still
+      // isolated by claimDeviceFor; never run logout's destructive cleanup here.
+      setAuth(null, null);
+      sessionStorage.setItem('disbit-password-reset-complete', email);
+      location.reload();
     }
-  } finally { button.disabled = false; }
+  } catch { show('Не удалось получить ответ. Проверьте связь. Если пароль уже изменён, попробуйте войти с новым.'); }
+  finally {
+    resetBusy = false;
+    button.disabled = false;
+    button.textContent = resetStep === 'request' ? 'Отправить код' : 'Сохранить пароль';
+    document.getElementById('reset-form').setAttribute('aria-busy', 'false');
+    document.getElementById('reset-back').disabled = false;
+    document.querySelectorAll('#reset-form input').forEach(input => { input.disabled = false; });
+    updateResetResend();
+    if (request && resetStep === 'confirm') document.getElementById('reset-token').focus();
+  }
 }
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
@@ -3950,7 +4009,12 @@ function openSheet(id) {
   });
 }
 function closeSheet(id) {
+  if (id === 'auth-overlay' && resetBusy) return;
   if (id === 'auth-overlay' && authGateActive) return;   // гейт не закрывается
+  if (id === 'auth-overlay' && !document.getElementById('reset-form').hidden) {
+    if (document.getElementById('reset-password').value && !confirm('Выйти из формы? Введённый новый пароль не будет сохранён.')) return;
+    toggleReset(false);
+  }
   if (id === 'add-overlay' && habitFormSaving) return;
   if (id === 'add-overlay') rememberHabitDraft();
   document.getElementById(id).inert = true;
@@ -5437,8 +5501,23 @@ function init() {
   // аккаунт: вход/регистрация
   wireSeg('auth-tabs', btn => setAuthMode(btn.dataset.auth));
   document.getElementById('reset-open').addEventListener('click', () => toggleReset(true));
-  document.getElementById('reset-back').addEventListener('click', () => toggleReset(false));
-  document.getElementById('reset-submit').addEventListener('click', submitReset);
+  document.getElementById('profile-password').addEventListener('click', () => {
+    if (!authUser) { toast('Сначала войдите в аккаунт'); return; }
+    if (!authUser.emailVerified) { toast('Сначала подтвердите почту аккаунта'); return; }
+    openAuthSheet('login');
+    toggleReset(true);
+    document.getElementById('reset-email').value = authUser.email || '';
+  });
+  document.getElementById('reset-back').addEventListener('click', () => {
+    if (resetBusy) return;
+    if (document.getElementById('reset-password').value && !confirm('Выйти из формы? Введённый новый пароль не будет сохранён.')) return;
+    toggleReset(false);
+    if (authUser) closeSheet('auth-overlay');
+  });
+  document.getElementById('reset-resend').addEventListener('click', () => submitReset(true));
+  document.getElementById('reset-form').addEventListener('submit', e => {
+    e.preventDefault(); submitReset();
+  });
   document.getElementById('auth-submit').addEventListener('click', submitAuth);
   document.getElementById('auth-cancel').addEventListener('click', () => closeSheet('auth-overlay'));
   document.querySelectorAll('.ff-eye').forEach(b =>
@@ -5613,7 +5692,16 @@ function init() {
   const needGate = !authToken && (API || !localStorage.getItem(GATE_KEY));
   // онбординг — 3 экрана в самый первый запуск, ДО гейта. Дальше идёт обычный поток.
   const afterOnboard = () => {
-    if (needGate) openAuthGate();
+    if (needGate) {
+      openAuthGate();
+      const resetEmail = sessionStorage.getItem('disbit-password-reset-complete');
+      if (resetEmail) {
+        sessionStorage.removeItem('disbit-password-reset-complete');
+        setAuthMode('login');
+        document.getElementById('li-id').value = resetEmail;
+        document.getElementById('auth-note').textContent = 'Пароль изменён. Войдите с новым паролем. Локальные данные сохранены на этом устройстве.';
+      }
+    }
     else if (fresh.length) showSettleModal(fresh);
   };
   // «Начало» — интро-воронка при первом входе. Экран плюсов внутри заменяет

@@ -7,8 +7,8 @@
       Именно это отсекает «@gmail.fdkjfsk»: регуляркой такое не поймать.
 
    Отправка — через транзакционный сервис по HTTP, без SDK.
-   По умолчанию Resend (MAIL_PROVIDER=resend). Нет ключа — код печатается
-   в лог сервера, чтобы можно было тестировать до подключения сервиса.
+   По умолчанию Resend (MAIL_PROVIDER=resend). Содержимое писем и коды
+   никогда не печатаются в журнал, включая локальную разработку.
    ============================================================ */
 
 import dns from 'node:dns';
@@ -119,8 +119,7 @@ async function sendViaSendgrid(to, subject, html) {
 export async function sendMail(to, subject, html) {
   if (!mailConfigured()) {
     if (runtime.hosted) throw new Error('Mail provider is not configured');
-    // dev-режим: без ключа письмо не уходит, но код видно в логах Railway
-    console.log(`[mail:dev] → ${to} | ${subject}\n${html.replace(/<[^>]+>/g, ' ').trim()}`);
+    console.info('[mail] delivery disabled: no provider configured');
     return { sent: false, dev: true };
   }
   if (PROVIDER === 'timeweb') {
