@@ -3212,6 +3212,7 @@ function saveIdea() {
 /* темы */
 /* ---------- АККАУНТ: UI ---------- */
 function renderAccount() {
+  updateGoogleControls();
   const box = document.getElementById('acc-box');
   if (!box) return;
   if (!API) {
@@ -3250,6 +3251,8 @@ function renderAccount() {
 }
 
 let authGateActive = false;
+let authEmailOpen = false;
+let authReturnHash = '#today';
 const GATE_KEY = 'disbit_gate_v1';
 
 function openAuthSheet(mode) {
@@ -3262,7 +3265,7 @@ function openAuthSheet(mode) {
   setAuthMode(mode);
   document.getElementById('auth-error').hidden = true;
   openSheet('auth-overlay');
-  document.getElementById(mode === 'login' ? 'li-id' : 'rg-login').focus();
+  document.getElementById('auth-title').focus({preventScroll:true});
 }
 
 // обязательный гейт при входе в приложение
@@ -3273,7 +3276,8 @@ function openAuthGate() {
   document.getElementById('auth-note').textContent = API
     ? 'Для работы с disbit нужен аккаунт: обещания хранятся на сервере и не потеряются.'
     : 'Сервер недоступен — можно продолжить локально, данные останутся на этом устройстве.';
-  setAuthMode('register');
+  const requested = location.hash.slice(1);
+  setAuthMode(requested === 'login' ? 'login' : 'register', requested === 'register-email');
   document.getElementById('auth-error').hidden = true;
   openSheet('auth-overlay');
 }
@@ -3281,15 +3285,128 @@ function passGate() {
   authGateActive = false;
   localStorage.setItem(GATE_KEY, '1');
 }
-function setAuthMode(mode) {
-  if (document.getElementById('auth-submit').disabled) return;
+function setAuthMode(mode, email = false, updateURL = true) {
+  if (document.getElementById('auth-submit').disabled || googleBusy || resetBusy) return;
   authMode = mode;
-  document.getElementById('auth-title').textContent = mode === 'login' ? 'Вход' : 'Регистрация';
+  authEmailOpen = mode === 'register' && email;
+  const overlay = document.getElementById('auth-overlay');
+  const view = mode === 'login' ? 'login' : email ? 'register-email' : 'register';
+  overlay.dataset.view = view;
+  document.getElementById('reset-form').hidden = true;
+  document.getElementById('auth-title').textContent = mode === 'login' ? 'С возвращением' : email ? 'Создать аккаунт' : 'Начни свой путь';
+  document.getElementById('auth-eyebrow').textContent = mode === 'login' ? 'Вход' : 'Регистрация';
+  document.getElementById('auth-subtitle').textContent = mode === 'login' ? 'Твои обещания ждут тебя.' : email ? 'Твой путь останется с тобой на любом устройстве.' : 'Обещай себе. Действуй. Двигайся вперёд.';
+  document.getElementById('auth-subtitle').hidden = false;
   document.getElementById('auth-submit').textContent = mode === 'login' ? 'Войти' : 'Создать аккаунт';
   document.getElementById('auth-login-form').hidden = mode !== 'login';
-  document.getElementById('auth-register-form').hidden = mode !== 'register';
-  setSegActive('auth-tabs', 'auth', mode);
-  document.querySelectorAll('#auth-tabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.auth===mode)));
+  document.getElementById('auth-register-form').hidden = !authEmailOpen;
+  overlay.querySelector('.sheet-actions').hidden = view === 'register';
+  document.getElementById('auth-tabs').hidden = false;
+  document.getElementById('auth-methods-back').hidden = !authEmailOpen;
+  document.getElementById('auth-switch-label').textContent = mode === 'login' ? 'Ещё нет аккаунта?' : 'Уже есть аккаунт?';
+  const switchLink = document.getElementById('auth-switch-link');
+  switchLink.href = mode === 'login' ? '#register' : '#login';
+  switchLink.textContent = mode === 'login' ? 'Зарегистрироваться' : 'Войти';
+  document.getElementById('auth-error').hidden = true;
+  document.getElementById('auth-note').hidden = true;
+  if (!document.getElementById('auth-traveler').childElementCount && typeof pathTravelerArtwork === 'function') {
+    document.getElementById('auth-traveler').innerHTML = `<svg viewBox="0 0 220 300" aria-hidden="true">${pathTravelerArtwork('cap')}</svg>`;
+  }
+  if (updateURL && location.hash !== '#' + view) {
+    if (!['#login','#register','#register-email'].includes(location.hash)) {
+      authReturnHash = location.hash || '#today';
+      history.replaceState(null, '', '#' + view);
+    } else history.pushState(null, '', '#' + view);
+  }
+  updateGoogleControls();
+}
+let googleAvailable = false;
+let googleBusy = false;
+function updateGoogleControls() {
+  const login = document.getElementById('google-login');
+  const link = document.getElementById('profile-google');
+  if (login) login.hidden = !!authUser || authEmailOpen || !document.getElementById('reset-form').hidden;
+  const button = document.getElementById('google-login-button');
+  if (button) button.disabled = !googleAvailable || googleBusy;
+  document.getElementById('google-availability').hidden = googleAvailable;
+  document.getElementById('auth-email-button').hidden = authMode === 'login';
+  document.getElementById('auth-divider').hidden = authMode !== 'login';
+  if (link) link.hidden = !googleAvailable || !authUser;
+}
+async function googleRequest(route, body) {
+  const response = await fetch(API + '/auth/oauth/' + route, {
+    method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-Disbit-OAuth': '1', ...(authToken ? { Authorization: 'Bearer ' + authToken } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000)
+  });
+  const result = await response.json();
+  if (!response.ok) throw Error(result.error || 'Не удалось завершить вход. Попробуйте ещё раз.');
+  return result;
+}
+async function loadGoogleAvailability() {
+  // Embedded WebViews need a separate native auth flow; never open Google here.
+  if (!API || isNativeApp || !sameOrigin) return;
+  try { googleAvailable = (await googleRequest('providers')).google === true; }
+  catch { googleAvailable = false; }
+  updateGoogleControls();
+}
+async function startGoogleSignIn(mode) {
+  if (googleBusy || !googleAvailable) return;
+  const link = mode === 'link';
+  if (!link && authToken) return;
+  const button = document.getElementById(link ? 'google-link-submit' : 'google-login-button');
+  const error = document.getElementById(link ? 'google-link-error' : 'auth-error');
+  const password = document.getElementById('google-link-password');
+  error.hidden = true;
+  const buttonLabel = link ? button : document.getElementById('google-login-label');
+  googleBusy = true; button.disabled = true; buttonLabel.textContent = 'Открываем Google…'; button.setAttribute('aria-busy','true');
+  const owner = authToken;
+  try {
+    if (link) {
+      clearTimeout(statePushTimer);
+      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+      if (!saved?.ok) throw Error('Не удалось сохранить данные. Проверьте связь и повторите привязку.');
+    }
+    if (owner !== authToken) return;
+    const result = await googleRequest('google/start', { mode, ...(link ? { password: password.value } : {}) });
+    if (owner !== authToken) return;
+    const destination = new URL(result.url);
+    if (destination.origin !== 'https://accounts.google.com' || destination.pathname !== '/o/oauth2/v2/auth') throw Error('Некорректный адрес входа. Попробуйте позже.');
+    password.value = '';
+    location.assign(destination.href);
+  } catch (err) { error.textContent = err.message || 'Нет связи. Попробуйте ещё раз.'; error.hidden = false; error.focus(); }
+  finally {
+    googleBusy = false; button.disabled = false; buttonLabel.textContent = link ? 'Выбрать Google' : 'Продолжить с Google'; button.setAttribute('aria-busy','false');
+  }
+}
+async function finishGoogleSignIn() {
+  const address = new URL(location.href);
+  address.searchParams.delete('oauth');
+  history.replaceState(null, '', address.pathname + address.search + address.hash);
+  try {
+    const result = await googleRequest('google/result', {});
+    if (result.result === 'login') {
+      // A newer account opened in another tab must not be overwritten.
+      if (authToken) throw Error('Вы уже вошли в аккаунт. Выйдите из него перед сменой пользователя.');
+      setAuth(result.token, result.user);
+      if (claimDeviceFor(result.user)) return;
+      passGate(); closeSheet('auth-overlay'); renderAccount(); await apiBootstrap();
+      toast('Вход через Google выполнен'); return;
+    }
+    if (result.result === 'linked') { switchScreen('profile'); toast('Google привязан к этому аккаунту'); return; }
+    const messages = {
+      link_required: 'На эту почту уже есть аккаунт. Войдите с паролем и нажмите «Привязать Google» в профиле.',
+      identity_in_use: 'Этот Google уже привязан к другому аккаунту Disbit. Выберите другой.',
+      already_linked: 'К этому профилю уже привязан другой Google.',
+      session_expired: 'Сессия завершена. Войдите снова и повторите привязку.',
+      cancelled: 'Вход через Google отменён. Можно выбрать другой способ.',
+      expired: 'Время входа истекло. Начните снова.'
+    };
+    throw Error(messages[result.result] || 'Не удалось завершить вход через Google. Попробуйте ещё раз.');
+  } catch (err) {
+    if (authToken) toast(err.message);
+    else { openAuthSheet('login'); showAuthError(err.message); }
+  }
 }
 let resetStep = 'request';
 let resetBusy = false;
@@ -3307,11 +3424,16 @@ function toggleReset(open) {
   clearInterval(resetTimer);
   const overlay = document.getElementById('auth-overlay');
   document.getElementById('reset-form').hidden = !open;
+  updateGoogleControls();
   document.getElementById('auth-tabs').hidden = open;
   overlay.querySelector('.sheet-actions').hidden = open;
   document.getElementById('auth-login-form').hidden = open;
   document.getElementById('auth-register-form').hidden = true;
   document.getElementById('auth-title').textContent = open ? 'Восстановление пароля' : 'Вход';
+  overlay.dataset.view = open ? 'reset' : 'login';
+  document.getElementById('auth-eyebrow').textContent = 'Доступ к аккаунту';
+  document.getElementById('auth-subtitle').hidden = open;
+  document.getElementById('auth-methods-back').hidden = true;
   document.getElementById('reset-message').hidden = true;
   if (open) {
     resetStep = 'request';
@@ -3445,9 +3567,11 @@ async function submitAuth() {
     renderAccount();
     apiBootstrap();   // подтянуть/залить данные аккаунта
     if (res.needVerify) openVerifySheet(res.user?.email, res.verificationEmailSent);
+  } catch {
+    showAuthError('Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.');
   } finally {
     btn.disabled = false;
-    setAuthMode(authMode);
+    btn.textContent = authMode === 'login' ? 'Войти' : 'Создать аккаунт';
   }
 }
 /* ---------- ПОДТВЕРЖДЕНИЕ ПОЧТЫ ----------
@@ -3993,6 +4117,7 @@ function switchScreen(name, updateHash = true) {
 /* ---------- ШТОРКИ ---------- */
 function openSheet(id) {
   const el = document.getElementById(id);
+  if (id === 'auth-overlay') document.querySelector('.app').inert = true;
   // Finish an outgoing sheet before opening its successor; no overlapping forms.
   document.querySelectorAll('.sheet-overlay[hidden]').forEach(overlay => overlay.getAnimations({subtree:true}).forEach(animation => { try { animation.finish(); } catch {} }));
   el.inert = false;
@@ -4002,7 +4127,7 @@ function openSheet(id) {
   queueMicrotask(() => {
     if (!el.isConnected || el.hidden || el.inert || el.contains(document.activeElement)) return;
     const touch = matchMedia('(pointer: coarse)').matches && document.documentElement.dataset.input !== 'keyboard';
-    const target = touch ? (el.querySelector('.sheet-title, .sheet h2, .sheet h3') || el.querySelector('.sheet'))
+    const target = (touch || id === 'auth-overlay') ? (el.querySelector('.sheet-title, .sheet h2, .sheet h3') || el.querySelector('.sheet'))
       : el.querySelector('input:not([disabled]), button:not([disabled])');
     if (touch && target && !target.hasAttribute('tabindex')) target.tabIndex = -1;
     target?.focus({preventScroll: true});
@@ -4019,6 +4144,10 @@ function closeSheet(id) {
   if (id === 'add-overlay') rememberHabitDraft();
   document.getElementById(id).inert = true;
   document.getElementById(id).hidden = true;
+  if (id === 'auth-overlay') {
+    document.querySelector('.app').inert = false;
+    if (['#login','#register','#register-email'].includes(location.hash)) history.replaceState(null, '', authReturnHash);
+  }
   const returnFocus = pathSheetFocus.get(id); pathSheetFocus.delete(id);
   queueMicrotask(() => { if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true }); });
   if (id === 'add-overlay') { editingId = null; pendingBacklogId = null; }
@@ -5142,6 +5271,11 @@ function onBackButton() {
   const dialog = document.querySelector('dialog[open]');
   if (dialog) { dialog.close('cancel'); return; }
   if (!document.getElementById('intro')?.hidden) return;   // интро не пропускаем
+  if (!document.getElementById('auth-overlay').hidden) {
+    if (resetBusy || googleBusy || document.getElementById('auth-submit').disabled) return;
+    if (!document.getElementById('reset-form').hidden) { document.getElementById('reset-back').click(); return; }
+    if (document.getElementById('auth-overlay').dataset.view !== 'register') { setAuthMode('register'); return; }
+  }
   if (authGateActive) return;                              // гейт обязателен
 
   const proof = document.getElementById('proof-overlay');
@@ -5495,11 +5629,33 @@ function init() {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault(); switchScreen(b.dataset.screen);
     }));
-  window.addEventListener('hashchange', () =>
-    switchScreen(location.hash.slice(1), false));
+  window.addEventListener('hashchange', () => {
+    const view = location.hash.slice(1);
+    if (['login','register','register-email'].includes(view) && !authUser) {
+      if (googleBusy || resetBusy || document.getElementById('auth-submit').disabled) {
+        history.replaceState(null, '', '#' + document.getElementById('auth-overlay').dataset.view);
+        return;
+      }
+      if (!document.getElementById('reset-form').hidden) {
+        if (document.getElementById('reset-password').value && !confirm('Выйти из формы? Введённый новый пароль не будет сохранён.')) {
+          history.replaceState(null, '', '#login'); return;
+        }
+        clearInterval(resetTimer);
+        for (const id of ['reset-token','reset-password','reset-password-repeat']) document.getElementById(id).value = '';
+      }
+      setAuthMode(view === 'login' ? 'login' : 'register', view === 'register-email', false);
+      if (document.getElementById('auth-overlay').hidden) openSheet('auth-overlay');
+      document.getElementById('auth-overlay').scrollTop = 0;
+      document.getElementById('auth-title').focus({preventScroll:true});
+    } else if (authGateActive) {
+      history.replaceState(null, '', '#' + document.getElementById('auth-overlay').dataset.view);
+    } else {
+      if (!document.getElementById('auth-overlay').hidden) closeSheet('auth-overlay');
+      switchScreen(view, false);
+    }
+  });
 
   // аккаунт: вход/регистрация
-  wireSeg('auth-tabs', btn => setAuthMode(btn.dataset.auth));
   document.getElementById('reset-open').addEventListener('click', () => toggleReset(true));
   document.getElementById('profile-password').addEventListener('click', () => {
     if (!authUser) { toast('Сначала войдите в аккаунт'); return; }
@@ -5519,6 +5675,15 @@ function init() {
     e.preventDefault(); submitReset();
   });
   document.getElementById('auth-submit').addEventListener('click', submitAuth);
+  document.getElementById('google-login-button').addEventListener('click', () => startGoogleSignIn('login'));
+  document.getElementById('profile-google').addEventListener('click', () => {
+    if (!authUser?.emailVerified) { toast('Сначала подтвердите почту аккаунта'); return; }
+    document.getElementById('google-link-password').value = '';
+    document.getElementById('google-link-error').hidden = true;
+    openSheet('google-link-overlay');
+  });
+  document.getElementById('google-link-form').addEventListener('submit', event => { event.preventDefault(); startGoogleSignIn('link'); });
+  loadGoogleAvailability();
   document.getElementById('auth-cancel').addEventListener('click', () => closeSheet('auth-overlay'));
   document.querySelectorAll('.ff-eye').forEach(b =>
     b.addEventListener('click', () => {
@@ -5700,13 +5865,16 @@ function init() {
         setAuthMode('login');
         document.getElementById('li-id').value = resetEmail;
         document.getElementById('auth-note').textContent = 'Пароль изменён. Войдите с новым паролем. Локальные данные сохранены на этом устройстве.';
+        document.getElementById('auth-note').hidden = false;
       }
     }
     else if (fresh.length) showSettleModal(fresh);
   };
   // «Начало» — интро-воронка при первом входе. Экран плюсов внутри заменяет
   // старый 3-экранный онбординг, поэтому дальше сразу гейт/итог дня.
-  if (!localStorage.getItem(INTRO_KEY)) openIntro(afterOnboard);
+  if (new URLSearchParams(location.search).get('oauth') === 'google' && !isNativeApp && sameOrigin) finishGoogleSignIn();
+  else if (needGate) afterOnboard();
+  else if (!localStorage.getItem(INTRO_KEY)) openIntro(afterOnboard);
   else afterOnboard();
 
   wireNativeShell();     // статус-бар, «назад», resume; сплэш убираем последним
