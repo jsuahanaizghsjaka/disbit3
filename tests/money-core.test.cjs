@@ -8,6 +8,28 @@ const { randomUUID } = require('node:crypto');
 
 let core, settlement;
 const agreement={agreementVersion:'draft-qa',agreementHash:'a'.repeat(64)};
+
+test('unknown provider outcomes past retry window never repeat POST or release refund reserve', async () => {
+  const db=await fixture();
+  try {
+    const {createMoneyService}=await import('../backend/lib/money-service.js');
+    let posts=0;
+    const provider={createPayment:async()=>{posts++;throw Error('timeout');},createRefund:async()=>{posts++;throw Error('timeout');}};
+    const service=createMoneyService(db,provider,{now:()=>Date.parse('2026-11-05T12:00:00Z')});
+    const intent=core.openMoneyPayment(db,{userId:1,amount:10000});
+    db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-04 13:00:00',intent.id);
+    await assert.rejects(service.resumePayment(intent.id,'https://disbit.ru/'),/Manual reconciliation/);
+    fund(db,10000,'payment-98765432109876543210');
+    const refund=core.reserveMoneyRefund(db,{userId:1,amount:3000});
+    db.prepare('UPDATE money_refund_requests SET created_at=? WHERE id=?').run('2026-11-04 13:00:00',refund.id);
+    await assert.rejects(service.resumeRefundPart(refund.parts[0].id),/Manual reconciliation/);
+    assert.equal(posts,0);
+    assert.equal(core.moneyBalance(db,1).reserved,3000);
+    db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-05 11:00:00',intent.id);
+    await assert.rejects(service.resumePayment(intent.id,'https://disbit.ru/'),/timeout/);
+    assert.equal(posts,1);
+  } finally {db.close();}
+});
 async function fixture() {
   core ||= await import('../backend/lib/money-core.js');
   settlement ||= await import('../backend/lib/money-settlement.js');

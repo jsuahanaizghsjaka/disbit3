@@ -3309,9 +3309,6 @@ function setAuthMode(mode, email = false, updateURL = true) {
   switchLink.textContent = mode === 'login' ? 'Зарегистрироваться' : 'Войти';
   document.getElementById('auth-error').hidden = true;
   document.getElementById('auth-note').hidden = true;
-  if (!document.getElementById('auth-traveler').childElementCount && typeof pathTravelerArtwork === 'function') {
-    document.getElementById('auth-traveler').innerHTML = `<svg viewBox="0 0 220 300" aria-hidden="true">${pathTravelerArtwork('cap')}</svg>`;
-  }
   if (updateURL && location.hash !== '#' + view) {
     if (!['#login','#register','#register-email'].includes(location.hash)) {
       authReturnHash = location.hash || '#today';

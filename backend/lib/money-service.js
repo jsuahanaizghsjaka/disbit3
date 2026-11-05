@@ -5,7 +5,17 @@ import {
 
 // The public webhook must only pass an object ID. Every monetary decision is
 // made from a fresh authenticated GET to the configured YooKassa shop.
-export function createMoneyService(db, provider) {
+export function createMoneyService(db, provider, { now = () => Date.now() } = {}) {
+  // Count from local creation, conservatively before the first provider POST.
+  // YooKassa only guarantees idempotency for 24h. An unknown result outside
+  // this window needs operator reconciliation, never another automatic POST.
+  function requireRetryWindow(createdAt) {
+    const started = Date.parse(createdAt.replace(' ', 'T') + 'Z');
+    const age = now() - started;
+    if (!Number.isFinite(age) || age < 0 || age >= 23 * 60 * 60 * 1000) {
+      throw Error('Manual reconciliation required: provider retry window expired');
+    }
+  }
   async function resumePayment(intentId, returnUrl) {
     const intent=db.prepare('SELECT * FROM money_payment_intents WHERE id=?').get(intentId);
     if (!intent) throw Error('Unknown payment intent');
@@ -15,6 +25,7 @@ export function createMoneyService(db, provider) {
       const result=confirmProviderPayment(db,remote);
       return { id:intent.id, providerId:intent.provider_payment_id, url:intent.confirmation_url, result };
     }
+    requireRetryWindow(intent.created_at);
     const remote=await provider.createPayment({id:intent.id,amount:intent.amount,idempotencyKey:intent.idempotency_key},returnUrl);
     return attachProviderPayment(db,intent.id,remote);
   }
@@ -28,6 +39,8 @@ export function createMoneyService(db, provider) {
     if (!part) throw Error('Unknown refund part');
     if (part.status==='succeeded' || part.status==='failed') return { id:part.id,status:part.status };
     if (part.provider_refund_id) return confirmProviderRefund(db,await provider.getRefund(part.provider_refund_id));
+    const request = db.prepare('SELECT created_at FROM money_refund_requests WHERE id=?').get(part.request_id);
+    requireRetryWindow(request.created_at);
     const remote=await provider.createRefund({amount:part.amount,idempotencyKey:part.idempotency_key},part.provider_payment_id);
     attachProviderRefund(db,part.id,remote);
     return confirmProviderRefund(db,remote);
