@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="path-insights.css" />
   <link rel="stylesheet" href="path-support.css" />
   <link rel="stylesheet" href="path-motion.css" />
+  <link rel="stylesheet" href="path-auth.css" />
 </head>
 <body>
   <a class="skip-link" href="#today">К основному содержимому</a>
@@ -504,6 +505,7 @@
       <section class="card">
         <h3 class="card-title">Настройки</h3>
         <button type="button" class="row-btn" id="profile-password">Изменить пароль</button>
+        <button type="button" class="row-btn" id="profile-google" hidden>Привязать Google</button>
         <div class="setting-row">
           <span id="set-offday-label">Показывать блок «Не сегодня»</span>
           <button type="button" class="aswitch" id="set-offday" role="switch"
@@ -1284,26 +1286,34 @@
     </div>
   </div>
 
-  <!-- ===== ШТОРКА: ВХОД / РЕГИСТРАЦИЯ ===== -->
+  <!-- Full-page account entry. Existing form IDs retain the auth/recovery contract. -->
   <div class="sheet-overlay" id="auth-overlay" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-      <div class="sheet-handle"></div>
-      <h2 class="sheet-title" id="auth-title">Вход</h2>
-
-      <div class="seg" id="auth-tabs">
-        <button class="seg-btn active" data-auth="login">Вход</button>
-        <button class="seg-btn" data-auth="register">Регистрация</button>
+    <div class="sheet auth-page" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <div class="auth-hero" aria-hidden="true">
+        <div class="auth-wordmark" translate="no">disbit<span>.</span></div>
+        <div class="auth-landscape">
+          <span class="auth-moon"></span><span class="auth-star star-one"></span><span class="auth-star star-two"></span>
+          <div class="auth-dune dune-back"></div><div class="auth-dune dune-front"></div>
+          <div id="auth-traveler"></div>
+          <span class="auth-trail"></span>
+        </div>
+        <p class="auth-hero-caption">Большой путь начинается<br>с обещания себе.</p>
       </div>
+      <div class="auth-content">
+      <a class="auth-back" id="auth-methods-back" href="#register" hidden><svg class="ic" aria-hidden="true"><use href="#i-chev-l"/></svg>Другой способ</a>
+      <p class="auth-eyebrow" id="auth-eyebrow">Регистрация</p>
+      <h1 class="sheet-title" id="auth-title" tabindex="-1">Начни свой путь</h1>
+      <p class="auth-subtitle" id="auth-subtitle">Обещай себе. Действуй. Двигайся вперёд.</p>
 
       <div id="auth-login-form">
         <div class="ff">
-          <input class="ff-input" id="li-id" type="text" placeholder=" " autocomplete="username" />
+          <input class="ff-input" id="li-id" name="username" type="text" placeholder=" " autocomplete="username" autocapitalize="none" spellcheck="false" />
           <label class="ff-label" for="li-id">Логин или почта</label>
         </div>
         <div class="ff">
-          <input class="ff-input" id="li-pass" type="password" placeholder=" " autocomplete="current-password" />
+          <input class="ff-input" id="li-pass" name="password" type="password" placeholder=" " autocomplete="current-password" />
           <label class="ff-label" for="li-pass">Пароль</label>
-          <button type="button" class="ff-eye" data-eye="li-pass" aria-label="Показать пароль">👁</button>
+          <button type="button" class="ff-eye" data-eye="li-pass" aria-label="Показать пароль"><img src="icons/auth/eye.svg" class="auth-icon monochrome" width="20" height="20" alt=""/></button>
         </div>
         <button type="button" class="row-btn" id="reset-open">Забыли пароль?</button>
       </div>
@@ -1327,42 +1337,66 @@
 
       <div id="auth-register-form" hidden>
         <div class="ff">
-          <input class="ff-input" id="rg-login" type="text" placeholder=" " maxlength="24" autocomplete="username" />
+          <input class="ff-input" id="rg-login" name="username" type="text" placeholder=" " maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" />
           <label class="ff-label" for="rg-login">Логин (латиница)</label>
         </div>
         <div class="ff">
-          <input class="ff-input" id="rg-email" type="email" placeholder=" " autocomplete="email" />
+          <input class="ff-input" id="rg-email" name="email" type="email" placeholder=" " autocomplete="email" autocapitalize="none" spellcheck="false" />
           <label class="ff-label" for="rg-email">Почта</label>
         </div>
         <div class="ff">
-          <input class="ff-input" id="rg-pass" type="password" placeholder=" " autocomplete="new-password" />
+          <input class="ff-input" id="rg-pass" name="new-password" type="password" placeholder=" " autocomplete="new-password" />
           <label class="ff-label" for="rg-pass">Пароль (мин. 6 символов)</label>
-          <button type="button" class="ff-eye" data-eye="rg-pass" aria-label="Показать пароль">👁</button>
+          <button type="button" class="ff-eye" data-eye="rg-pass" aria-label="Показать пароль"><img src="icons/auth/eye.svg" class="auth-icon monochrome" width="20" height="20" alt=""/></button>
         </div>
-        <p class="hint">При регистрации обещания с этого устройства привяжутся к аккаунту.</p>
       </div>
 
-      <p class="auth-error" id="auth-error" hidden></p>
-      <details class="account-availability"><summary>Другие способы входа</summary><p class="hint">Вход через Google и Apple, а также восстановление пароля пока не подключены. Сейчас доступны логин или почта и пароль.</p></details>
-
+      <p class="auth-error" id="auth-error" role="status" aria-live="polite" tabindex="-1" hidden></p>
       <div class="sheet-actions">
         <button class="btn-ghost" id="auth-cancel">Позже</button>
         <button class="btn-primary" id="auth-submit">Войти</button>
       </div>
+      <div class="auth-providers" id="google-login">
+        <p class="auth-divider" id="auth-divider" hidden>или продолжить с</p>
+        <button type="button" class="auth-glass" id="apple-login-button" disabled aria-describedby="apple-availability"><img src="icons/auth/apple.svg" class="auth-icon monochrome" width="24" height="24" alt=""/><span>Продолжить с Apple</span><small id="apple-availability">Скоро</small></button>
+        <button type="button" class="auth-glass" id="google-login-button" disabled><img src="icons/auth/google.svg" class="auth-icon" width="24" height="24" alt=""/><span id="google-login-label">Продолжить с Google</span><small id="google-availability">Недоступен</small></button>
+        <a class="auth-glass" id="auth-email-button" href="#register-email"><img src="icons/auth/mail.svg" class="auth-icon monochrome" width="24" height="24" alt=""/><span>Продолжить с почтой</span></a>
+      </div>
+
       <button class="row-btn" id="auth-local" hidden style="justify-content:center;margin-top:6px">
         <span>Продолжить локально, без аккаунта</span>
       </button>
       <p class="hint" style="text-align:center;margin-top:10px" id="auth-note">
         Аккаунт хранит обещания на сервере и синхронизирует устройства.
       </p>
-      <p class="hint" style="text-align:center;margin-top:8px">
-        Регистрируясь, ты соглашаешься с
-        <a href="privacy.html" target="_blank" style="color:var(--primary)">политикой конфиденциальности</a>.
+      <p id="auth-tabs" class="auth-switch"><span id="auth-switch-label">Уже есть аккаунт?</span> <a id="auth-switch-link" href="#login">Войти</a></p>
+      <p class="auth-legal">
+        Продолжая регистрацию, вы принимаете
+        <a href="privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.
       </p>
+      </div>
     </div>
   </div>
 
   <!-- ===== ШТОРКА: ИТОГ ДНЯ (СИМУЛЯЦИЯ) ===== -->
+  <div class="sheet-overlay" id="google-link-overlay" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="google-link-title">
+      <h2 class="sheet-title" id="google-link-title">Привязать Google</h2>
+      <p class="hint">Подтвердите текущий пароль Disbit, затем выберите аккаунт Google. Обещания, друзья и баланс сохранятся в этом профиле.</p>
+      <form id="google-link-form">
+        <div class="ff">
+          <input class="ff-input" id="google-link-password" name="current-password" type="password" placeholder=" " autocomplete="current-password" maxlength="1024" required />
+          <label class="ff-label" for="google-link-password">Пароль Disbit</label>
+        </div>
+        <p class="auth-error" id="google-link-error" role="status" aria-live="polite" tabindex="-1" hidden></p>
+        <div class="sheet-actions">
+          <button type="button" class="btn-ghost" data-close-sheet="google-link-overlay">Отмена</button>
+          <button type="submit" class="btn-primary" id="google-link-submit">Выбрать Google</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <div class="sheet-overlay" id="summary-overlay" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="summary-title">
       <div class="sheet-handle"></div>

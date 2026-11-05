@@ -9,6 +9,7 @@ import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from 
 import { setTimeout as delay } from 'node:timers/promises';
 import { db } from '../db/db.js';
 import { isEmailFormatValid, domainAcceptsMail, sendMail, verifyCodeHtml, mailConfigured } from '../lib/email.js';
+import { createSocialAuthRouter } from './social-auth.js';
 
 const router = Router();
 
@@ -248,6 +249,8 @@ router.post('/password-reset/confirm', (req, res) => {
     const consumed = db.prepare('DELETE FROM password_resets WHERE user_id = ? AND token_hash = ? AND expires_at > ?').run(row.user_id, digest, Date.now());
     if (!consumed.changes) { db.exec('ROLLBACK'); return res.status(400).json({ error: 'Код недействителен или истёк' }); }
     db.prepare('UPDATE users SET pass_hash = ?, pass_salt = ? WHERE id = ?').run(hash, salt, row.user_id);
+    db.prepare('DELETE FROM oauth_results WHERE user_id = ?').run(row.user_id);
+    db.prepare('DELETE FROM oauth_flows WHERE user_id = ?').run(row.user_id);
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.user_id);
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
@@ -292,5 +295,7 @@ export function authMiddleware(req, res, next) {
   }
   next();
 }
+
+router.use('/oauth', createSocialAuthRouter({ db, createSession, publicUser, hashPassword, verifyPassword }));
 
 export default router;

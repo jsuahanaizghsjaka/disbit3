@@ -47,6 +47,37 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 -- Обещания (поля совпадают с объектом на фронтенде)
+-- Social identities are linked explicitly, never by matching email alone.
+CREATE TABLE IF NOT EXISTS social_identities (
+  provider TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY(provider, subject),
+  UNIQUE(provider, user_id)
+);
+CREATE TABLE IF NOT EXISTS oauth_flows (
+  state_hash TEXT PRIMARY KEY,
+  binding_hash TEXT UNIQUE NOT NULL,
+  nonce TEXT NOT NULL,
+  verifier TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK(mode IN ('login','link')),
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  session_token TEXT REFERENCES sessions(token) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS oauth_results (
+  binding_hash TEXT PRIMARY KEY,
+  result TEXT NOT NULL,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  session_token TEXT REFERENCES sessions(token) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS oauth_limits (
+  bucket TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL
+);
+
 -- id — TEXT, потому что фронтенд генерирует свои id ('h' + timestamp)
 CREATE TABLE IF NOT EXISTS habits (
   id              TEXT PRIMARY KEY,
