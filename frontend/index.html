@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="path-support.css" />
   <link rel="stylesheet" href="path-motion.css" />
   <link rel="stylesheet" href="path-auth.css" />
+  <link rel="stylesheet" href="path-intro.css" />
 </head>
 <body>
   <a class="skip-link" href="#today">К основному содержимому</a>
@@ -1122,138 +1123,94 @@
     </form>
   </dialog>
 
-  <!-- ===== «НАЧАЛО»: интро-воронка при самом первом входе (фон как у приложения) ===== -->
-  <div class="intro" id="intro" hidden>
-    <div class="aura" aria-hidden="true">
-      <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
-    </div>
-    <div class="intro-progress"><span class="intro-progress-fill" id="intro-progress"></span></div>
-
-    <div class="intro-inner">
-      <button class="path-back" id="intro-back" type="button">Назад</button>
-      <!-- 1: сколько часов в телефоне -->
-      <section class="intro-step" data-step="hours">
-        <p class="intro-kicker">Честно про телефон</p>
-        <h2 class="intro-q">Сколько часов в день ты в телефоне?</h2>
-        <div class="intro-hours"><b id="intro-h">4</b><span>ч / день</span></div>
-        <input type="range" class="slider intro-slider" id="intro-hours-range"
-          min="1" max="12" step="1" value="4" aria-label="Часов в день" />
-        <button class="btn-primary intro-cta" data-next>Дальше</button>
-      </section>
-
-      <!-- 2: сколько потеряешь -->
-      <section class="intro-step" data-step="lose" hidden>
-        <h2 class="intro-q">Начни с небольшого обещания</h2>
-        <p class="intro-hint">Например, читать 10 минут каждый вечер. Выбери действие, которое действительно помещается в твой день.</p>
-        <button class="btn-primary intro-cta" data-next>Дальше</button>
-      </section>
-
-      <!-- 3: сколько вернёт disbit -->
-      <section class="intro-step" data-step="gain" hidden>
-        <h2 class="intro-q">Оставь место для сложных дней</h2>
-        <p class="intro-hint">Минимум помогает продолжить: одна страница вместо десяти минут чтения. А доступный грэйс-день можно выбрать явно, без шага марафона и бита.</p>
-        <button class="btn-primary intro-cta" data-next>Дальше</button>
-      </section>
-
-      <!-- 4: что хочешь улучшить -->
-      <section class="intro-step" data-step="improve" hidden>
-        <h2 class="intro-q">Что хочешь улучшить?</h2>
-        <p class="intro-hint">Можно выбрать несколько</p>
-        <div class="intro-chips" data-multi id="chips-improve">
-          <button class="intro-chip" data-v="Здоровье">💪 Здоровье</button>
-          <button class="intro-chip" data-v="Учёба и развитие">📚 Учёба</button>
-          <button class="intro-chip" data-v="Спорт">🏃 Спорт</button>
-          <button class="intro-chip" data-v="Продуктивность">⚡ Продуктивность</button>
-          <button class="intro-chip" data-v="Сон и режим">😴 Сон</button>
-          <button class="intro-chip" data-v="Меньше телефона">📵 Меньше телефона</button>
-          <button class="intro-chip" data-v="Финансы">💰 Финансы</button>
-          <button class="intro-chip" data-v="Спокойствие">🧘 Спокойствие</button>
-        </div>
-        <button class="btn-primary intro-cta" data-next>Дальше</button>
-      </section>
-
-      <!-- 5: что мешает -->
-      <section class="intro-step" data-step="blockers" hidden>
-        <h2 class="intro-q">Что сейчас мешает?</h2>
-        <div class="intro-chips" data-multi id="chips-blockers">
-          <button class="intro-chip" data-v="Нет силы воли">Нет силы воли</button>
-          <button class="intro-chip" data-v="Прокрастинация">Прокрастинация</button>
-          <button class="intro-chip" data-v="Залипаю в телефоне">Залипаю в телефоне</button>
-          <button class="intro-chip" data-v="Быстро бросаю">Быстро бросаю</button>
-          <button class="intro-chip" data-v="Нет мотивации">Нет мотивации</button>
-          <button class="intro-chip" data-v="Нет времени">Нет времени</button>
-        </div>
-        <button class="btn-primary intro-cta" data-next>Дальше</button>
-      </section>
-
-      <!-- 6: какие обещания -->
-      <section class="intro-step" data-step="habits" hidden>
-        <h2 class="intro-q">С каких обещаний начнёшь?</h2>
-        <p class="intro-hint">Потом добавишь их в приложении</p>
-        <div class="intro-chips" data-multi id="chips-habits">
-          <button class="intro-chip" data-v="Учиться">📖 Учиться</button>
-          <button class="intro-chip" data-v="Спорт">🏋️ Спорт</button>
-          <button class="intro-chip" data-v="Чтение">📕 Чтение</button>
-          <button class="intro-chip" data-v="Вода">💧 Вода</button>
-          <button class="intro-chip" data-v="Ранний подъём">🌅 Ранний подъём</button>
-          <button class="intro-chip" data-v="Медитация">🧘 Медитация</button>
-          <button class="intro-chip" data-v="Английский">🗣️ Английский</button>
-          <button class="intro-chip" data-v="Без соцсетей">🚫 Без соцсетей</button>
-        </div>
-        <button class="btn-primary intro-cta" data-next>Дальше</button>
-      </section>
-
-      <!-- 7: откуда узнал -->
-      <section class="intro-step" data-step="source" hidden>
-        <h2 class="intro-q">Откуда узнал про disbit?</h2>
-        <div class="intro-chips" id="chips-source">
-          <button class="intro-chip" data-v="TikTok">TikTok</button>
-          <button class="intro-chip" data-v="Instagram">Instagram</button>
-          <button class="intro-chip" data-v="YouTube">YouTube</button>
-          <button class="intro-chip" data-v="Друзья">От друзей</button>
-          <button class="intro-chip" data-v="Поиск">Поиск / стор</button>
-          <button class="intro-chip" data-v="Другое">Другое</button>
-        </div>
-        <button class="btn-primary intro-cta" data-next>Дальше</button>
-      </section>
-
-      <!-- 8: главные плюсы -->
-      <section class="intro-step intro-step-wide" data-step="perks" hidden>
-        <h2 class="intro-q">Почему с disbit получится</h2>
-        <ul class="intro-perks">
-          <li><span class="ip-ic">🎯</span><div><b>Последствия заранее</b><span>Укажи штраф за невыполнение. Режим платежей виден в депозите; блокировка приложений пока недоступна.</span></div></li>
-          <li><span class="ip-ic">⚡</span><div><b>Минимум</b><span>Нет сил на полное — сделай маленький шаг. Серия жива.</span></div></li>
-          <li><span class="ip-ic">🛟</span><div><b>Грейс-день</b><span>Один пропуск не рвёт серию.</span></div></li>
-          <li><span class="ip-ic">🏔️</span><div><b>Марафон</b><span>Путник идёт к твоей большой цели — 1 обещание = 1 шаг.</span></div></li>
-          <li><span class="ip-ic">🎁</span><div><b>Награда себе</b><span>Сам выбираешь бонус за серию.</span></div></li>
-          <li><span class="ip-ic">📊</span><div><b>Статистика</b><span>Весь прогресс и стрики на виду.</span></div></li>
-          <li><span class="ip-ic">👥</span><div><b>Друзья</b><span>Соревнуйтесь или проходите марафоны и обещания вместе.</span></div></li>
-        </ul>
-        <button class="btn-primary intro-cta" data-next>Готов начать</button>
-      </section>
-
-      <!-- 9: отпечаток-обещание -->
-      <section class="intro-step" data-step="commit" hidden>
-        <p class="intro-kicker">Дай слово себе</p>
-        <h2 class="intro-q">Готов к первому обещанию?</h2>
-        <button class="fp" id="intro-fp" aria-label="Приложить палец и дать обещание">
-          <span class="fp-fill" id="intro-fp-fill"></span>
-          <svg class="fp-svg" viewBox="0 0 100 100" aria-hidden="true">
-            <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-              <path d="M50 22 C33 22 24 38 26 58"/>
-              <path d="M50 30 C39 30 32 41 33 58 34 68 33 74 30 80"/>
-              <path d="M50 38 C43 38 39 45 40 58 41 70 39 76 36 82"/>
-              <path d="M50 46 C46 46 45 51 46 60 47 72 46 78 44 84"/>
-              <path d="M50 46 C54 46 55 51 54 60 53 72 55 78 58 84"/>
-              <path d="M50 38 C57 38 61 45 60 58 59 70 61 78 65 82"/>
-              <path d="M50 30 C61 30 68 41 67 58 66 68 68 76 71 80"/>
-              <path d="M50 22 C67 22 76 38 74 58"/>
-            </g>
-          </svg>
-        </button>
-        <p class="intro-hint" id="intro-fp-hint">Держи палец пару секунд</p>
-        <button class="btn-primary intro-cta" id="intro-finish">Перейти в приложение</button>
-      </section>
+  <!-- First-launch introduction. Completion is stored on this device. -->
+  <div class="intro intro-mobile" id="intro" role="dialog" aria-modal="true" aria-label="Знакомство с Disbit" hidden>
+    <div class="intro-shell">
+      <header class="intro-header"><span class="intro-brand" translate="no">disbit<span>.</span></span></header>
+      <div class="intro-pages">
+        <section class="intro-step" data-step="welcome">
+          <div class="intro-art intro-target" aria-hidden="true">
+            <span class="intro-orbit"></span>
+            <img class="intro-object intro-target-object" src="icons/welcome/target.webp" width="300" height="300" alt=""/>
+            <img class="intro-object intro-star-object" src="icons/welcome/star.webp" width="110" height="110" alt=""/>
+            <span class="intro-glass-tag"><img src="icons/intro/check.svg" width="24" height="24" alt=""/> Для себя. Каждый день.</span>
+          </div>
+          <div class="intro-copy">
+            <h2 class="intro-q">Держи слово.<br><span>Перед собой.</span></h2>
+            <p class="intro-hint">Маленькие обещания. Настоящие перемены.</p>
+          </div>
+        </section>
+        <section class="intro-step" data-step="journey" hidden>
+          <div class="intro-art intro-landscape" aria-hidden="true">
+            <span class="intro-sun"></span><span class="intro-dune dune-back"></span><span class="intro-dune dune-front"></span>
+            <svg id="intro-traveler" viewBox="0 0 220 300"></svg>
+            <img class="intro-object intro-award" src="icons/welcome/trophy.webp" width="130" height="130" alt=""/>
+            <div class="intro-route-label"><span>Твой маршрут</span><b>Ещё один шаг</b><span class="intro-route-track"><i></i></span></div>
+          </div>
+          <div class="intro-copy">
+            <h2 class="intro-q">Большая цель.<br><span>Твой маршрут.</span></h2>
+            <p class="intro-hint">Выполняй обещания. Двигай путника вперёд.</p>
+          </div>
+        </section>
+        <section class="intro-step" data-step="minimum" hidden>
+          <div class="intro-art intro-minimum" aria-hidden="true">
+            <span class="intro-orbit"></span>
+            <div class="intro-example intro-example-full"><img src="icons/intro/book-open.svg" width="24" height="24" alt=""/><span>Обычный день<b>Читать 10 минут</b></span><span class="intro-example-dot"></span></div>
+            <div class="intro-example intro-example-min"><img src="icons/intro/check.svg" width="24" height="24" alt=""/><span>Сегодня — минимум<b>Одна страница</b></span></div>
+            <div class="intro-streak"><img src="icons/intro/check.svg" width="24" height="24" alt=""/> Серия продолжается</div>
+          </div>
+          <div class="intro-copy">
+            <h2 class="intro-q">Меньше —<br><span>тоже считается.</span></h2>
+            <p class="intro-hint">Сделай свой минимум. Сохрани серию.</p>
+          </div>
+        </section>
+        <section class="intro-step" data-step="features" hidden>
+          <div class="intro-copy"><h2 class="intro-q">У обещания<br><span>есть сила.</span></h2></div>
+          <ul class="intro-feature-list">
+            <li>
+              <div class="intro-benefit-icon intro-benefit-stake" aria-hidden="true">₽</div>
+              <div><b>Штраф за срыв</b><span>Сумму задаёшь сам.</span></div>
+            </li>
+            <li>
+              <div class="intro-benefit-icon intro-benefit-proof" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 9h6l2-4h8l2 4h6v18H4Z"/><circle cx="16" cy="17" r="5"/></svg></div>
+              <div><b>Покажи результат</b><span>Делись пруфами — фото или видео выполненного дела.</span></div>
+            </li>
+            <li>
+              <div class="intro-benefit-icon intro-benefit-minimum" aria-hidden="true"><img src="icons/intro/check.svg" width="32" height="32" alt=""/></div>
+              <div><b>Минимум считается</b><span>Нет сил? Маленькое действие сохранит серию.</span></div>
+            </li>
+            <li>
+              <div class="intro-benefit-icon intro-benefit-reward" aria-hidden="true"><img src="icons/welcome/trophy.webp" width="72" height="72" alt=""/></div>
+              <div><b>Марафон к цели</b><span>Каждое выполнение двигает твоего путника вперёд.</span></div>
+            </li>
+            <li>
+              <div class="intro-benefit-icon intro-benefit-reward" aria-hidden="true"><img src="icons/welcome/star.webp" width="72" height="72" alt=""/></div>
+              <div><b>Дела → награды</b><span>Зарабатывай биты. Назначай награды себе.</span></div>
+            </li>
+          </ul>
+        </section>
+        <section class="intro-step" data-step="first-step" hidden>
+          <div class="intro-art intro-first-art" aria-hidden="true"><img class="intro-object" src="icons/welcome/star.webp" width="260" height="260" alt=""/></div>
+          <div class="intro-copy"><h2 class="intro-q">Одно дело.<br><span>Уже сегодня.</span></h2><p class="intro-hint">Страница книги. Прогулка. Время для себя.</p></div>
+        </section>
+        <section class="intro-step" data-step="commit" hidden>
+          <div class="intro-copy"><h2 class="intro-q" id="intro-commit-title">Обещаю себе<br><span>начать.</span></h2></div>
+          <div class="intro-pledge-art">
+            <span class="intro-pledge-ring" aria-hidden="true"></span>
+            <button class="intro-fingerprint" id="intro-fp" type="button" aria-label="Даю слово себе" aria-describedby="intro-fp-hint">
+              <span class="intro-fingerprint-fill" aria-hidden="true"></span>
+              <img src="icons/intro/fingerprint.svg" width="100" height="100" alt=""/>
+              <span class="intro-pledge-label">Даю слово</span>
+            </button>
+          </div>
+          <p class="intro-pledge-hint" id="intro-fp-hint" role="status">Удерживай, чтобы дать слово.</p>
+        </section>
+      </div>
+      <footer class="intro-footer">
+        <div class="intro-pagination" id="intro-pagination" aria-hidden="true"></div>
+        <p class="intro-position" id="intro-position" aria-live="polite">1 из 6</p>
+        <p class="intro-swipe-hint">Листай влево <span aria-hidden="true">←</span></p>
+      </footer>
     </div>
   </div>
 
@@ -1464,5 +1421,6 @@
   <script src="path-archive.js"></script>
   <script src="script.js"></script>
   <script type="module" src="path-welcome.js"></script>
+  <script type="module" src="path-intro.js"></script>
 </body>
 </html>
