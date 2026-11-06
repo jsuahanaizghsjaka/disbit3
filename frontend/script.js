@@ -4658,10 +4658,7 @@ function wireProof() {
   window.addEventListener('pagehide', suspendProofCamera);
 }
 
-/* ---------- «НАЧАЛО»: драматичный интро при первом входе ----------
-   Экранного времени в вебе не достать, поэтому спрашиваем часы у пользователя
-   и считаем прогноз: ~60 лет впереди × часы = сколько лет уйдёт в телефон
-   (h×365×60 / (24×365) = h×2.5). disbit «возвращает» долю, если жить, а не скроллить. */
+/* ---------- First-launch introduction, completed once per device ---------- */
 const INTRO_KEY = 'disbit_intro_v1';
 
 function introYears(hours) {
@@ -4683,49 +4680,15 @@ function countUp(el, value, ms = 1100) {
 }
 
 function openIntro(done) {
-  const box=document.getElementById('intro'), steps=[...box.querySelectorAll('.intro-step')];
-  const range=document.getElementById('intro-hours-range'), back=document.getElementById('intro-back');
-  const old=profile.intro || {}, answers={hours:old.hours ?? 4,improve:old.improve||[],blockers:old.blockers||[],habits:old.habits||[],source:old.source||null};
-  let i=0, finished=false;
-  range.value=answers.hours;
-  const show=n=>{
-    i=Math.max(0,Math.min(steps.length-1,n));
-    steps.forEach((step,k)=>{step.hidden=k!==i;});
-    back.hidden=i===0;
-    document.getElementById('intro-progress').style.width=((i+1)/steps.length*100)+'%';
-    box.scrollTop=0;
-    const title=steps[i].querySelector('h2');if(title){title.tabIndex=-1;title.focus({preventScroll:true});}
-  };
-  box.querySelectorAll('.intro-chips').forEach(group=>{
-    const key=group.id.replace('chips-','');
-    group.querySelectorAll('.intro-chip').forEach(chip=>{
-      const selected=Array.isArray(answers[key])?answers[key].includes(chip.dataset.v):answers[key]===chip.dataset.v;
-      chip.classList.toggle('on',selected);chip.setAttribute('aria-pressed',String(selected));
-      chip.onclick=()=>{
-        if(group.hasAttribute('data-multi')) chip.classList.toggle('on');
-        else {group.querySelectorAll('.intro-chip').forEach(c=>c.classList.remove('on'));chip.classList.add('on');}
-        group.querySelectorAll('.intro-chip').forEach(c=>c.setAttribute('aria-pressed',String(c.classList.contains('on'))));
-      };
-    });
+  window.DisbitIntro.open({
+    initial: profile.intro || {},
+    onFinish(answers) {
+      profile.intro = { ...profile.intro, ...answers };
+      saveJson(PROFILE_KEY, profile);
+      localStorage.setItem(INTRO_KEY, '1');
+      done?.();
+    }
   });
-  const collect=()=>{
-    answers.hours=Number(range.value);
-    ['improve','blockers','habits','source'].forEach(key=>{
-      const selected=[...document.querySelectorAll('#chips-'+key+' .on')].map(c=>c.dataset.v);
-      answers[key]=key==='source'?selected[0]||null:selected;
-    });
-  };
-  const finish=()=>{
-    if(finished)return; finished=true;collect();
-    profile.intro=answers;saveJson(PROFILE_KEY,profile);
-    localStorage.setItem(INTRO_KEY,'1');box.hidden=true;document.querySelector('.app').inert=false;done?.();
-  };
-  box.querySelectorAll('[data-next]').forEach(b=>b.onclick=()=>{collect();show(i+1);});
-  back.onclick=()=>{collect();show(i-1);};
-  document.getElementById('intro-finish').onclick=finish;
-  box.hidden=false;document.querySelector('.app').inert=true;
-  initSlider(range,v=>document.getElementById('intro-h').textContent=v);
-  document.getElementById('intro-h').textContent=range.value;show(0);
 }
 
 /* ---------- ОНБОРДИНГ (3 экрана в первый запуск) ---------- */
@@ -5852,7 +5815,7 @@ function init() {
   // обязательная регистрация при входе:
   // с сервером — всегда, пока нет токена; без сервера — один раз, с локальным режимом
   const needGate = !authToken && (API || !localStorage.getItem(GATE_KEY));
-  // онбординг — 3 экрана в самый первый запуск, ДО гейта. Дальше идёт обычный поток.
+  // First-run story precedes registration; returning sessions go straight in.
   const afterOnboard = () => {
     if (needGate) {
       openAuthGate();
@@ -5870,8 +5833,9 @@ function init() {
   // «Начало» — интро-воронка при первом входе. Экран плюсов внутри заменяет
   // старый 3-экранный онбординг, поэтому дальше сразу гейт/итог дня.
   if (new URLSearchParams(location.search).get('oauth') === 'google' && !isNativeApp && sameOrigin) finishGoogleSignIn();
-  else if (needGate) afterOnboard();
-  else if (!localStorage.getItem(INTRO_KEY)) openIntro(afterOnboard);
+  else if (!authToken && !localStorage.getItem(INTRO_KEY)
+    && !['login', 'register', 'register-email'].includes(location.hash.slice(1))
+    && !sessionStorage.getItem('disbit-password-reset-complete')) openIntro(afterOnboard);
   else afterOnboard();
 
   wireNativeShell();     // статус-бар, «назад», resume; сплэш убираем последним

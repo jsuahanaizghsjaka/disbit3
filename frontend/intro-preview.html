@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0B1324"/>
+  <title>Disbit — предпросмотр знакомства</title>
+  <link rel="icon" href="icons/icon-192.png"/>
+  <link rel="stylesheet" href="fonts.css"/>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="path-ui.css"/>
+  <link rel="stylesheet" href="path-journey.css"/>
+  <link rel="stylesheet" href="path-insights.css"/>
+  <link rel="stylesheet" href="path-support.css"/>
+  <link rel="stylesheet" href="path-motion.css"/>
+  <link rel="stylesheet" href="path-auth.css"/>
+  <link rel="stylesheet" href="path-intro.css"/>
+</head>
+<body>
+  <main class="app"><p>Предпросмотр первого запуска. Данные аккаунта не меняются.</p><button id="preview-again">Посмотреть ещё раз</button></main>
+  <script src="path-traveler.js"></script>
+  <script type="module">
+    const html = await (await fetch('./index.html')).text();
+    const intro = new DOMParser().parseFromString(html, 'text/html').getElementById('intro');
+    document.body.append(intro);
+    await import('./path-intro.js');
+    const open = () => window.DisbitIntro.open({ onFinish: () => location.assign('./#register') });
+    document.getElementById('preview-again').onclick = open;
+    open();
+  </script>
+</body>
+</html>

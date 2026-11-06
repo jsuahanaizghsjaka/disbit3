@@ -231,12 +231,12 @@ function wirePathUI() {
     else if (!e.shiftKey && (document.activeElement === last || !overlay.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
   });
   const updateInert = () => {
-    const open = [...document.querySelectorAll('.sheet-overlay, .proof-overlay')].some(el => !el.hidden);
+    const open = [...document.querySelectorAll('.sheet-overlay, .proof-overlay, #intro, #onboard')].some(el => !el.hidden);
     document.querySelector('.app').inert = open;
     const top = !$('proof-overlay').hidden ? $('proof-overlay') : anyOpenSheet();
     document.querySelectorAll('.sheet-overlay, .proof-overlay').forEach(el => { el.inert = el.hidden || (!!top && el !== top); });
   };
-  document.querySelectorAll('.sheet-overlay, .proof-overlay').forEach(el => new MutationObserver(updateInert).observe(el, { attributes: true, attributeFilter: ['hidden'] }));
+  document.querySelectorAll('.sheet-overlay, .proof-overlay, #intro, #onboard').forEach(el => new MutationObserver(updateInert).observe(el, { attributes: true, attributeFilter: ['hidden'] }));
   if (window.visualViewport) {
     const updateKeyboard = () => document.body.classList.toggle('kb-open', innerHeight - visualViewport.height > 150 && /INPUT|TEXTAREA/.test(document.activeElement?.tagName));
     visualViewport.addEventListener('resize', updateKeyboard);
