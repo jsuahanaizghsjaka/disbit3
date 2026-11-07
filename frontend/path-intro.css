@@ -109,7 +109,8 @@
 }
 
 /* Six-screen, gesture-led edition. The pledge is the only button. */
-.intro-header { justify-content: center; }
+.intro-header { justify-content: space-between; }
+.intro-header #intro-skip { min-width:136px; min-height:48px; padding:10px 18px; border:1px solid #ffffff3d; border-radius:24px; background:#ffffff08; color:#f4f7ff; font-size:17px; font-weight:650; touch-action:manipulation; }
 .intro-mobile .intro-q { font-size: clamp(36px,10.8vw,48px); line-height: 1.08; }
 .intro-mobile .intro-hint { font-size: 21px; line-height: 1.4; }
 .intro-pagination { gap: 8px; margin-bottom: 12px; }

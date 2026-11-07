@@ -5834,7 +5834,6 @@ function init() {
   // старый 3-экранный онбординг, поэтому дальше сразу гейт/итог дня.
   if (new URLSearchParams(location.search).get('oauth') === 'google' && !isNativeApp && sameOrigin) finishGoogleSignIn();
   else if (!authToken && !localStorage.getItem(INTRO_KEY)
-    && !['login', 'register', 'register-email'].includes(location.hash.slice(1))
     && !sessionStorage.getItem('disbit-password-reset-complete')) openIntro(afterOnboard);
   else afterOnboard();
 

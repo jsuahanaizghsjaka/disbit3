@@ -4,6 +4,8 @@ disbit.ru {
     reverse_proxy 127.0.0.1:3000
     header X-Content-Type-Options nosniff
     header Referrer-Policy strict-origin-when-cross-origin
+    # Google callback query contains short-lived credentials; do not access-log it.
+    log_skip /api/auth/oauth/google/callback
 }
 
 # Before publishing: create DNS A and set STAGING_ALLOWED_CIDRS in Caddy's

@@ -109,4 +109,9 @@ test('Google ID tokens reject wrong signature, issuer, audience, nonce, expiry a
   const env={GOOGLE_OAUTH_ENABLED:'1',APP_ENV:'test',PUBLIC_URL:'http://127.0.0.1:3470',GOOGLE_OAUTH_CLIENT_ID:'client',GOOGLE_OAUTH_CLIENT_SECRET:'secret'};
   assert.equal(googleConfig(env).redirectUri,'http://127.0.0.1:3470/api/auth/oauth/google/callback');
   for(const change of [{APP_ENV:'production'},{APP_ENV:'staging'},{PUBLIC_URL:'http://example.org'},{PUBLIC_URL:'https://example.org/extra'},{GOOGLE_OAUTH_ENABLED:'0'}])assert.equal(googleConfig({...env,...change}),null);
+  const production={...env,APP_ENV:'production',PUBLIC_URL:'https://disbit.ru'};
+  assert.equal(googleConfig(production),null,'Staging flag must not enable production');
+  assert.equal(googleConfig({...production,GOOGLE_OAUTH_PRODUCTION_ENABLED:'1'}).redirectUri,'https://disbit.ru/api/auth/oauth/google/callback');
+  for(const change of [{PUBLIC_URL:'http://disbit.ru'},{GOOGLE_OAUTH_ENABLED:'0'},{GOOGLE_OAUTH_CLIENT_SECRET:''},{PUBLIC_URL:'https://attacker@disbit.ru'},{PUBLIC_URL:'https://disbit.ru/path'}])assert.equal(googleConfig({...production,GOOGLE_OAUTH_PRODUCTION_ENABLED:'1',...change}),null);
+  assert.equal(googleConfig({...env,APP_ENV:undefined,NODE_ENV:'production'}),null,'NODE_ENV production cannot fall back to loopback development');
 });

@@ -3,14 +3,16 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'), { timeoutDuration: 8000 });
 
 export function googleConfig(env = process.env) {
-  // Production is deliberately not enabled by the staging feature flag.
-  if (env.GOOGLE_OAUTH_ENABLED !== '1' || !['development', 'test', 'staging'].includes(env.APP_ENV || 'development')) return null;
+  // Production requires its own explicit opt-in; a staging flag cannot enable it.
+  const environment = env.APP_ENV || (env.NODE_ENV === 'production' ? 'production' : 'development');
+  if (env.GOOGLE_OAUTH_ENABLED !== '1' || !['development', 'test', 'staging', 'production'].includes(environment)) return null;
+  if (environment === 'production' && env.GOOGLE_OAUTH_PRODUCTION_ENABLED !== '1') return null;
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return null;
   let origin;
   try {
     const url = new URL(env.PUBLIC_URL);
     if (url.origin !== env.PUBLIC_URL || url.username || url.password) return null;
-    const local = ['127.0.0.1', 'localhost'].includes(url.hostname) && ['test', 'development'].includes(env.APP_ENV || 'development');
+    const local = ['127.0.0.1', 'localhost'].includes(url.hostname) && ['test', 'development'].includes(environment);
     if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) return null;
     origin = url.origin;
   } catch { return null; }

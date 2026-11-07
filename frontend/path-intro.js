@@ -3,6 +3,7 @@ const box = document.getElementById('intro');
 const steps = [...box.querySelectorAll('.intro-step')];
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const finger = document.getElementById('intro-fp');
+const skip = document.getElementById('intro-skip');
 const last = steps.length - 1;
 let page = 0, confirmed = false, finished = false, entrance = [], celebrationTimer;
 let finishCallback, initialAnswers, pointerStart = null;
@@ -70,6 +71,7 @@ function show(index) {
   }
 }
 document.getElementById('intro-pagination').innerHTML = steps.map(() => '<i></i>').join('');
+skip.addEventListener('click', finish);
 // A click alone never confirms. Pointer and keyboard holds share the same timer.
 finger.addEventListener('click', e => e.preventDefault());
 finger.addEventListener('contextmenu', e => e.preventDefault());
@@ -101,7 +103,13 @@ document.addEventListener('keydown', e => {
   if (box.hidden) return;
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); show(page + (e.key === 'ArrowRight' ? 1 : -1)); }
   if (e.key === 'Escape' && !confirmed) { e.preventDefault(); finish(); }
-  if (e.key === 'Tab') { e.preventDefault(); if (page === last && !confirmed) finger.focus(); else steps[page].querySelector('h2').focus(); }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const controls = page === last && !confirmed ? [skip, finger] : [skip];
+    const current = controls.indexOf(document.activeElement);
+    const next = current < 0 ? (e.shiftKey ? controls.length - 1 : 0) : (current + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+    controls[next].focus();
+  }
 });
 box.addEventListener('pointerdown', e => {
   if (e.button !== 0 || e.target.closest('button') || confirmed) return;

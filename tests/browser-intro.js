@@ -8,7 +8,7 @@ async page => {
   await page.setViewportSize({width:390,height:844});
   await page.goto(root+'/');
   await page.locator('#intro:not([hidden])').waitFor();
-  assert(await page.locator('#intro button').count()===1,'Pledge must be the only button');
+  assert(await page.locator('#intro button').count()===2,'Only skip and pledge should be buttons');
   await page.mouse.move(300,400); await page.mouse.wheel(0,100);
   await page.waitForFunction(()=>document.getElementById('intro').dataset.step==='journey');
   await page.waitForTimeout(220); // Independent wheel gesture, past the inertia guard.
@@ -57,8 +57,19 @@ async page => {
   assert(await page.locator('#auth-overlay').getAttribute('data-view')==='register','Automatic registration missing');
   assert(await page.evaluate(()=>profile.intro.pledged&&localStorage.getItem('disbit_intro_v1')==='1'),'Pledge not saved');
   await page.goto(root+'/');assert(await page.locator('#intro').isHidden(),'Intro repeats');
-  await page.evaluate(()=>localStorage.removeItem('disbit_intro_v1'));
-  await page.goto(root+'/#login');assert(await page.locator('#intro').isHidden(),'Login intercepted');
+  await page.goto(root+'/#login');assert(await page.locator('#intro').isHidden(),'Returning login interrupted');
+  for(const hash of ['register','register-email','login']){
+    await page.evaluate(()=>{localStorage.clear();sessionStorage.clear()});
+    await page.goto(root+'/#'+hash);
+    await page.reload(); // A hash-only navigation does not run the first-visit bootstrap.
+    await page.locator('#intro:not([hidden])').waitFor();
+    await page.keyboard.press('Tab');
+    assert(await page.locator('#intro-skip').evaluate(e=>e===document.activeElement),'Skip not keyboard reachable');
+    await page.locator('#intro-skip').click();
+    await page.locator('#intro').waitFor({state:'hidden'});
+    assert(await page.evaluate(()=>localStorage.getItem('disbit_intro_v1')==='1' && !profile.intro.pledged),'Skip must persist without giving a pledge');
+    await page.reload(); assert(await page.locator('#intro').isHidden(),'Skip did not survive reload '+hash);
+  }
   await page.goto(root+'/intro-preview.html');
   await page.locator('#intro:not([hidden])').waitFor();
   await page.emulateMedia({reducedMotion:'reduce'});
@@ -104,6 +115,6 @@ async page => {
     await mobile.waitForURL('**/#register');
   } finally {await mobileContext.close();}
   assert(errors.length===0,errors.join('\n'));
-  return {passed:['six slides','only pledge button','wheel/tap/swipe navigation','short click rejected','early release resets progress','pointer exit cancels','slide change cancels','keyboard hold','mobile touch cancellation','mobile hold with reduced motion','congratulations','automatic registration','one-time completion','explicit login','six viewport sizes'],pageErrors:errors};
+  return {passed:['six slides','skip and pledge buttons','wheel/tap/swipe navigation','short click rejected','early release resets progress','pointer exit cancels','slide change cancels','keyboard hold','mobile touch cancellation','mobile hold with reduced motion','congratulations','automatic registration','one-time completion','first visit on auth URLs','persistent skip without pledge','six viewport sizes'],pageErrors:errors};
 }
 
