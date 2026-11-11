@@ -5261,6 +5261,29 @@ function onAppResume() {
   scheduleNotifSync();          // расписание тоже могло протухнуть
 }
 
+/* В браузере и PWA события resume нет, а вкладка может жить сутками. Без этой
+   проверки после полуночи экран показывал вчерашний день, и отметка упиралась в
+   «День сменился. Обнови приложение». Открытую шторку или диалог не рвём —
+   перезагрузимся, как только их закроют. */
+function reloadIfDayChanged() {
+  if (dateKey() === TODAY) return false;
+  if (document.hidden || document.querySelector('.sheet-overlay:not([hidden]), dialog[open]')) return false;
+  location.reload();
+  return true;
+}
+function msToNextDay() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5) - now;
+}
+function scheduleDayCheck(delay = msToNextDay()) {
+  setTimeout(() => {
+    if (dateKey() === TODAY) scheduleDayCheck();
+    else if (!reloadIfDayChanged()) scheduleDayCheck(30000);
+  }, Math.min(delay, 2147483647));
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadIfDayChanged(); });
+scheduleDayCheck();
+
 /* Клавиатура.
    1. resize 'native' — WebView сжимается под клавиатуру, и поле ввода вместе с
       липким подвалом шторки остаётся на виду. Требует adjustResize в манифесте.
