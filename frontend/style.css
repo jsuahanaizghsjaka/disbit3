@@ -2246,8 +2246,8 @@ dialog button:focus-visible { outline: 2px solid var(--primary); outline-offset:
 .sheet-overlay {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  /* No backdrop blur: under the dark scrim it is not visible, but a full-screen
+     blur is re-rasterised on every frame of the sheet transition on phones. */
   display: flex;
   align-items: flex-end;
   justify-content: center;

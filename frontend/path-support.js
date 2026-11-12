@@ -185,7 +185,26 @@ function wireSupportUI() {
   document.addEventListener('keydown',()=>{document.documentElement.dataset.input='keyboard';},true);
   document.addEventListener('pointerdown',()=>{document.documentElement.dataset.input='pointer';},true);
   document.getElementById('notif-check').onclick=async()=>{await checkNotifPermission();await syncNotifications();};
-  document.getElementById('capability-open').onclick=()=>openSheet('capability-overlay');
+  document.getElementById('capability-open').onclick=()=>{
+    openSheet('capability-overlay');
+    const cap = window.Capacitor;
+    const native = cap?.isNativePlatform?.() && cap?.isPluginAvailable?.('AppBlocking');
+    document.getElementById('blocking-native-controls').hidden = !native;
+    document.getElementById('blocking-native-status').textContent = '';
+  };
+  document.getElementById('blocking-native-open').onclick=async()=>{
+    const button=document.getElementById('blocking-native-open');
+    const status=document.getElementById('blocking-native-status');
+    button.disabled=true;
+    try {
+      const cap=window.Capacitor;
+      if (!cap?.isNativePlatform?.() || !cap?.isPluginAvailable?.('AppBlocking')) throw Error('unavailable');
+      const plugin=cap.registerPlugin('AppBlocking');
+      await plugin.openSettings();
+      status.textContent='Открыт нативный экран. Автоматические ограничения за обещания пока выключены.';
+    } catch (_) { status.textContent='Не удалось открыть настройки ограничений. Нужна новая нативная сборка приложения.'; }
+    finally { button.disabled=false; }
+  };
   const states={
     choose:['Выбранные приложения','Приложения не выбраны. Список и длительность появятся после подключения нативной функции.','Выбор пока недоступен'],
     permission:['Доступ не запрошен','Будущий экран объяснит, какой доступ нужен системе и как его отозвать. Сейчас системный запрос не отправляется.','Запрос пока недоступен'],

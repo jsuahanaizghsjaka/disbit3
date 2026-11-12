@@ -75,7 +75,26 @@ app.get('/review', (req, res) => {
 });
 
 // раздаём фронтенд статикой (http://localhost:3000 → приложение)
-app.use(express.static(path.join(__dirname, '..', 'frontend')));
+// Шрифты и иконки не меняются между релизами — не перепроверяем их на каждый запуск.
+// HTML/JS/CSS остаются с ETag-перепроверкой: имена файлов без хэшей.
+app.use(express.static(path.join(__dirname, '..', 'frontend'), {
+  setHeaders(res, file) {
+    if (/\.woff2$/.test(file)) res.set('Cache-Control', 'public, max-age=2592000');
+    else if (/[\\/]icons[\\/]/.test(file)) res.set('Cache-Control', 'public, max-age=604800');
+  }
+}));
+
+/* Ошибки парсинга тела и неожиданные исключения: без этого Express отдавал
+   HTML-страницу (в development — со стеком), а клиент ждёт JSON с полем error. */
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.status >= 400 && err.status < 600 ? err.status : 500;
+  if (status >= 500) console.error(err);
+  const error = err.type === 'entity.too.large' ? 'Слишком большой запрос'
+    : err.type === 'entity.parse.failed' ? 'Некорректный JSON в запросе'
+    : status >= 500 ? 'Внутренняя ошибка сервера' : 'Некорректный запрос';
+  res.status(status).json({ error });
+});
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, process.env.HOST || '127.0.0.1', () => {

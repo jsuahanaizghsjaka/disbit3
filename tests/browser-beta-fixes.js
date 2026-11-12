@@ -82,6 +82,8 @@ async page => {
   assert(await page.locator('#completion-skip').isDisabled(),'Exhausted quota enabled');
   await page.screenshot({path:'test-results/beta-proof-mobile.png',fullPage:true});
   await page.locator('#completion-dialog [value="share"]').click();
+  // The capture screen is prepared in the dialog's asynchronous close event.
+  await page.locator('#proof-overlay').waitFor({state:'visible'});
   assert(await page.locator('#proof-skip').isDisabled(),'Capture quota bypass');
   // Camera hardware is not available in CI: inject a valid small PNG into the captured-media stage.
   await page.evaluate(()=>{
