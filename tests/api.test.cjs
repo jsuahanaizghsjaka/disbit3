@@ -272,3 +272,12 @@ test('three server-bit purchases are capped through the API', async()=>{
   const final=await (await request('GET','/habits/skips/quota',undefined,token)).json();
   assert.equal(final.remaining,8); assert.equal(final.trustedBits,0);
 });
+
+test('registration requires both explicit consents before any account work', async () => {
+  const base = { login: 'consent_user', email: 'consent@example.org', password: 'secret-123' };
+  for (const consents of [{}, { acceptTerms: true }, { acceptPersonalData: true }, { acceptTerms: 'true', acceptPersonalData: 1 }]) {
+    const r = await request('POST', '/auth/register', { ...base, ...consents }, '');
+    assert.equal(r.status, 400);
+    assert.match((await r.json()).error, /соглашение/);
+  }
+});

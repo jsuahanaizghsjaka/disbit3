@@ -10,6 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { db } from '../db/db.js';
 import { isEmailFormatValid, domainAcceptsMail, sendMail, verifyCodeHtml, mailConfigured } from '../lib/email.js';
 import { createSocialAuthRouter } from './social-auth.js';
+import { hasConsent, recordConsent, CONSENT_ERROR } from '../lib/legal.js';
 
 const router = Router();
 
@@ -84,13 +85,17 @@ router.post('/register', async (req, res) => {
   if (!isEmailFormatValid(email)) {
     return res.status(400).json({ error: 'Некорректная почта' });
   }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Пароль — минимум 6 символов' });
+  }
+  // Consent is checked before the DNS lookup: no account work without it.
+  if (!hasConsent(req.body)) {
+    return res.status(400).json({ error: CONSENT_ERROR });
+  }
   // проверяем, что домен реально принимает почту: регулярка пропускает
   // выдумки вроде «@gmail.fdkjfsk», а MX-запись — нет
   if (!(await domainAcceptsMail(email))) {
     return res.status(400).json({ error: 'Такого почтового домена не существует — проверь адрес' });
-  }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Пароль — минимум 6 символов' });
   }
 
   const exists = db.prepare(
@@ -101,9 +106,16 @@ router.post('/register', async (req, res) => {
   }
 
   const { salt, hash } = hashPassword(password);
-  const info = db.prepare(
-    'INSERT INTO users (login, email, pass_hash, pass_salt) VALUES (?, ?, ?, ?)'
-  ).run(login, email, hash, salt);
+  // Account and consent records are written together or not at all.
+  db.exec('BEGIN IMMEDIATE');
+  let info;
+  try {
+    info = db.prepare(
+      'INSERT INTO users (login, email, pass_hash, pass_salt) VALUES (?, ?, ?, ?)'
+    ).run(login, email, hash, salt);
+    recordConsent(db, Number(info.lastInsertRowid), 'email');
+    db.exec('COMMIT');
+  } catch (err) { db.exec('ROLLBACK'); throw err; }
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   const token = createSession(user.id);

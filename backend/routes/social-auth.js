@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import { googleConfig, exchangeGoogleCode } from '../lib/google-identity.js';
+import { hasConsent, recordConsent } from '../lib/legal.js';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
@@ -55,8 +56,10 @@ export function createSocialAuthRouter({ db, createSession, publicUser, hashPass
       db.prepare('DELETE FROM oauth_flows WHERE binding_hash=?').run(digest(previous));
       db.prepare('DELETE FROM oauth_results WHERE binding_hash=?').run(digest(previous));
     }
-    db.prepare(`INSERT INTO oauth_flows(state_hash,binding_hash,nonce,verifier,mode,user_id,session_token,expires_at)
-      VALUES(?,?,?,?,?,?,?,?)`).run(digest(state), digest(binding), nonce, verifier, mode, userId, session, Date.now() + FLOW_TTL);
+    // Consent only matters if this sign-in ends up creating a new account.
+    const consent = mode === 'login' && hasConsent(req.body) ? 1 : 0;
+    db.prepare(`INSERT INTO oauth_flows(state_hash,binding_hash,nonce,verifier,mode,consent,user_id,session_token,expires_at)
+      VALUES(?,?,?,?,?,?,?,?,?)`).run(digest(state), digest(binding), nonce, verifier, mode, consent, userId, session, Date.now() + FLOW_TTL);
     res.cookie(cookieName(cfg), binding, { ...cookieOptions(cfg), maxAge: FLOW_TTL });
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.search = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.redirectUri, response_type: 'code',
@@ -95,6 +98,7 @@ export function createSocialAuthRouter({ db, createSession, publicUser, hashPass
             }
           } else if (linked) { result = 'login'; userId = linked.user_id; }
           else if (db.prepare('SELECT 1 FROM users WHERE lower(email)=?').get(identity.email)) result = 'link_required';
+          else if (!flow.consent) result = 'consent_required';
           else {
             // No usable password is created; email recovery can set one later.
             const password = hashPassword(secret());
@@ -102,6 +106,7 @@ export function createSocialAuthRouter({ db, createSession, publicUser, hashPass
               .run('g_' + randomBytes(10).toString('hex'), identity.email, password.hash, password.salt);
             userId = Number(created.lastInsertRowid);
             db.prepare("INSERT INTO social_identities(provider,subject,user_id) VALUES('google',?,?)").run(identity.subject, userId);
+            recordConsent(db, userId, 'google');
             result = 'login';
           }
           db.exec('COMMIT');

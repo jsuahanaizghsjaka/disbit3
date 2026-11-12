@@ -1319,10 +1319,11 @@
         Аккаунт хранит обещания на сервере и синхронизирует устройства.
       </p>
       <p id="auth-tabs" class="auth-switch"><span id="auth-switch-label">Уже есть аккаунт?</span> <a id="auth-switch-link" href="#login">Войти</a></p>
-      <p class="auth-legal">
-        Продолжая регистрацию, вы принимаете
-        <a href="privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.
-      </p>
+      <fieldset class="auth-legal auth-consents" id="auth-consents">
+        <legend class="sr-only">Согласия для регистрации</legend>
+        <label class="auth-consent"><input type="checkbox" id="rg-accept-terms" /><span>Принимаю <a href="terms.html" target="_blank" rel="noopener">пользовательское соглашение</a> и <a href="terms.html#content" target="_blank" rel="noopener">правила контента</a></span></label>
+        <label class="auth-consent"><input type="checkbox" id="rg-accept-pd" /><span>Даю <a href="consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a> по <a href="privacy.html" target="_blank" rel="noopener">политике</a></span></label>
+      </fieldset>
       </div>
     </div>
   </div>

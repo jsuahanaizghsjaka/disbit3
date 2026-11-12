@@ -55,12 +55,23 @@ CREATE TABLE IF NOT EXISTS social_identities (
   PRIMARY KEY(provider, subject),
   UNIQUE(provider, user_id)
 );
+-- Acceptance of the user agreement and the personal-data consent (152-FZ art. 9).
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document TEXT NOT NULL CHECK(document IN ('terms','personal_data')),
+  version TEXT NOT NULL,
+  source TEXT NOT NULL CHECK(source IN ('email','google')),
+  accepted_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS legal_acceptances_user ON legal_acceptances(user_id);
 CREATE TABLE IF NOT EXISTS oauth_flows (
   state_hash TEXT PRIMARY KEY,
   binding_hash TEXT UNIQUE NOT NULL,
   nonce TEXT NOT NULL,
   verifier TEXT NOT NULL,
   mode TEXT NOT NULL CHECK(mode IN ('login','link')),
+  consent INTEGER NOT NULL DEFAULT 0,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   session_token TEXT REFERENCES sessions(token) ON DELETE CASCADE,
   expires_at INTEGER NOT NULL

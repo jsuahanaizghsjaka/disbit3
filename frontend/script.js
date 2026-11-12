@@ -3347,10 +3347,28 @@ async function loadGoogleAvailability() {
   catch { googleAvailable = false; }
   updateGoogleControls();
 }
+// Registration consents: both boxes, never pre-ticked (152-FZ art. 9).
+function registerConsents() {
+  return {
+    acceptTerms: document.getElementById('rg-accept-terms').checked,
+    acceptPersonalData: document.getElementById('rg-accept-pd').checked
+  };
+}
+function requireConsents() {
+  const consents = registerConsents();
+  const missing = !consents.acceptTerms ? 'rg-accept-terms' : !consents.acceptPersonalData ? 'rg-accept-pd' : '';
+  for (const id of ['rg-accept-terms', 'rg-accept-pd']) document.getElementById(id).removeAttribute('aria-invalid');
+  if (!missing) return true;
+  showAuthError('Отметь согласие с соглашением и на обработку персональных данных');
+  const box = document.getElementById(missing);
+  box.setAttribute('aria-invalid', 'true'); box.focus();
+  return false;
+}
 async function startGoogleSignIn(mode) {
   if (googleBusy || !googleAvailable) return;
   const link = mode === 'link';
   if (!link && authToken) return;
+  if (!link && authMode === 'register' && !requireConsents()) return;
   const button = document.getElementById(link ? 'google-link-submit' : 'google-login-button');
   const error = document.getElementById(link ? 'google-link-error' : 'auth-error');
   const password = document.getElementById('google-link-password');
@@ -3365,7 +3383,7 @@ async function startGoogleSignIn(mode) {
       if (!saved?.ok) throw Error('Не удалось сохранить данные. Проверьте связь и повторите привязку.');
     }
     if (owner !== authToken) return;
-    const result = await googleRequest('google/start', { mode, ...(link ? { password: password.value } : {}) });
+    const result = await googleRequest('google/start', { mode, ...(link ? { password: password.value } : registerConsents()) });
     if (owner !== authToken) return;
     const destination = new URL(result.url);
     if (destination.origin !== 'https://accounts.google.com' || destination.pathname !== '/o/oauth2/v2/auth') throw Error('Некорректный адрес входа. Попробуйте позже.');
@@ -3397,8 +3415,10 @@ async function finishGoogleSignIn() {
       already_linked: 'К этому профилю уже привязан другой Google.',
       session_expired: 'Сессия завершена. Войдите снова и повторите привязку.',
       cancelled: 'Вход через Google отменён. Можно выбрать другой способ.',
-      expired: 'Время входа истекло. Начните снова.'
+      expired: 'Время входа истекло. Начните снова.',
+      consent_required: 'Для этого Google ещё нет аккаунта. Отметьте согласия и нажмите «Продолжить с Google» ещё раз.'
     };
+    if (result.result === 'consent_required' && !authToken) { openAuthSheet('register'); showAuthError(messages.consent_required); return; }
     throw Error(messages[result.result] || 'Не удалось завершить вход через Google. Попробуйте ещё раз.');
   } catch (err) {
     if (authToken) toast(err.message);
@@ -3535,6 +3555,7 @@ async function submitAuth() {
     const invalid=!input.value.trim() || (id==='rg-email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) || (id==='rg-pass' && input.value.length<6);
     if(invalid) {showAuthError(id==='rg-pass'?'Пароль должен содержать не менее 6 символов':id==='rg-email'?'Укажи корректную почту':'Заполни поле');input.setAttribute('aria-invalid','true');input.setAttribute('aria-describedby','auth-error');input.focus();return;}
   }
+  if (authMode === 'register' && !requireConsents()) return;
   btn.disabled = true;
   btn.textContent = 'Секунду…';
   try {
@@ -3548,7 +3569,8 @@ async function submitAuth() {
       res = await apiCallStrict('POST', '/auth/register', {
         login: document.getElementById('rg-login').value.trim(),
         email: document.getElementById('rg-email').value.trim(),
-        password: document.getElementById('rg-pass').value
+        password: document.getElementById('rg-pass').value,
+        ...registerConsents()
       });
     }
     if (res.error) { showAuthError(res.error); return; }

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Согласие на обработку персональных данных — disbit</title>
+  <meta name="theme-color" content="#0B1324" />
+  <link rel="icon" href="icons/app.ico" />
+  <link rel="stylesheet" href="fonts.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0B1324; --card: #14233B; --line: #2B3C56;
+      --text: #F4F7FF; --text-2: #AEBBD1; --text-3: #AEBBD1; --primary: #9AB2FF;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: 'Onest', system-ui, sans-serif; line-height: 1.6;
+      padding: max(24px, env(safe-area-inset-top)) 20px calc(48px + env(safe-area-inset-bottom));
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    .logo { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+    .logo span { color: var(--primary); }
+    h1 { font-family: 'Onest', sans-serif; font-size: clamp(24px,6vw,32px); line-height: 1.2; margin: 20px 0 12px; overflow-wrap: anywhere; }
+    .upd { color: var(--text-3); font-size: 13px; margin: 0 0 28px; }
+    h2 { font-size: 17px; font-weight: 800; margin: 28px 0 10px; }
+    p, li { color: var(--text-2); font-size: 16px; line-height:24px; }
+    a { color: var(--primary); }
+    ul { padding-left: 20px; margin: 8px 0; }
+    li { margin-bottom: 6px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; padding: 16px 18px; margin: 14px 0;
+    }
+    .card strong { color: var(--text); }
+    .back { display: inline-flex; align-items:center; min-height:44px; margin-block:16px; color: var(--primary); font-weight: 700; }
+    a { overflow-wrap:anywhere; text-underline-offset:4px; }
+    a:focus-visible { outline:2px solid var(--primary); outline-offset:4px; border-radius:4px; }
+    .foot { color: var(--text-3); font-size: 12px; margin-top: 28px; }
+      mark { background: #3b3320; color: #ffd98a; border-radius: 4px; padding: 0 3px; }
+    .draft { background: #3b2020; border: 1px solid #7a3b3b; color: #ffd0d0; border-radius: 12px; padding: 12px 16px; font-size: 14px; }
+    h2.part { font-size: 22px; margin-top: 44px; scroll-margin-top: 16px; }
+    blockquote { margin: 12px 0; padding: 12px 16px; border-left: 3px solid var(--primary); background: var(--card); border-radius: 0 12px 12px 0; color: var(--text-2); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back" href="index.html#register">← В приложение</a>
+    <div class="logo">dis<span>bit</span></div>
+    <h1>Согласие на обработку персональных данных</h1>
+    <p class="draft">Редакция от <mark>[дата публикации]</mark>. ЧЕРНОВИК — не действует до проверки юристом и заполнения реквизитов.</p>
+    <p>Это согласие оформлено отдельно от других документов (ч. 1 ст. 9 Федерального закона № 152-ФЗ). Вы даёте его отдельной отметкой при регистрации.</p>
+    <blockquote>Я свободно, своей волей и в своём интересе даю <mark>[ФИО оператора]</mark>, ИНН <mark>[ИНН]</mark>, адрес <mark>[адрес]</mark>, согласие на обработку моих персональных данных: логина, адреса почты, данных профиля, обещаний и отметок, фото и видео пруфов, истории денежных операций — в целях работы сервиса Disbit по <a href="terms.html">Пользовательскому соглашению</a>. Согласие даётся на сбор, запись, систематизацию, накопление, хранение, уточнение, извлечение, использование, передачу лицам, перечисленным в <a href="privacy.html">Политике обработки персональных данных</a>, удаление и уничтожение, с использованием средств автоматизации. Согласие действует до удаления аккаунта или отзыва. Отозвать его можно письмом на <a href="mailto:disbitx1@gmail.com">disbitx1@gmail.com</a>.</blockquote>
+    <h2>Как отозвать</h2>
+    <p>Напишите на <a href="mailto:disbitx1@gmail.com">disbitx1@gmail.com</a> с адреса, привязанного к аккаунту. После отзыва аккаунт и данные удаляются в течение <mark>[срок]</mark> дней; история денежных операций хранится столько, сколько требует закон.</p>
+    <a class="back" href="index.html#register">← Вернуться в приложение</a>
+  </main>
+</body>
+</html>

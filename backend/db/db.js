@@ -45,6 +45,7 @@ for (const sql of [
   "ALTER TABLE users ADD COLUMN time_zone TEXT",
   "ALTER TABLE users ADD COLUMN pass_hash TEXT",
   "ALTER TABLE users ADD COLUMN pass_salt TEXT",
+  "ALTER TABLE oauth_flows ADD COLUMN consent INTEGER NOT NULL DEFAULT 0",
   // сессии без срока жизни: старые строки получат его в routes/auth.js
   "ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0"
 ]) {
