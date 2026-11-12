@@ -6,10 +6,10 @@
 
 | Дата | Что | Версия / versionCode | Коммит | Тег | Источник |
 |---|---|---|---|---|---|
-| 2026-10-25 | Сервер production + staging | — | `5ae29a7` | — | RELEASE-FOUNDATION-REPORT.md |
-| 2026-10-25 | Android APK/AAB | 1.0.4 / 5 | `5ae29a7` | — | RELEASE-FOUNDATION-REPORT.md |
-| 2026-10-27 | Android APK (Galaxy A22) | 1.0.6 / 7 | `e9d98b5` | — | plans/DISBIT-PERFORMANCE-AUDIT-AND-SPEC.md |
-| 2026-11-07 | Сервер production + staging | — | `777ff10` | `server-2026-11-07` | ops/INTRO-SKIP-GOOGLE-2026-11-07.md |
+| 2026-10-25 | Сервер production + staging | — | `d487aab` | — | RELEASE-FOUNDATION-REPORT.md |
+| 2026-10-25 | Android APK/AAB | 1.0.4 / 5 | `d487aab` | — | RELEASE-FOUNDATION-REPORT.md |
+| 2026-10-27 | Android APK (Galaxy A22) | 1.0.6 / 7 | `e65ec69` | — | plans/DISBIT-PERFORMANCE-AUDIT-AND-SPEC.md |
+| 2026-11-07 | Сервер production + staging | — | `2c975b7` | `server-2026-11-07` | ops/INTRO-SKIP-GOOGLE-2026-11-07.md |
 | не выпущен | Android (в `android/app/build.gradle`) | 1.0.7 / 8 | — | — | build.gradle |
 
 ## Как ставить тег
