@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { db } from '../db/db.js';
 import { accountDay, proofSatisfied, proofQuota } from '../proof-policy.js';
 import { transaction, syncTrustedBitAward, trustedCompletionEligible } from '../lib/promise-skips.js';
+import { validateVideo } from '../lib/proof-video.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,7 +36,7 @@ if (!ADMIN_KEY) {
 } else if (ADMIN_KEY.length < 16) {
   console.warn('[proofs] ADMIN_KEY короче 16 символов — подбирается перебором, замени');
 }
-const MAX_BYTES = 25 * 1024 * 1024;                          // 25 МБ на пруф
+const MAX_BYTES = 10 * 1024 * 1024;
 
 const router = Router();
 const uid = req => req.userId;   // загрузка под authRequired — гостя здесь не бывает
@@ -83,7 +84,7 @@ router.post('/skip', authRequired, (req, res) => {
 /* -------- загрузка пруфа (сырые байты) --------
    POST /api/proofs?habitId=..&day=YYYY-MM-DD&type=photo|video&name=..
    тело = байты медиа, Content-Type = image/* | video/* */
-router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES }), (req, res) => {
+router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES }), async (req, res, next) => {
   const { habitId, day, name } = req.query;
   const type = req.query.type === 'video' ? 'video' : 'photo';
   const mime = req.headers['content-type'] || '';
@@ -103,12 +104,25 @@ router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES 
     return res.status(400).json({ error: 'Пустое медиа' });
   }
   const bytes = req.body;
+  if (type === 'photo' && bytes.length > 5 * 1024 * 1024) {
+    return res.status(413).json({ error: 'Фото должно быть не больше 5 МБ' });
+  }
   const signature = mediaType === 'image/jpeg' ? bytes.subarray(0,3).equals(Buffer.from([255,216,255])) :
     mediaType === 'image/png' ? bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) :
     mediaType === 'image/webp' ? bytes.toString('ascii',0,4)==='RIFF' && bytes.toString('ascii',8,12)==='WEBP' :
     mediaType === 'video/webm' ? bytes.subarray(0,4).equals(Buffer.from([26,69,223,163])) :
     bytes.toString('ascii',4,8)==='ftyp';
   if (!signature) return res.status(415).json({ error: 'Файл не похож на фото или видео. Пересними пруф.' });
+  if (type === 'video') {
+    try { await validateVideo(bytes); }
+    catch (error) {
+      if (error.code === 'ENOENT') return res.status(503).json({error:'Проверка видео временно недоступна. Отправь фото.'});
+      if (error.message === 'video-busy') return res.status(429).json({error:'Сейчас проверяются другие видео. Повтори через несколько секунд.'});
+      return res.status(400).json({error:error.message === 'video-too-long' ? 'Видео должно быть не длиннее 15 секунд' : 'Не удалось проверить видео. Пересними пруф или отправь фото.'});
+    }
+    // Async validation may overlap account deletion or archiving.
+    if (!db.prepare('SELECT 1 FROM habits WHERE id=? AND user_id=? AND archived=0').get(String(habitId),uid(req))) return res.status(409).json({error:'Обещание больше недоступно'});
+  }
   const ext = EXT[mediaType];
   const fname = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.${ext}`;
   try {
@@ -122,10 +136,12 @@ router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES 
     const u = db.prepare('SELECT login FROM users WHERE id = ?').get(req.userId);
     login = u?.login || null;
   }
-  const info = db.prepare(`
+  let info;
+  try { info = db.prepare(`
     INSERT INTO proofs (user_id, user_login, habit_id, habit_name, day, type, file, mime)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(uid(req), login, String(habitId), String(name || ''), String(day), type, fname, mime);
+  } catch (error) { fs.rmSync(path.join(PROOFS_DIR,fname),{force:true}); return next(error); }
 
   res.status(201).json({ ok: true, id: info.lastInsertRowid, status: 'pending' });
 });
@@ -141,11 +157,12 @@ function keyMatches(given) {
   return crypto.timingSafeEqual(a, b);
 }
 
-function adminOnly(req, res, next) {
+export function adminOnly(req, res, next) {
   if (!ADMIN_KEY) {
     return res.status(503).json({ error: 'Панель выключена: на сервере не задан ADMIN_KEY' });
   }
-  const key = req.headers['x-admin-key'] || req.query.key;
+  res.set('Cache-Control', 'no-store');
+  const key = req.headers['x-admin-key'];
   if (!keyMatches(key)) return res.status(401).json({ error: 'Нужен админ-ключ' });
   next();
 }

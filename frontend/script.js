@@ -4036,10 +4036,16 @@ function saveMotivation() {
 }
 
 /* ---------- ЭКСПОРТ / ИМПОРТ / ОЧИСТКА ---------- */
-function exportData() {
+async function exportData() {
+  let server = null;
+  if (authToken) {
+    try { server = await apiCallStrict('GET', '/account/export'); }
+    catch { dataStatus('Не удалось получить данные аккаунта. Проверь подключение и повтори экспорт.'); return; }
+  }
   const data = {
     app: 'disbit',
     version: 5,
+    server,
     exportedAt: new Date().toISOString(),
     habits, ledger, profile, settings, friends, goals, rewards, backlog, skips,
     settled: localStorage.getItem(SETTLED_KEY)
@@ -4513,7 +4519,7 @@ async function proofToggleVideo() {
   proofRecordStream = recordStream;
 
   proofChunks = [];
-  try { proofRecorder = new MediaRecorder(recordStream, { mimeType: proofPickVideoMime() || undefined }); }
+  try { proofRecorder = new MediaRecorder(recordStream, { mimeType: proofPickVideoMime() || undefined, videoBitsPerSecond: 2000000, audioBitsPerSecond: 64000 }); }
   catch { cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null; if (proofRecordStream !== proofStream) proofRecordStream?.getVideoTracks().forEach(t => t.stop()); proofRecordStream = null; document.getElementById('proof-photo').disabled = false; document.getElementById('proof-flip').disabled = false; toast('Запись видео недоступна. Можно сделать фото.'); return; }
   proofRecorder.ondataavailable = e => { if (e.data && e.data.size) proofChunks.push(e.data); };
   proofRecorder.onstop = () => {
@@ -4525,6 +4531,7 @@ async function proofToggleVideo() {
     const b = new Blob(proofChunks, { type: proofRecorder.mimeType || 'video/webm' });
     proofChunks = [];
     proofRecorder = null;
+    if (b.size > 10 * 1024 * 1024) { toast('Видео больше 10 МБ. Запиши более короткое видео.'); return; }
     proofBlob = b; proofType = 'video';
     proofShowPreview(URL.createObjectURL(b), 'video');
   };
@@ -4572,8 +4579,9 @@ async function proofSend() {
   if (!proofBlob || !proofHabit || proofSending) return;
   const uploadError = document.getElementById('proof-upload-error');
   uploadError.hidden = true;
-  if (!proofBlob.size || proofBlob.size > 25 * 1024 * 1024) {
-    uploadError.textContent = proofBlob.size ? 'Файл больше 25 МБ. Пересними более короткое видео.' : 'Файл пуст. Пересними момент.';
+  const maxProofBytes = (proofType === 'video' ? 10 : 5) * 1024 * 1024;
+  if (!proofBlob.size || proofBlob.size > maxProofBytes) {
+    uploadError.textContent = proofBlob.size ? (proofType === 'video' ? 'Видео больше 10 МБ. Пересними более короткое видео.' : 'Фото больше 5 МБ. Пересними фото.') : 'Файл пуст. Пересними момент.';
     uploadError.hidden = false; return;
   }
   if (!API || !authToken) { toast('Для отправки фото нужен аккаунт.'); return; }

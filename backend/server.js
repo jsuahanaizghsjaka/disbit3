@@ -22,6 +22,8 @@ import friendsRouter from './routes/friends.js';
 import invitesRouter from './routes/invites.js';
 import aiRouter from './routes/ai.js';
 import walletRouter from './routes/wallet.js';
+import accountRouter from './routes/account.js';
+import moderationRouter from './routes/moderation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -57,6 +59,8 @@ app.use('/api/friends', friendsRouter);
 app.use('/api/invites', invitesRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/wallet', walletRouter);
+app.use('/api/account', accountRouter);
+app.use('/api/moderation', moderationRouter);
 
 /* Неизвестный /api/* НЕ должен проваливаться в статику ниже: опечатка в адресе
    отдавала index.html со статусом 200, apiCall() спотыкался на JSON.parse и
@@ -66,6 +70,9 @@ app.use('/api', (req, res) => {
 });
 
 // чистый URL для политики конфиденциальности (нужен сторам): /privacy
+app.get('/support', (_req, res) => res.sendFile(path.join(__dirname, '..', 'frontend', 'support.html')));
+app.get('/safety', (_req, res) => res.sendFile(path.join(__dirname, '..', 'frontend', 'safety.html')));
+app.get('/delete-account', (_req, res) => res.sendFile(path.join(__dirname, '..', 'frontend', 'delete-account.html')));
 app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'privacy.html'));
 });

@@ -38,6 +38,11 @@
     .badge { font-size:11px; font-weight:800; padding:3px 8px; border-radius:20px; }
     .b-approved { background:rgba(62,190,125,0.16); color:var(--green); }
     .b-rejected { background:rgba(240,102,106,0.16); color:var(--red); }
+    :focus-visible { outline:3px solid var(--primary); outline-offset:3px; }
+    button { min-height:44px; }
+    .p-habit, .p-meta, .proof p { overflow-wrap:anywhere; }
+    .tabs { flex-wrap:wrap; }
+    .gate { padding:0 16px; }
   </style>
 </head>
 <body>
@@ -45,7 +50,8 @@
   <div class="gate" id="gate">
     <h1>Проверка пруфов</h1>
     <p class="sub">Введи админ-ключ, чтобы увидеть присланные подтверждения.</p>
-    <input class="inp" id="key" type="password" placeholder="Админ-ключ" autocomplete="off" />
+    <label for="key">Админ-ключ</label>
+    <input class="inp" id="key" type="password" autocomplete="off" />
     <button class="btn btn-primary" id="enter">Войти</button>
     <p class="err" id="gate-err" hidden></p>
   </div>
@@ -53,6 +59,7 @@
   <!-- панель -->
   <div class="wrap" id="panel" hidden>
     <h1>Проверка пруфов</h1>
+    <button class="btn" id="logout">Выйти</button>
     <p class="sub" id="counts"></p>
     <div class="tabs">
       <button class="tab on" data-status="pending">Ожидают</button>
@@ -60,14 +67,37 @@
       <button class="tab" data-status="rejected">Отклонены</button>
     </div>
     <div id="list"></div>
+    <h2>Жалобы пользователей</h2>
+    <button class="btn" id="reports-refresh">Обновить жалобы</button>
+    <div id="reports" role="status"></div>
   </div>
 
   <script>
     let KEY = '';
     let status = 'pending';
+    let mediaUrls = [];
+    let generation = 0;
     const H = () => ({ 'X-Admin-Key': KEY });
+    async function loadReports() {
+      const list=document.getElementById('reports');list.textContent='Загрузка…';
+      try {
+        const r=await fetch('/api/moderation/reports',{headers:H()});if(!r.ok)throw Error('load');
+        const {items}=await r.json();list.replaceChildren();
+        for(const item of items){
+          const box=document.createElement('article');box.className='proof';
+          const text=document.createElement('p');text.textContent=`№${item.id} · ${item.target_login || 'Удалённый аккаунт'} · ${item.created_at}: ${item.reason}`;box.append(text);
+          for(const [status,label] of [['resolved','Меры приняты'],['dismissed','Нарушение не найдено']]) {
+            const b=document.createElement('button');b.className='btn';b.textContent=label;
+            b.onclick=async()=>{b.disabled=true;try{const response=await fetch(`/api/moderation/reports/${item.id}/decision`,{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify({status})});if(!response.ok)throw Error('save');await loadReports();}catch{b.disabled=false;alert('Решение не сохранено');}};box.append(b);
+          }list.append(box);
+        }if(!items.length)list.textContent='Нет ожидающих жалоб';
+      }catch{list.textContent='Не удалось загрузить жалобы';}
+    }
+    document.getElementById('reports-refresh').onclick=loadReports;
 
     async function load() {
+      const current = ++generation;
+      mediaUrls.forEach(url => URL.revokeObjectURL(url)); mediaUrls = [];
       const list = document.getElementById('list');
       list.innerHTML = '<p class="empty">Загрузка…</p>';
       let data;
@@ -75,6 +105,7 @@
         const r = await fetch('/api/proofs?status=' + status, { headers: H() });
         if (!r.ok) throw new Error('unauth');
         data = await r.json();
+        if (current !== generation) return;
       } catch { list.innerHTML = '<p class="empty">Ошибка загрузки</p>'; return; }
 
       const c = data.counts || {};
@@ -87,8 +118,8 @@
         const el = document.createElement('div');
         el.className = 'proof';
         const media = p.type === 'video'
-          ? `<video class="p-media" src="/api/proofs/${p.id}/media?key=${encodeURIComponent(KEY)}" controls playsinline></video>`
-          : `<img class="p-media" src="/api/proofs/${p.id}/media?key=${encodeURIComponent(KEY)}" alt="">`;
+          ? `<video class="p-media" controls playsinline preload="none"></video>`
+          : `<img class="p-media" alt="Фото выполнения обещания">`;
         const actions = status === 'pending'
           ? `<div class="p-actions">
                <button class="btn btn-ok" data-ok="${p.id}">✓ Одобрить</button>
@@ -100,21 +131,36 @@
             <span class="p-habit">${escapeHtml(p.habit_name || 'Обещание')}</span>
             <span class="p-meta">${escapeHtml(p.user_login || 'гость')} · ${p.day}</span>
           </div>
+          <button class="btn" data-load>Открыть ${p.type === 'video' ? 'видео' : 'фото'}</button>
           ${media}
           ${actions}`;
         list.appendChild(el);
+        el.querySelector('.p-media').hidden = true;
+        el.querySelectorAll('[data-ok],[data-no]').forEach(b=>b.disabled=true);
+        const open = el.querySelector('[data-load]');
+        open.onclick = () => {
+        open.disabled = true; open.textContent = 'Загрузка…';
+        fetch('/api/proofs/' + p.id + '/media', { headers: H(), cache: 'no-store' })
+          .then(r => { if (!r.ok) throw Error('media'); return r.blob(); })
+          .then(blob => { if (current !== generation) return; const url=URL.createObjectURL(blob); mediaUrls.push(url); const viewer=el.querySelector('.p-media'); viewer.src=url; viewer.hidden=false; open.hidden=true; el.querySelectorAll('[data-ok],[data-no]').forEach(b=>b.disabled=false); })
+          .catch(() => { if (current === generation) { open.disabled=false;open.textContent='Не удалось загрузить. Повторить'; } });
+        };
       }
       list.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => decide(b.dataset.ok, 'approved'));
       list.querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no, 'rejected'));
     }
 
     async function decide(id, decision) {
-      await fetch('/api/proofs/' + id + '/decision', {
+      if (!confirm(decision === 'approved' ? 'Подтвердить выполнение?' : 'Отклонить этот пруф?')) return;
+      try {
+      const response = await fetch('/api/proofs/' + id + '/decision', {
         method: 'POST',
         headers: { ...H(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: decision })
       });
+      if (!response.ok) throw Error('decision');
       load();
+      } catch { alert('Решение не сохранено. Проверьте подключение и повторите.'); }
     }
 
     function escapeHtml(s) {
@@ -125,13 +171,20 @@
     document.getElementById('enter').onclick = async () => {
       KEY = document.getElementById('key').value.trim();
       const err = document.getElementById('gate-err');
+      err.hidden=true;
+      document.getElementById('enter').disabled=true;
+      try {
       const r = await fetch('/api/proofs?status=pending', { headers: H() });
       if (!r.ok) { err.hidden = false; err.textContent = 'Неверный ключ'; return; }
-      sessionStorage.setItem('disbit_admin_key', KEY);
+      document.getElementById('key').value = '';
       document.getElementById('gate').hidden = true;
       document.getElementById('panel').hidden = false;
       load();
+      loadReports();
+      } catch { err.hidden=false;err.textContent='Нет соединения. Попробуйте ещё раз.'; }
+      finally { document.getElementById('enter').disabled=false; }
     };
+    document.getElementById('logout').onclick=()=>{ KEY='';generation++;mediaUrls.forEach(url=>URL.revokeObjectURL(url));mediaUrls=[];document.getElementById('list').replaceChildren();document.getElementById('reports').replaceChildren();document.getElementById('panel').hidden=true;document.getElementById('gate').hidden=false;document.getElementById('key').focus(); };
     document.getElementById('key').addEventListener('keydown', e => {
       if (e.key === 'Enter') document.getElementById('enter').click();
     });
@@ -143,8 +196,7 @@
     });
 
     // если ключ уже вводили в этой вкладке — сразу входим
-    const saved = sessionStorage.getItem('disbit_admin_key');
-    if (saved) { document.getElementById('key').value = saved; document.getElementById('enter').click(); }
+    sessionStorage.removeItem('disbit_admin_key');
   </script>
 </body>
 </html>

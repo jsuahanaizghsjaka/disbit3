@@ -10,6 +10,7 @@
 
 import { Router } from 'express';
 import { db } from '../db/db.js';
+import { blocked } from '../lib/moderation.js';
 
 const router = Router();
 
@@ -56,7 +57,7 @@ router.get('/', (req, res) => {
   const me = db.prepare('SELECT login FROM users WHERE id = ?').get(req.userId);
   res.json({
     me: me?.login || null,
-    friends: rows.map(r => ({ id: r.id, login: r.login, ...publicCard(r.id) }))
+    friends: rows.filter(r=>!blocked(req.userId,r.id)).map(r => ({ id: r.id, login: r.login, ...publicCard(r.id) }))
   });
 });
 
@@ -68,6 +69,7 @@ router.post('/', (req, res) => {
   const friend = db.prepare('SELECT id, login FROM users WHERE login = ?').get(login);
   if (!friend) return res.status(404).json({ error: 'Пользователь с таким логином не найден' });
   if (friend.id === req.userId) return res.status(400).json({ error: 'Это твой собственный логин' });
+  if (blocked(req.userId,friend.id)) return res.status(403).json({error:'Добавление этого пользователя недоступно'});
 
   const exists = db.prepare(
     'SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?'

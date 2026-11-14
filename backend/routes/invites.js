@@ -10,6 +10,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { db, habitToParams, rowToHabit } from '../db/db.js';
+import { blocked } from '../lib/moderation.js';
 
 const router = Router();
 
@@ -64,6 +65,7 @@ router.post('/:code/accept', (req, res) => {
   const inv = db.prepare('SELECT * FROM habit_invites WHERE code = ?').get(req.params.code);
   if (!inv) return res.status(404).json({ error: 'Приглашение не найдено' });
   if (inv.owner_id === req.userId) return res.status(400).json({ error: 'Это твоё собственное приглашение' });
+  if (blocked(req.userId,inv.owner_id)) return res.status(403).json({error:'Приглашение недоступно'});
 
   const owner = db.prepare('SELECT id, login FROM users WHERE id = ?').get(inv.owner_id);
   const me = db.prepare('SELECT id, login FROM users WHERE id = ?').get(req.userId);
