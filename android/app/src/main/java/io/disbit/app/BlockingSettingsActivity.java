@@ -40,12 +40,17 @@ public class BlockingSettingsActivity extends Activity {
             .setTitle("Доступ к специальным возможностям")
             .setMessage(getString(R.string.disbit_blocking_disclosure))
             .setNegativeButton("Отмена", null)
-            .setPositiveButton("Согласен — открыть настройки", (d, w) -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
+            .setPositiveButton("Согласен — открыть настройки", (d, w) -> {
+                BlockingStore.prefs(this).edit().putInt("disclosureVersion", 1).commit();
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            })
             .show());
         Button choose = button("Выбрать приложения"); content.addView(choose); choose.setOnClickListener(v -> chooseApps());
         start = button("Проверить блокировку на 15 минут"); content.addView(start);
         start.setOnClickListener(v -> {
-            if (!AppBlockingPlugin.authorized(this) || BlockingStore.selected(this).isEmpty()) { updateStatus(); return; }
+            if (!AppBlockingPlugin.authorized(this) || !AppBlockingService.connected
+                || BlockingStore.prefs(this).getInt("disclosureVersion", 0) != 1
+                || BlockingStore.selected(this).isEmpty()) { updateStatus(); return; }
             new AlertDialog.Builder(this).setTitle("Включить на 15 минут?")
                 .setMessage("Выбранные приложения будут недоступны. Ограничение можно снять здесь в любой момент.")
                 .setNegativeButton("Отмена", null).setPositiveButton("Включить", (d, w) -> {
@@ -58,6 +63,7 @@ public class BlockingSettingsActivity extends Activity {
         Button settings = button("Настройки энергосбережения"); content.addView(settings);
         settings.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)));
         content.addView(label("Android может остановить службу при энергосбережении. После перезагрузки проверьте её состояние. Отключение разрешения прекращает блокировку; это не денежный штраф.", 16));
+        content.addView(label("Samsung: проверьте, что Disbit не находится в списке спящих приложений. Xiaomi: проверьте разрешение автозапуска и ограничения фоновой работы. Названия настроек зависят от версии системы. Даже после изменения настроек проверьте блокировку на выбранном приложении — разрешение само по себе не означает, что служба работает.", 16));
         Button done = button("Вернуться в Disbit"); content.addView(done); done.setOnClickListener(v -> finish());
     }
     private TextView label(String text, int size) {
@@ -75,7 +81,9 @@ public class BlockingSettingsActivity extends Activity {
             + (granted && !AppBlockingService.connected ? "\nСлужба не подключена. Выключите и включите доступ в настройках Android." : "")
             + "\nВыбрано приложений: " + count + "\n" + (active ? "Ограничение активно" : "Ограничение не активно") + end
             + (power.isPowerSaveMode() ? "\nЭнергосбережение включено" : ""));
-        start.setEnabled(granted && AppBlockingService.connected && count > 0 && !active);
+        boolean consent = BlockingStore.prefs(this).getInt("disclosureVersion", 0) == 1;
+        if (!consent) status.append("\nПрочитайте описание доступа и подтвердите согласие кнопкой «Разрешить ограничение приложений».");
+        start.setEnabled(consent && granted && AppBlockingService.connected && count > 0 && !active);
     }
     private void chooseApps() {
         if (BlockingStore.active(this)) {

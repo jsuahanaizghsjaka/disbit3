@@ -24,6 +24,7 @@ import aiRouter from './routes/ai.js';
 import walletRouter from './routes/wallet.js';
 import accountRouter from './routes/account.js';
 import moderationRouter from './routes/moderation.js';
+import blockingRouter from './routes/blocking.js';
 import {enforceModeration} from './lib/moderation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,7 @@ app.use('/api/ai', aiRouter);
 app.use('/api/wallet', walletRouter);
 app.use('/api/account', accountRouter);
 app.use('/api/moderation', moderationRouter);
+app.use('/api/blocking', blockingRouter);
 
 /* Неизвестный /api/* НЕ должен проваливаться в статику ниже: опечатка в адресе
    отдавала index.html со статусом 200, apiCall() спотыкался на JSON.parse и

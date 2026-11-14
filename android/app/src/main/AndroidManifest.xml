@@ -4,6 +4,8 @@
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
         <intent><action android:name="android.intent.action.DIAL" /></intent>
+        <intent><action android:name="android.intent.action.DIAL_EMERGENCY" /></intent>
+        <intent><action android:name="android.intent.action.CALL_EMERGENCY" /></intent>
         <intent><action android:name="android.settings.SETTINGS" /></intent>
     </queries>
 

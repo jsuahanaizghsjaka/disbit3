@@ -30,7 +30,11 @@ public class AppBlockingService extends AccessibilityService implements SharedPr
         if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || event.getPackageName() == null) return;
         String pkg = event.getPackageName().toString();
         // Our own overlay produces events too; do not hide it because of those.
-        if (pkg.equals(getPackageName()) && shield != null) return;
+        if (pkg.equals(getPackageName()) && shield != null) {
+            String screen = String.valueOf(event.getClassName());
+            if (!screen.equals(MainActivity.class.getName())
+                    && !screen.equals(BlockingSettingsActivity.class.getName())) return;
+        }
         foreground = pkg;
         reconcile();
     }

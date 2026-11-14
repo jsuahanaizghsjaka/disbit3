@@ -16,7 +16,8 @@ final class BlockingStore {
     }
     static boolean active(Context c) {
         SharedPreferences p = prefs(c);
-        return BlockingWindow.active(p.getLong("start", 0), p.getLong("end", 0), System.currentTimeMillis());
+        return p.getInt("disclosureVersion", 0) == 1
+            && BlockingWindow.active(p.getLong("start", 0), p.getLong("end", 0), System.currentTimeMillis());
     }
     static void stop(Context c) {
         prefs(c).edit().remove("start").remove("end").commit();
@@ -35,7 +36,9 @@ final class BlockingStore {
             if (pm.getLaunchIntentForPackage(pkg) == null) return false;
             Intent[] protectedIntents = {
                 new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
-                new Intent(Intent.ACTION_DIAL), new Intent(Settings.ACTION_SETTINGS)
+                new Intent(Intent.ACTION_DIAL), new Intent(Settings.ACTION_SETTINGS),
+                new Intent("android.intent.action.DIAL_EMERGENCY"),
+                new Intent("android.intent.action.CALL_EMERGENCY")
             };
             for (Intent intent : protectedIntents) {
                 for (ResolveInfo r : pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
@@ -44,10 +47,11 @@ final class BlockingStore {
             }
             android.view.inputmethod.InputMethodManager imm =
                 (android.view.inputmethod.InputMethodManager)c.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm == null) return false;
             for (android.view.inputmethod.InputMethodInfo input : imm.getInputMethodList()) {
                 if (pkg.equals(input.getPackageName())) return false;
             }
             return true;
-        } catch (PackageManager.NameNotFoundException e) { return false; }
+        } catch (PackageManager.NameNotFoundException | SecurityException e) { return false; }
     }
 }
