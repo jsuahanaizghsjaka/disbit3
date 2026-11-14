@@ -17,3 +17,19 @@ document.getElementById('safety-form').onsubmit=async event=>{
  catch(e){result.textContent=e.message;}finally{buttons.forEach(b=>b.disabled=false);}
 };
 loadBlocks().catch(e=>result.textContent=e.message);
+async function loadModeration(){
+ const [notices,state]=await Promise.all([call('GET','/notices'),call('GET','/restriction')]);
+ const box=document.getElementById('notices');box.replaceChildren();
+ for(const item of notices.items){const p=document.createElement('p');p.textContent=item.message;box.append(p);}
+ if(!notices.items.length)box.textContent='Пока нет ответов.';
+ document.getElementById('appeal-section').hidden=!state.restriction;
+ document.getElementById('restriction').textContent=state.restriction?.reason||'';
+ document.getElementById('appeal-form').hidden=state.appeal?.status==='pending';
+ if(state.appeal?.status==='pending')document.getElementById('restriction').textContent+=' Обращение принято. Ответ — в течение 48 часов.';
+}
+document.getElementById('appeal-form').onsubmit=async event=>{
+ event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;
+ try{await call('POST','/appeals',{message:document.getElementById('appeal-message').value});await loadModeration();result.textContent='Обращение отправлено.';}
+ catch(e){result.textContent=e.message;}finally{button.disabled=false;}
+};
+loadModeration().catch(e=>result.textContent=e.message);

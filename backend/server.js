@@ -24,6 +24,7 @@ import aiRouter from './routes/ai.js';
 import walletRouter from './routes/wallet.js';
 import accountRouter from './routes/account.js';
 import moderationRouter from './routes/moderation.js';
+import {enforceModeration} from './lib/moderation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -34,6 +35,7 @@ app.set('trust proxy', 'loopback');
 app.use(cors());                    // чтобы фронтенд с другого порта мог обращаться
 app.use(express.json({ limit: '1mb' }));
 app.use(authMiddleware);            // Authorization: Bearer → req.userId
+app.use(enforceModeration);
 
 // проверка, что сервер жив
 app.get('/api/health', (req, res) => {

@@ -67,7 +67,7 @@
       <button class="tab" data-status="rejected">Отклонены</button>
     </div>
     <div id="list"></div>
-    <h2>Жалобы пользователей</h2>
+    <h2>Обжалования ограничений</h2><button class="btn" id="appeals-refresh">Обновить обращения</button><div id="appeals" role="status"></div><h2>Жалобы пользователей</h2>
     <button class="btn" id="reports-refresh">Обновить жалобы</button>
     <div id="reports" role="status"></div>
   </div>
@@ -78,6 +78,28 @@
     let mediaUrls = [];
     let generation = 0;
     const H = () => ({ 'X-Admin-Key': KEY });
+    async function loadAppeals(){
+      const list=document.getElementById('appeals');list.textContent='Загрузка…';
+      try{
+        const response=await fetch('/api/moderation/appeals/admin',{headers:H()});if(!response.ok)throw Error();
+        const data=await response.json();list.replaceChildren();
+        for(const item of data.items){
+          const card=document.createElement('article');card.className='proof';
+          const text=document.createElement('p');text.textContent='@'+item.login+': '+item.message;card.append(text);
+          const label=document.createElement('label');label.textContent='Причина решения';label.htmlFor='appeal-reason-'+item.id;
+          const reason=document.createElement('textarea');reason.id=label.htmlFor;reason.className='inp';reason.maxLength=1000;card.append(label,reason);
+          for(const [status,title] of [['accepted','Снять ограничение'],['rejected','Оставить ограничение']]){
+            const button=document.createElement('button');button.className='btn';button.textContent=title;
+            button.onclick=async()=>{
+              if(reason.value.trim().length<5){reason.focus();return;}
+              if(!confirm(title+'?'))return;button.disabled=true;
+              try{const saved=await fetch('/api/moderation/appeals/'+item.id+'/decision',{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify({status,reason:reason.value})});if(!saved.ok)throw Error();await loadAppeals();}catch{alert('Решение не сохранено. Повторите.');button.disabled=false;}
+            };card.append(button);
+          }list.append(card);
+        }if(!data.items.length)list.textContent='Нет ожидающих обращений';
+      }catch{list.textContent='Не удалось загрузить обращения';}
+    }
+    document.getElementById('appeals-refresh').onclick=loadAppeals;
     async function loadReports() {
       const list=document.getElementById('reports');list.textContent='Загрузка…';
       try {
@@ -86,7 +108,7 @@
         for(const item of items){
           const box=document.createElement('article');box.className='proof';
           const text=document.createElement('p');text.textContent=`№${item.id} · ${item.target_login || 'Удалённый аккаунт'} · ${item.created_at}: ${item.reason}`;box.append(text);
-          for(const [status,label] of [['resolved','Меры приняты'],['dismissed','Нарушение не найдено']]) {
+          for(const [status,label] of [['resolved','Ограничить социальные действия'],['dismissed','Нарушение не найдено']]) {
             const b=document.createElement('button');b.className='btn';b.textContent=label;
             b.onclick=async()=>{b.disabled=true;try{const response=await fetch(`/api/moderation/reports/${item.id}/decision`,{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify({status})});if(!response.ok)throw Error('save');await loadReports();}catch{b.disabled=false;alert('Решение не сохранено');}};box.append(b);
           }list.append(box);
@@ -181,6 +203,7 @@
       document.getElementById('panel').hidden = false;
       load();
       loadReports();
+      loadAppeals();
       } catch { err.hidden=false;err.textContent='Нет соединения. Попробуйте ещё раз.'; }
       finally { document.getElementById('enter').disabled=false; }
     };

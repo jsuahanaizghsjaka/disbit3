@@ -34,6 +34,25 @@ test('blocking prevents friendship and invitations; reporting is authenticated',
  assert.equal((await request('POST','/moderation/reports',{login:'recovery_two',reason:'Private proof',proofId:99})).status,400);
  const report=await fetch(base+'/moderation/reports',{headers:{'X-Admin-Key':'safety-only-admin-1234567890123456'}});assert.equal((await report.json()).items.length,1);
 });
+test('moderation decision restricts social writes and delivers only reporter notification',async()=>{
+ const headers={'X-Admin-Key':'safety-only-admin-1234567890123456','Content-Type':'application/json'};
+ const reports=await(await fetch(base+'/moderation/reports',{headers})).json();
+ const url=base+'/moderation/reports/'+reports.items[0].id+'/decision';
+ assert.equal((await fetch(url,{method:'POST',headers,body:JSON.stringify({status:'resolved'})})).status,200);
+ assert.equal((await fetch(url,{method:'POST',headers,body:JSON.stringify({status:'resolved'})})).status,409);
+ assert.equal((await request('POST','/friends',{login:'recovery_one'},'2'.repeat(64))).status,403);
+ assert.equal((await request('GET','/account/export',undefined,'2'.repeat(64))).status,200);
+ assert.equal((await(await request('GET','/moderation/notices')).json()).items.length,1);
+ assert.equal((await(await request('GET','/moderation/notices',undefined,'2'.repeat(64))).json()).items.length,0);
+ assert.equal((await request('POST','/moderation/appeals',{message:'Прошу пересмотреть решение'},'2'.repeat(64))).status,201);
+ assert.equal((await request('POST','/moderation/appeals',{message:'Повторное обращение'},'2'.repeat(64))).status,409);
+ const appeals=await(await fetch(base+'/moderation/appeals/admin',{headers})).json();
+ const appealUrl=base+'/moderation/appeals/'+appeals.items[0].id+'/decision';
+ assert.equal((await fetch(appealUrl,{method:'POST',headers,body:JSON.stringify({status:'accepted',reason:'Ошибка первоначальной проверки'})})).status,200);
+ assert.equal((await fetch(appealUrl,{method:'POST',headers,body:JSON.stringify({status:'accepted',reason:'Повторная обработка'})})).status,409);
+ assert.equal((await(await request('GET','/moderation/restriction',undefined,'2'.repeat(64))).json()).restriction,null);
+ assert.equal((await(await request('GET','/moderation/notices',undefined,'2'.repeat(64))).json()).items.length,1);
+});
 test('financial deletion preserves settled ledger and queues unresolved balance',async()=>{
  const db=new DatabaseSync(path.join(dir,'test.db'));
  db.prepare('INSERT INTO money_accounts(user_id,balance,reserved) VALUES(3,100,0)').run();
