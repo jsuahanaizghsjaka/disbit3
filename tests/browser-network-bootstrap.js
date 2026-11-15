@@ -22,7 +22,7 @@ async page => {
   await page.waitForFunction(() => habits.some(h => h.id === 'bootstrap-check') && supportSyncBusy);
   const early = Date.now() - start;
   if (early >= 1900) throw new Error(`Habits waited for the delayed wallet: ${early}ms`);
-  await page.waitForFunction(() => !supportSyncBusy && wallet?.sandbox?.available);
+  await page.waitForFunction(() => !supportSyncBusy && authUser?.login === 'tester');
   const first = name => events.find(e => e.path === name)?.at;
   const auth = first('auth/me'), habit = first('habits'), charge = first('charges'), state = first('state'), friends = first('friends'), walletAt = first('wallet');
   if (!auth || !habit || !charge || !state || !friends || !walletAt) throw new Error('Missing expected bootstrap request');

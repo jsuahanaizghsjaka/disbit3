@@ -11,8 +11,14 @@ import { db } from '../db/db.js';
 import { isEmailFormatValid, domainAcceptsMail, sendMail, verifyCodeHtml, mailConfigured } from '../lib/email.js';
 import { createSocialAuthRouter } from './social-auth.js';
 import { hasConsent, recordConsent, CONSENT_ERROR } from '../lib/legal.js';
+import {requestLimit} from '../lib/request-limits.js';
 
 const router = Router();
+router.post('/login', requestLimit('login-ip', 60, 15*60000),
+  requestLimit('login-identity-ip', 15, 15*60000, req => req.ip + ':' + String(req.body?.id || '').trim().toLowerCase()));
+router.post('/register', requestLimit('register-ip', 20, 60*60000));
+router.post('/resend', requestLimit('resend-ip', 30, 60*60000));
+router.post('/verify', requestLimit('verify-ip', 60, 15*60000));
 
 /* ---------- подтверждение почты ---------- */
 const CODE_TTL_MS = 15 * 60 * 1000;      // код живёт 15 минут

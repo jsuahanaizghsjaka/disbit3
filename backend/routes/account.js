@@ -37,7 +37,7 @@ router.get('/export', (req, res) => {
     data[table] = db.prepare(`SELECT * FROM ${table} WHERE user_id=?`).all(id);
   }
   data.completions = db.prepare('SELECT c.* FROM completions c JOIN habits h ON h.id=c.habit_id WHERE h.user_id=?').all(id);
-  data.proofs = db.prepare('SELECT id,habit_id,habit_name,day,type,status,created_at FROM proofs WHERE user_id=?').all(id);
+  data.proofs = db.prepare('SELECT id,habit_id,habit_name,day,type,source,status,created_at FROM proofs WHERE user_id=?').all(id);
   data.friends = db.prepare('SELECT u.login FROM friendships f JOIN users u ON u.id=f.friend_id WHERE f.user_id=?').all(id);
   data.socialProviders = db.prepare('SELECT provider FROM social_identities WHERE user_id=?').all(id);
   res.json(data);

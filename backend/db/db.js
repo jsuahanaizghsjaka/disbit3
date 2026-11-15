@@ -31,6 +31,7 @@ db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 
 // мягкие миграции для баз, созданных до появления авторизации
 for (const sql of [
+  "ALTER TABLE proofs ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown'",
   "ALTER TABLE habits ADD COLUMN week_target INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN minimum_action TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE completions ADD COLUMN minimum INTEGER NOT NULL DEFAULT 0",

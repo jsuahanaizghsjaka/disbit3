@@ -41,7 +41,17 @@ router.put('/', (req, res) => {
   if (json.length > 900_000) {
     return res.status(413).json({ error: 'Слишком большой стейт (лимит ~900КБ)' });
   }
-  const ts = String(Number(req.body?.ts) || Date.now());
+  const requestedTs = req.body?.ts == null ? Date.now() : Number(req.body.ts);
+  if (!Number.isSafeInteger(requestedTs) || requestedTs < 0 || requestedTs > Date.now()+300000) {
+    return res.status(400).json({error:'Некорректная версия настроек'});
+  }
+  const ts = String(requestedTs || Date.now());
+  const previous = db.prepare('SELECT updated_at FROM user_state WHERE user_id=?').get(uid(req));
+  const hasBase = Object.prototype.hasOwnProperty.call(req.body, 'baseUpdatedAt');
+  if ((hasBase && String(req.body.baseUpdatedAt ?? '') !== String(previous?.updated_at ?? ''))
+      || (previous && Number(ts) <= Number(previous.updated_at))) {
+    return res.status(409).json({error:'Настройки уже изменены на другом устройстве. Обновите данные перед сохранением.',code:'state_conflict'});
+  }
   db.prepare(`
     INSERT INTO user_state (user_id, data, updated_at) VALUES (?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at

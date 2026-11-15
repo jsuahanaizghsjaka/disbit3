@@ -30,7 +30,10 @@
     .p-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; gap:8px; }
     .p-habit { font-weight:800; font-size:16px; }
     .p-meta { color:var(--text-3); font-size:12px; }
+    .p-top { flex-wrap:wrap; }
+    .p-source { order:3; flex-basis:100%; font-size:13px; color:var(--text-2); overflow-wrap:anywhere; }
     .p-media { width:100%; border-radius:12px; background:#000; display:block; max-height:60vh; object-fit:contain; }
+    .p-media[hidden] { display:none; }
     .p-actions { display:flex; gap:10px; margin-top:12px; }
     .btn-ok { background:rgba(62,190,125,0.16); color:var(--green); flex:1; }
     .btn-no { background:rgba(240,102,106,0.16); color:var(--red); flex:1; }
@@ -151,6 +154,7 @@
         el.innerHTML = `
           <div class="p-top">
             <span class="p-habit">${escapeHtml(p.habit_name || 'Обещание')}</span>
+            <span class="p-source">${p.source === 'gallery' ? 'Из галереи' : p.source === 'camera' ? 'Камера приложения' : 'Источник не указан'} · способ загрузки указан приложением</span>
             <span class="p-meta">${escapeHtml(p.user_login || 'гость')} · ${p.day}</span>
           </div>
           <button class="btn" data-load>Открыть ${p.type === 'video' ? 'видео' : 'фото'}</button>

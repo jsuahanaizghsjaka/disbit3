@@ -58,6 +58,8 @@ let authMode = 'login';   // 'login' | 'register'
 
 function setAuth(token, user) {
   if (authToken !== token) {
+    clearTimeout(statePushTimer);
+    stateRemoteVersion = undefined; stateSyncConflict = false;
     ++friendsRequest;
     serverFriends = []; myLogin = null; friendsLoading = false; friendsError = '';
     friendsCacheOwner = null; friendsLoadedAt = 0;
@@ -219,6 +221,9 @@ const STATE_TS_KEY = 'disbit_state_ts_v1';
 const SYNC_KEYS = new Set([PROFILE_KEY, SETTINGS_KEY, GOALS_KEY, REWARDS_KEY, FRIENDS_KEY, BACKLOG_KEY]);
 let applyingRemote = false;   // применяем серверный стейт — не эхо-пушим
 let statePushTimer = null;
+let stateRemoteVersion;
+let stateSyncConflict = false;
+let statePushRunning = false;
 
 function stateBlob() {
   return {
@@ -241,14 +246,27 @@ function touchStateTs() {
   localStorage.setItem(STATE_TS_KEY, String(Date.now()));
 }
 function scheduleStatePush() {
-  if (!API || !authToken || applyingRemote) return;
+  if (!API || !authToken || applyingRemote || stateSyncConflict) return;
+  const owner = authToken;
   clearTimeout(statePushTimer);
-  statePushTimer = setTimeout(() => {
-    if (!authToken) return;
-    apiCall('PUT', '/state', {
-      data: stateBlob(),
-      ts: Number(localStorage.getItem(STATE_TS_KEY)) || Date.now()
-    });
+  statePushTimer = setTimeout(async () => {
+    if (owner !== authToken || stateRemoteVersion === undefined || stateSyncConflict) return;
+    if (statePushRunning) { scheduleStatePush(); return; }
+    const ts = Math.max(Number(localStorage.getItem(STATE_TS_KEY)) || Date.now(), Number(stateRemoteVersion) + 1);
+    statePushRunning = true;
+    try {
+      const result = await apiCallStrict('PUT', '/state', {data:stateBlob(), ts, baseUpdatedAt:stateRemoteVersion});
+      if (result.error) throw result;
+      if (owner !== authToken) return;
+      stateRemoteVersion = result.updatedAt;
+      if (Number(localStorage.getItem(STATE_TS_KEY)) > ts) scheduleStatePush();
+    } catch (error) {
+      if (owner !== authToken) return;
+      if (error.status === 409) stateSyncConflict = true;
+      syncFailure(stateSyncConflict
+        ? 'Настройки изменились на другом устройстве. Локальная копия сохранена. Нажми «Повторить», чтобы выбрать загрузку серверной версии.'
+        : 'Не удалось сохранить настройки на сервере. Локальная копия сохранена; повтори синхронизацию.');
+    } finally { statePushRunning = false; }
   }, 800);
 }
 // применяем серверный блоб поверх локального
@@ -464,6 +482,7 @@ async function bootstrapData() {
   if (authToken) {
     const st = await stateRead;
     if (bootstrapOwner !== authToken) return;
+    if (st) stateRemoteVersion = st.updatedAt ?? null;
     const localTs = Number(localStorage.getItem(STATE_TS_KEY)) || 0;
     if (st?.data && Number(st.updatedAt) > localTs) {
       applyRemoteState(st.data, st.updatedAt);
@@ -599,7 +618,23 @@ function isDoneToday(h) { return doneOn(h, TODAY); }
 
 // ТЕКУЩИЙ СТРИК с грейс-днём: один пропуск не рвёт серию,
 // два запланированных пропуска подряд — рвут.
-function computeStreak(h) {
+const habitDerivedCache = new WeakMap();
+function cachedHabitMetric(h, metric, calculate) {
+  // Mutations also arrive through import, sync and older UI handlers. Compare
+  // actual inputs rather than relying on every caller to bump a revision.
+  const signature = JSON.stringify([authToken, TODAY, clientTimeZone, h.createdAt,
+    h.archived, h.archivePeriods, h.schedule, h.weekTarget, h.goal, h.history, h.counts]);
+  let entry = habitDerivedCache.get(h);
+  if (!entry || entry.signature !== signature) {
+    entry = {signature, values:Object.create(null)};
+    habitDerivedCache.set(h, entry);
+  }
+  if (!(metric in entry.values)) entry.values[metric] = calculate(h);
+  return entry.values[metric];
+}
+function computeStreak(h) { return cachedHabitMetric(h, 'streak', calculateStreak); }
+function computeBestStreak(h) { return cachedHabitMetric(h, 'best', calculateBestStreak); }
+function calculateStreak(h) {
   let streak = 0, misses = 0;
   let d = new Date();
   if (isScheduledOn(h, d) && !doneOn(h, dateKey(d))) d = addDays(d, -1); // сегодня не судим
@@ -624,7 +659,7 @@ function computeStreak(h) {
 }
 
 // лучший стрик за всё время (с тем же грейс-правилом)
-function computeBestStreak(h) {
+function calculateBestStreak(h) {
   let best = 0, cur = 0, misses = 0;
   let d = keyToDate(h.createdAt);
   const end = new Date();
@@ -927,6 +962,7 @@ function showSettleModal(entries) {
 
 /* ---------- ОБЩИЙ РЕНДЕР ---------- */
 function render() {
+  window.DisbitPerf?.count('render');
   const screen = document.querySelector('.screen.active')?.id.slice(7) || 'today';
   // Hidden screens are refreshed when entered, so changes never require
   // rebuilding their calendars, charts or profile while the user is elsewhere.
@@ -1112,7 +1148,17 @@ function marathonStreak(g) {
 }
 
 // пройдено шагов = выполненные отметки обещаний ЭТОГО марафона с момента старта
+const marathonStepsCache = new WeakMap();
 function stepsDone(g) {
+  const linked = marathonHabits(g);
+  const signature = JSON.stringify([authToken, g.startedAt, linked.map(h => [h.id, h.goal, h.history, h.counts])]);
+  const cached = marathonStepsCache.get(g);
+  if (cached?.signature === signature) return cached.value;
+  const value = calculateStepsDone(g);
+  marathonStepsCache.set(g, {signature, value});
+  return value;
+}
+function calculateStepsDone(g) {
   const from = g.startedAt || '0000-00-00';
   let n = 0;
   for (const h of marathonHabits(g)) {
@@ -1524,18 +1570,19 @@ function renderWalker() {
   const routes = document.getElementById('screen-marathon').classList.contains('active')
     ? [activeJourney()].filter(Boolean) : goals.filter(isMarathon);
   const ids = new Set(routes.map(g => g.id));
+  const allIds = new Set(goals.filter(isMarathon).map(g=>g.id));
   [...box.children].forEach(node => {
-    if (!ids.has(node.dataset.route)) {
+    if (!allIds.has(node.dataset.route)) {
       const card = node.querySelector('.walker-card');
       if(card) { walkerObserver?.unobserve(card); clearTimeout(walkerWalkTimers.get(card)); }
       node.remove();
-    }
+    } else node.hidden = !ids.has(node.dataset.route);
   });
   box.hidden = !routes.length;
   routes.forEach((g, index) => {
     let slot = [...box.children].find(node => node.dataset.route === g.id);
     if (!slot) { slot = document.createElement('div'); slot.dataset.route = g.id; box.append(slot); }
-    renderWalkerCard(g, slot, index);
+    renderWalkerCard(g, slot, goals.indexOf(g));
   });
 }
 
@@ -1955,6 +2002,12 @@ function togglePin(id) {
   });
 }
 
+const habitCardSignatures = new WeakMap();
+const boundHabitButtons = new WeakSet();
+function bindHabitButton(button, handler) {
+  if (boundHabitButtons.has(button)) return;
+  boundHabitButtons.add(button); button.addEventListener('click', handler);
+}
 function renderHabits() {
   const list = document.getElementById('habit-list');
   const offList = document.getElementById('offday-list');
@@ -1962,9 +2015,23 @@ function renderHabits() {
   const pinnedList = document.getElementById('pinned-list');
   const pinnedBlock = document.getElementById('pinned-block');
   const empty = document.getElementById('empty-state');
-  list.innerHTML = '';
-  offList.innerHTML = '';
-  pinnedList.innerHTML = '';
+  const existing = new Map([...document.querySelectorAll('#screen-today .habit[data-hid]')].map(node=>[node.dataset.hid,node]));
+  const shared = JSON.stringify([authToken,TODAY,clientTimeZone,profile.name,profile.color,profile.emoji,serverFriends,friends]);
+  const reconcile = (container, items, off) => {
+    const wanted = new Set(items.map(h=>h.id));
+    [...container.children].forEach(node=>{if(!wanted.has(node.dataset.hid))node.remove();});
+    items.forEach((h,index)=>{
+      const signature=shared+JSON.stringify([h,off,pendingHabitMarks.has(h.id)]);
+      let node=existing.get(h.id);
+      if (!node || habitCardSignatures.get(node)!==signature) {
+        const next=habitCard(h,off);habitCardSignatures.set(next,signature);
+        if(node?.parentElement===container)node.replaceWith(next);
+        else node?.remove();
+        node=next;
+      }
+      if(container.children[index]!==node)container.insertBefore(node,container.children[index]||null);
+    });
+  };
 
   empty.hidden = habits.some(h => !h.archived);
   document.getElementById('btn-day-summary').hidden = habits.length === 0;
@@ -1975,12 +2042,12 @@ function renderHabits() {
   // закреплённые — отдельной секцией наверху; секции нет, пока некого показывать
   const pinned = todays.filter(h => h.pinned);
   const rest = todays.filter(h => !h.pinned);
-  pinned.forEach(h => pinnedList.appendChild(habitCard(h, false)));
+  reconcile(pinnedList,pinned,false);
   pinnedBlock.hidden = pinned.length === 0;
   document.getElementById('mine-title').hidden = rest.length === 0;
 
-  rest.forEach(h => list.appendChild(habitCard(h, false)));
-  if (settings.showOffday) off.forEach(h => offList.appendChild(habitCard(h, true)));
+  reconcile(list,rest,false);
+  reconcile(offList,settings.showOffday?off:[],true);
   offBlock.hidden = !settings.showOffday || off.length === 0;
   document.querySelectorAll('#screen-today .habit[data-hid]').forEach(card => {
     const message = habitMarkErrors.get(card.dataset.hid);
@@ -1990,9 +2057,9 @@ function renderHabits() {
   });
 
   document.querySelectorAll('#screen-today [data-check]').forEach(b =>
-    b.addEventListener('click', () => toggleHabit(b.dataset.check)));
+    bindHabitButton(b, () => toggleHabit(b.dataset.check)));
   document.querySelectorAll('#screen-today [data-min]').forEach(b =>
-    b.addEventListener('click', async () => {
+    bindHabitButton(b, async () => {
       const h = habits.find(x => x.id === b.dataset.min);
       if (!h) return;
       const saved = await toggleMinMark(h, TODAY);
@@ -2000,10 +2067,10 @@ function renderHabits() {
       if (saved) toast('Минимум сохранён');
     }));
   document.querySelectorAll('#screen-today [data-pin]').forEach(b =>
-    b.addEventListener('click', () => togglePin(b.dataset.pin)));
+    bindHabitButton(b, () => togglePin(b.dataset.pin)));
   // тап по карточке — статистика этого обещания (редактирование — в меню внутри)
   document.querySelectorAll('#screen-today [data-stats]').forEach(b => {
-    b.addEventListener('click', () => openHabitStats(b.dataset.stats));
+    bindHabitButton(b, () => openHabitStats(b.dataset.stats));
   });
 }
 
@@ -3746,13 +3813,17 @@ async function buyCosmetic(kind, id, title) {
 }
 
 /* ---------- ЭКРАН «АВАТАР»: всё, что открывается за биты ---------- */
+let avatarRenderedSignature;
 function renderAvatar() {
   document.getElementById('bit-balance').textContent = profile.bit;
   renderBit();
+  renderGrace();
+  const signature=JSON.stringify([authToken,profile,settings]);
+  if(signature===avatarRenderedSignature)return;
+  avatarRenderedSignature=signature;
   renderThemeGrid();
   renderGearPicker();
   renderIconShop();
-  renderGrace();
   renderTravelerPreview();
   buildScenePicker('journey-scene-shop', null);
 }
@@ -4106,6 +4177,7 @@ function switchScreen(name, updateHash = true) {
   const previous = document.querySelector('.screen.active')?.id.slice(7);
   const changed = document.querySelector('.screen.active')?.id !== 'screen-' + name;
   if (!changed) return;
+  const navStarted=window.DisbitPerf?.start('navigation')??null;
   if (changed && previous) pathScroll.set(previous, window.scrollY);
   document.querySelectorAll('.screen').forEach(s =>
     s.classList.toggle('active', s.id === 'screen-' + name));
@@ -4136,6 +4208,8 @@ function switchScreen(name, updateHash = true) {
     window.scrollTo({ top: pathScroll.get(name) || 0, behavior: 'instant' });
     if (updateHash || name === 'operations') document.getElementById('screen-' + name).focus({ preventScroll: true });
   }
+  window.DisbitPerf?.end('navigation',navStarted);
+  window.DisbitPerf?.frame('navigation',navStarted);
 }
 
 
@@ -4332,13 +4406,10 @@ function selectedDays() {
     .map(b => Number(b.dataset.day));
 }
 
-/* ---------- ПРУФ ВЫПОЛНЕНИЯ (живое фото/видео) ----------
-   Открывается сразу после отметки обещания. Камера — только живая (getUserMedia),
-   из галереи грузить нельзя. Пруф уходит на сервер в статус pending, дальше его
-   вручную проверяет админ на /review. Отказ от фото не меняет выполнение.
-   Камеру нельзя протестировать без устройства — всё обёрнуто в try/guard, чтобы
-   отсутствие камеры/разрешения не ломало приложение (остаётся кнопка «Пропустить»). */
+/* Camera or selected gallery media; the moderator sees the declared source.
+   Completion awaits upload or an available proof skip. */
 let proofHabit = null, proofStream = null, proofBlob = null, proofType = 'photo';
+let proofSource = 'camera', proofSelectionRequest = 0;
 let proofFacing = 'user', proofRecorder = null, proofChunks = [], proofRecTimer = null, proofMirrorRAF = null;
 let proofRecordStream = null;
 let proofSending = false, proofCameraRequest = 0;
@@ -4349,6 +4420,9 @@ function openProofBanner(h) {
   proofHabit = h;
   proofBlob = null;
   proofType = 'photo';
+  proofSource = 'camera'; proofSelectionRequest++;
+  document.getElementById('proof-source').hidden = true;
+  document.getElementById('proof-gallery').disabled = false;
   document.getElementById('proof-habit-name').textContent = h.name || 'Обещание';
   document.getElementById('proof-skip').disabled = false;
   proofShowCapture();
@@ -4370,6 +4444,8 @@ function proofShowCapture() {
 }
 
 async function startProofCam() {
+  proofSelectionRequest++;
+  proofSource = 'camera';
   stopProofCam();
   document.getElementById('proof-start').hidden = true;
   document.getElementById('proof-photo').disabled = true;
@@ -4410,13 +4486,13 @@ async function startProofCam() {
     //   хранилища приложения); NotFoundError — на устройстве нет камеры/микро-
     //   фона; NotReadableError — камера занята другим приложением.
     const hints = {
-      NotAllowedError: 'Нет доступа к камере. Разреши её в настройках сайта или приложения и повтори попытку. Выполнение сохранено.',
+      NotAllowedError: 'Нет доступа к камере. Разреши её в настройках сайта или приложения и нажми «Попробовать снова». Без снимка или видео пруф не отправится.',
       NotFoundError: 'Камера или микрофон не найдены на этом устройстве.',
       NotReadableError: 'Камера занята другим приложением — закрой его и попробуй снова.',
       OverconstrainedError: 'Не удалось включить выбранную камеру устройства.',
       SecurityError: 'Камера заблокирована настройками безопасности устройства.'
     };
-    err.textContent = hints[e.name] || `Не удалось включить камеру (${e.name || 'ошибка'}). Из галереи снимать нельзя — попробуй ещё раз.`;
+    err.textContent = hints[e.name] || 'Не удалось включить камеру. Попробуй снова или выбери файл из галереи.';
   }
 }
 function stopProofCam() {
@@ -4548,6 +4624,9 @@ async function proofToggleVideo() {
 }
 
 function proofShowPreview(url, type) {
+  const sourceLabel = document.getElementById('proof-source');
+  sourceLabel.textContent = proofSource === 'gallery' ? 'Из галереи · модератор увидит эту отметку' : 'Снято камерой приложения';
+  sourceLabel.hidden = false;
   // The captured Blob remains available for retry, but live tracks are no
   // longer needed while the user reviews it.
   stopProofCam();
@@ -4564,6 +4643,7 @@ function proofShowPreview(url, type) {
   document.getElementById('proof-confirm').hidden = false;
 }
 function proofRetake() {
+  document.getElementById('proof-source').hidden = true;
   proofBlob = null;
   if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
   proofPreviewUrl = null;
@@ -4573,6 +4653,47 @@ function proofRetake() {
   document.getElementById('proof-upload-error').hidden = true;
   proofShowCapture();
   startProofCam();
+}
+
+async function proofSelectFile(file) {
+  if (!proofHabit || proofSending) return;
+  const request = ++proofSelectionRequest, habit = proofHabit;
+  const error = document.getElementById('proof-upload-error');
+  error.hidden = true;
+  const video = ['video/mp4','video/webm','video/quicktime'].includes(file.type);
+  if (!video && !['image/jpeg','image/png','image/webp'].includes(file.type)) {
+    error.textContent = 'Выбери фото JPEG, PNG, WebP или видео MP4, MOV, WebM. Для HEIC используй копию в JPEG.';
+    error.hidden = false; return;
+  }
+  if (!file.size || file.size > (video ? 10 : 5)*1024*1024) {
+    error.textContent = video ? 'Выбери видео до 10 МБ и 15 секунд.' : 'Выбери непустое фото до 5 МБ.';
+    error.hidden = false; return;
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    await new Promise((resolve,reject)=>{
+      const media = document.createElement(video ? 'video' : 'img');
+      const timer = setTimeout(()=>finish(Error('Не удалось прочитать файл. Выбери другой.')),10000);
+      const finish = err => {
+        clearTimeout(timer);media.onload=null;media.onloadedmetadata=null;media.onerror=null;
+        media.removeAttribute('src'); if(video)media.load();
+        err ? reject(err) : resolve();
+      };
+      if(video){media.preload='metadata';media.onloadedmetadata=()=>finish(Number.isFinite(media.duration)&&media.duration>0&&media.duration<=15.1 ? null : Error('Видео должно быть не длиннее 15 секунд.'));}
+      else media.onload=()=>finish(media.naturalWidth>0 ? null : Error('Не удалось открыть фото.'));
+      media.onerror=()=>finish(Error('Этот файл не удалось открыть. Выбери другой формат.'));
+      media.src=url;
+    });
+    if(request!==proofSelectionRequest || habit!==proofHabit || proofSending)return;
+    if(proofRecorder){proofRecorder.onstop=null;proofRecorder.ondataavailable=null;if(proofRecorder.state!=='inactive')proofRecorder.stop();proofRecorder=null;}
+    clearInterval(proofRecTimer);cancelAnimationFrame(proofMirrorRAF);proofChunks=[];
+    proofBlob=file;proofType=video?'video':'photo';proofSource='gallery';
+    document.getElementById('proof-cam-err').hidden=true;
+    document.getElementById('proof-start').hidden=true;
+    proofShowPreview(URL.createObjectURL(file),proofType);
+  } catch(e) {
+    if(request===proofSelectionRequest&&habit===proofHabit){error.textContent=e.message;error.hidden=false;}
+  } finally { URL.revokeObjectURL(url); }
 }
 
 async function proofSend() {
@@ -4586,11 +4707,11 @@ async function proofSend() {
   }
   if (!API || !authToken) { toast('Для отправки фото нужен аккаунт.'); return; }
   const h = proofHabit;
-  const q = new URLSearchParams({ habitId: h.id, day: TODAY, type: proofType, name: h.name || '' });
+  const q = new URLSearchParams({ habitId: h.id, day: TODAY, type: proofType, name: h.name || '', source: proofSource });
   const mime = proofBlob.type || (proofType === 'video' ? 'video/webm' : 'image/jpeg');
   const blob = proofBlob;
   proofSending = true;
-  const controls = ['proof-send', 'proof-retake', 'proof-skip', 'proof-close', 'proof-share-card'];
+  const controls = ['proof-send', 'proof-retake', 'proof-skip', 'proof-close', 'proof-share-card', 'proof-gallery'];
   controls.forEach(id => document.getElementById(id).disabled = true);
   document.getElementById('proof-send').textContent = 'Отправляем…';
   document.getElementById('proof-send').setAttribute('aria-busy', 'true');
@@ -4600,7 +4721,7 @@ async function proofSend() {
     const headers = { 'Content-Type': mime, 'X-Time-Zone': clientTimeZone };
     if (authToken) headers.Authorization = 'Bearer ' + authToken;
     const r = await fetch(API + '/proofs?' + q.toString(), { method: 'POST', headers, body: blob, signal: controller.signal });
-    if (!r.ok) throw new Error(r.status === 413 ? 'Файл больше 25 МБ.' : (await r.json().catch(() => ({}))).error || 'Не удалось отправить файл.');
+    if (!r.ok) throw new Error(r.status === 413 ? (proofType === 'video' ? 'Видео больше 10 МБ.' : 'Фото больше 5 МБ.') : (await r.json().catch(() => ({}))).error || 'Не удалось отправить файл.');
     proofSending = false;
     closeProofBanner(true);
     toast('Пруф отправлен на проверку');
@@ -4628,6 +4749,7 @@ async function proofSkip() {
 
 function closeProofBanner(authorized = false) {
   if (proofSending) return;
+  proofSelectionRequest++;
   if (proofRecorder) proofRecorder.onstop = null;
   if (proofRecorder && proofRecorder.state === 'recording') { try { proofRecorder.stop(); } catch {} }
   clearInterval(proofRecTimer);
@@ -4682,6 +4804,11 @@ function wireProof() {
   $('proof-video').onclick = proofToggleVideo;
   $('proof-retake').onclick = proofRetake;
   $('proof-send').onclick = proofSend;
+  $('proof-gallery').onclick = () => { if (!proofSending) $('proof-file').click(); };
+  $('proof-file').onchange = async event => {
+    const file = event.target.files?.[0]; event.target.value = '';
+    if (file) await proofSelectFile(file);
+  };
   $('proof-skip').onclick = proofSkip;
   $('proof-flip').onclick = () => { proofFacing = proofFacing === 'user' ? 'environment' : 'user'; startProofCam(); };
   document.addEventListener('visibilitychange', () => { if (document.hidden) suspendProofCamera(); });
@@ -5558,6 +5685,7 @@ function wireNotifications() {
 
 /* ---------- ИНИЦИАЛИЗАЦИЯ ---------- */
 function init() {
+  const initStarted=window.DisbitPerf?.start('startup')??null;
   wirePathUI();
   wireJourneyUI();
   wireInsightsUI();
@@ -5892,6 +6020,8 @@ function init() {
 
   wireNativeShell();     // статус-бар, «назад», resume; сплэш убираем последним
   apiBootstrap();
+  window.DisbitPerf?.end('startup',initStarted);
+  window.DisbitPerf?.frame('startup',initStarted);
 }
 
 document.addEventListener('DOMContentLoaded', init);

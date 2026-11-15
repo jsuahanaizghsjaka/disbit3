@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS proofs (
   type        TEXT NOT NULL DEFAULT 'photo',        -- 'photo' | 'video'
   file        TEXT NOT NULL,                        -- имя файла в PROOFS_DIR
   mime        TEXT,
+  source      TEXT NOT NULL DEFAULT 'unknown',      -- client-declared: camera/gallery/unknown
   status      TEXT NOT NULL DEFAULT 'pending',      -- 'pending' | 'approved' | 'rejected'
   created_at  TEXT DEFAULT (datetime('now'))
 );

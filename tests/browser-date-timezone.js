@@ -1,7 +1,7 @@
 // Uses isolated browser contexts and a local synthetic server only.
 async page => {
   const results = [];
-  for (const zone of ['Europe/Moscow', 'America/Los_Angeles']) {
+  for (const zone of ['Europe/Moscow', 'America/Los_Angeles', 'Asia/Tokyo']) {
     const context = await page.context().browser().newContext({timezoneId: zone});
     const tab = await context.newPage();
     const errors=[]; tab.on('pageerror', e=>errors.push(e.message));

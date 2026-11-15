@@ -5,6 +5,25 @@
 
   function createReadCoordinator({ fetchImpl, getOwner, getTimeZone, timeoutMs = 15000 }) {
     const pending = new Map();
+    let active = 0;
+    const queue = [];
+    function drain() {
+      while (active < 4 && queue.length) {
+        const item = queue.shift();
+        item.signal.removeEventListener('abort', item.cancel);
+        if (item.signal.aborted) { item.reject(new Error('aborted')); continue; }
+        active++;
+        item.resolve(() => { active--; drain(); });
+      }
+    }
+    function acquire(signal) {
+      return new Promise((resolve,reject)=>{
+        if(signal.aborted){reject(new Error('aborted'));return;}
+        const item={signal,resolve,reject,cancel:null};
+        item.cancel=()=>{const index=queue.indexOf(item);if(index>=0)queue.splice(index,1);reject(new Error('aborted'));};
+        signal.addEventListener('abort',item.cancel,{once:true});queue.push(item);drain();
+      });
+    }
 
     function cancelExcept(owner) {
       for (const entry of pending.values()) {
@@ -46,8 +65,10 @@
       const headers = { 'Content-Type': 'application/json', 'X-Time-Zone': timeZone };
       if (owner) headers.Authorization = 'Bearer ' + owner;
       entry.promise = (async () => {
+        let release;
         try {
-          const response = await Promise.resolve().then(() => fetchImpl(url, { method: 'GET', headers, signal: controller.signal }));
+          release = await acquire(controller.signal);
+          const response = await fetchImpl(url, { method: 'GET', headers, signal: controller.signal });
           const data = await response.json().catch(() => null);
           if ((getOwner() || null) !== owner || getTimeZone() !== timeZone) return { kind: 'stale' };
           if (entry.cancelReason) return { kind: entry.cancelReason };
@@ -59,6 +80,7 @@
           if (entry.cancelReason === 'timeout') return { kind: 'timeout' };
           return { kind: 'network', errorName: error?.name || 'Error' };
         } finally {
+          release?.();
           clearTimeout(timer);
           if (pending.get(key) === entry) pending.delete(key);
         }

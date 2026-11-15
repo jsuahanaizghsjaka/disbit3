@@ -97,10 +97,17 @@ function pendingPayment() { try { return JSON.parse(sessionStorage.getItem(payme
 function operationStatus(op) {
   return ({done:'Проведено',succeeded:'Проведено',created:'Создано',pending:'Ожидает подтверждения',failed:'Не выполнено',cancelled:'Отменено',canceled:'Отменено'})[op.status] || 'Статус не получен';
 }
+let operationDateZone;
+let operationDateFormatter;
 function operationDate(value) {
   if(!value) return 'Дата не получена';
   const d=new Date(value.includes('T') ? value : value.replace(' ','T')+'Z');
-  return Number.isNaN(d.valueOf())?'Дата не получена':d.toLocaleString('ru-RU',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  if (Number.isNaN(d.valueOf())) return 'Дата не получена';
+  if (!operationDateFormatter || operationDateZone !== clientTimeZone) {
+    operationDateZone = clientTimeZone;
+    operationDateFormatter = new Intl.DateTimeFormat('ru-RU',{timeZone:clientTimeZone,day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+  return operationDateFormatter.format(d);
 }
 function operationName(op) { return op.type==='topup'?'Пополнение':op.type==='charge'?'Штраф':op.type==='refund'?'Возврат':'Операция'; }
 function operationSettled(op) { return op.status==='done'||op.status==='succeeded'; }

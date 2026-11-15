@@ -1063,6 +1063,9 @@
       <p class="proof-habit" id="proof-habit-name"></p>
       <p class="proof-sub">Фото до 5 МБ или видео до 15 секунд и 10 МБ. Камера включится по нажатию. Для сохранения шага отправь пруф или используй пропуск.</p>
       <button class="btn-primary" id="proof-start">Включить камеру</button>
+      <button class="btn-secondary" id="proof-gallery" type="button">Выбрать из галереи</button>
+      <input id="proof-file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" aria-label="Фото или видео из галереи" hidden />
+      <p class="proof-sub" id="proof-source" role="status" hidden></p>
 
       <div class="proof-stage">
         <video class="proof-media proof-cam" id="proof-cam" autoplay playsinline muted></video>
@@ -1421,6 +1424,7 @@
   <script src="path-motion.js"></script>
   <script src="path-faces.js"></script>
   <script src="path-archive.js"></script>
+  <script src="path-performance.js"></script>
   <script src="script.js"></script>
   <script type="module" src="path-welcome.js"></script>
   <script type="module" src="path-intro.js"></script>

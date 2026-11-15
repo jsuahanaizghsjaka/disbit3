@@ -18,6 +18,7 @@ import { db } from '../db/db.js';
 import { accountDay, proofSatisfied, proofQuota } from '../proof-policy.js';
 import { transaction, syncTrustedBitAward, trustedCompletionEligible } from '../lib/promise-skips.js';
 import { validateVideo } from '../lib/proof-video.js';
+import {requestLimit} from '../lib/request-limits.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,10 +43,10 @@ const router = Router();
 const uid = req => req.userId;   // загрузка под authRequired — гостя здесь не бывает
 
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
-              'video/webm': 'webm', 'video/mp4': 'mp4' };
+              'video/webm': 'webm', 'video/mp4': 'mp4', 'video/quicktime': 'mov' };
 // обратная таблица: тип файла при отдаче берём ТОЛЬКО отсюда, по расширению
 const MIME_BY_EXT = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-                      webm: 'video/webm', mp4: 'video/mp4' };
+                      webm: 'video/webm', mp4: 'video/mp4', mov: 'video/quicktime' };
 
 // Загрузка — только для авторизованных. Без этого любой человек из интернета
 // мог класть на диск по 25 МБ сколько угодно раз: том кончится, приложение встанет.
@@ -84,9 +85,14 @@ router.post('/skip', authRequired, (req, res) => {
 /* -------- загрузка пруфа (сырые байты) --------
    POST /api/proofs?habitId=..&day=YYYY-MM-DD&type=photo|video&name=..
    тело = байты медиа, Content-Type = image/* | video/* */
-router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES }), async (req, res, next) => {
+router.post('/', authRequired,
+  requestLimit('proof-user', 30, 60*60000, req => req.userId),
+  requestLimit('proof-ip', 120, 60000),
+  express.raw({ type: () => true, limit: MAX_BYTES }), async (req, res, next) => {
   const { habitId, day, name } = req.query;
   const type = req.query.type === 'video' ? 'video' : 'photo';
+  const source = req.query.source == null ? 'unknown' : String(req.query.source);
+  if (!['camera','gallery','unknown'].includes(source)) return res.status(400).json({error:'Неизвестный источник файла'});
   const mime = req.headers['content-type'] || '';
 
   if (!habitId || !/^\d{4}-\d{2}-\d{2}$/.test(String(day || ''))) {
@@ -98,7 +104,7 @@ router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES 
   if (habit.archived) return res.status(409).json({ error: 'Обещание в архиве' });
   const mediaType = mime.split(';')[0].trim();
   if (!EXT[mediaType] || (type === 'video') !== mediaType.startsWith('video/')) {
-    return res.status(415).json({ error: 'Нужно фото JPEG/PNG/WebP или видео MP4/WebM' });
+    return res.status(415).json({ error: 'Нужно фото JPEG/PNG/WebP или видео MP4/MOV/WebM' });
   }
   if (!Buffer.isBuffer(req.body) || !req.body.length) {
     return res.status(400).json({ error: 'Пустое медиа' });
@@ -138,9 +144,9 @@ router.post('/', authRequired, express.raw({ type: () => true, limit: MAX_BYTES 
   }
   let info;
   try { info = db.prepare(`
-    INSERT INTO proofs (user_id, user_login, habit_id, habit_name, day, type, file, mime)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(uid(req), login, String(habitId), String(name || ''), String(day), type, fname, mime);
+    INSERT INTO proofs (user_id, user_login, habit_id, habit_name, day, type, file, mime, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(uid(req), login, String(habitId), String(name || ''), String(day), type, fname, mime, source);
   } catch (error) { fs.rmSync(path.join(PROOFS_DIR,fname),{force:true}); return next(error); }
 
   res.status(201).json({ ok: true, id: info.lastInsertRowid, status: 'pending' });
@@ -171,7 +177,7 @@ export function adminOnly(req, res, next) {
 router.get('/', adminOnly, (req, res) => {
   const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
   const rows = db.prepare(`
-    SELECT id, user_login, habit_name, day, type, mime, status, created_at
+    SELECT id, user_login, habit_name, day, type, mime, source, status, created_at
     FROM proofs WHERE status = ? ORDER BY id DESC LIMIT 200
   `).all(status);
   const counts = db.prepare(`SELECT status, COUNT(*) n FROM proofs GROUP BY status`).all();

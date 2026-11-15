@@ -177,7 +177,20 @@ function wireSupportUI() {
   const root=document.querySelector('.app');
   const box=document.createElement('section');box.id='connection-state';box.className='connection-state';box.hidden=true;
   box.innerHTML='<p role="status" aria-live="polite"></p><button type="button" class="btn-secondary">Повторить</button>';
-  root.querySelector('.header').after(box);box.querySelector('button').onclick=apiBootstrap;
+  root.querySelector('.header').after(box);box.querySelector('button').onclick=async()=>{
+    if (stateSyncConflict) {
+      if (!confirm('Загрузить настройки с сервера? Несинхронизированные изменения профиля, марафонов и настроек на этом устройстве будут заменены. Можно отменить и сначала экспортировать данные в профиле.')) return;
+      const owner=authToken;
+      try {
+        const remote=await apiCallStrict('GET','/state');
+        if (remote.error) throw remote;
+        if (owner!==authToken) return;
+        if (remote.data) applyRemoteState(remote.data,remote.updatedAt);
+        stateRemoteVersion=remote.updatedAt??null;stateSyncConflict=false;
+      } catch { syncFailure('Не удалось загрузить серверную версию. Локальная копия сохранена.');return; }
+    }
+    await apiBootstrap();
+  };
   window.addEventListener('offline',renderConnection);
   window.addEventListener('online',()=>{supportSyncError='Связь восстановлена. Обнови данные аккаунта.';renderConnection();});
   document.getElementById('set-motion').onchange=e=>{settings.motion=e.target.value;saveJson(SETTINGS_KEY,settings);applyMotion();};
