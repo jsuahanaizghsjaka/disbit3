@@ -1,0 +1,26 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {DatabaseSync}=require('node:sqlite');
+test('restore removes expired reviewed media, preserves pending media and decision metadata',async()=>{
+ const {createBackup,restoreBackup,verifyBackup}=await import('../scripts/backup.mjs');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'disbit-retention-'));
+ const source=path.join(root,'source');fs.mkdirSync(source);
+ const proofs=path.join(source,'proofs');fs.mkdirSync(proofs);
+ for(const file of ['expired.png','pending.png','fresh.png'])fs.writeFileSync(path.join(proofs,file),'synthetic');
+ const database=path.join(source,'disbit.db'),db=new DatabaseSync(database);
+ db.exec(`CREATE TABLE proofs(id INTEGER PRIMARY KEY,file TEXT,status TEXT,resolved_at TEXT,media_deleted INTEGER DEFAULT 0);
+ INSERT INTO proofs VALUES(1,'expired.png','approved',datetime('now','-31 days'),0),(2,'pending.png','pending',NULL,0),(3,'fresh.png','rejected',datetime('now','-1 day'),0);
+ CREATE TABLE proof_decisions(proof_id INTEGER,status TEXT);INSERT INTO proof_decisions VALUES(1,'approved');`);
+ db.close();
+ const backup=path.join(root,'backup'),restored=path.join(root,'restored');
+ createBackup({database,proofs,destination:backup,offline:true});
+ assert.equal(restoreBackup(backup,restored).ok,true);
+ assert.equal(fs.existsSync(path.join(restored,'proofs/expired.png')),false);
+ assert.equal(fs.existsSync(path.join(restored,'proofs/pending.png')),true);
+ assert.equal(fs.existsSync(path.join(restored,'proofs/fresh.png')),true);
+ const copy=new DatabaseSync(path.join(restored,'disbit.db'));
+ assert.equal(copy.prepare('SELECT count(*) n FROM proof_decisions').get().n,1);
+ assert.equal(copy.prepare('SELECT media_deleted FROM proofs WHERE id=1').get().media_deleted,1);
+ copy.close();assert.equal(verifyBackup(restored).ok,true);
+});

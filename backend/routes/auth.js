@@ -12,8 +12,27 @@ import { isEmailFormatValid, domainAcceptsMail, sendMail, verifyCodeHtml, mailCo
 import { createSocialAuthRouter } from './social-auth.js';
 import { hasConsent, recordConsent, CONSENT_ERROR } from '../lib/legal.js';
 import {requestLimit} from '../lib/request-limits.js';
+import {sessionDigest,emailCodeDigest} from '../lib/auth-secrets.js';
 
+db.exec(`CREATE TABLE IF NOT EXISTS pending_registrations (
+ token_hash TEXT PRIMARY KEY,login TEXT NOT NULL,email TEXT NOT NULL,
+ pass_hash TEXT NOT NULL,pass_salt TEXT NOT NULL,code_hash TEXT NOT NULL,
+ expires_at INTEGER NOT NULL,sent_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0);`);
+const clearExpiredRegistrations=()=>db.prepare('DELETE FROM pending_registrations WHERE expires_at<=?').run(Date.now());
+clearExpiredRegistrations();
+setInterval(()=>{try{clearExpiredRegistrations();}catch{console.error('[auth] pending registration cleanup failed');}},60000).unref();
 const router = Router();
+// Express 4 does not forward rejected async handler promises automatically.
+const post = router.post.bind(router);
+router.post = (path, ...handlers) => post(path, ...handlers.map(handler =>
+  (req,res,next) => { try { Promise.resolve(handler(req,res,next)).catch(next); } catch(error) { next(error); } }));
+router.use((req,res,next)=>{
+  for(const field of ['login','email','password','id','code','token']) {
+    const value=req.body?.[field];
+    if(value!==undefined && (typeof value!=='string'||value.length>1024))return res.status(400).json({error:'Некорректные поля запроса'});
+  }
+  next();
+});
 router.post('/login', requestLimit('login-ip', 60, 15*60000),
   requestLimit('login-identity-ip', 15, 15*60000, req => req.ip + ':' + String(req.body?.id || '').trim().toLowerCase()));
 router.post('/register', requestLimit('register-ip', 20, 60*60000));
@@ -32,7 +51,7 @@ function issueCode(userId) {
     VALUES (?, ?, ?, 0, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       code = excluded.code, expires_at = excluded.expires_at, attempts = 0, sent_at = excluded.sent_at
-  `).run(userId, code, Date.now() + CODE_TTL_MS, Date.now());
+  `).run(userId, emailCodeDigest(userId,code), Date.now() + CODE_TTL_MS, Date.now());
   return code;
 }
 
@@ -60,11 +79,15 @@ const SESSION_REFRESH_MS = 24 * 60 * 60 * 1000;   // продлеваем не �
 // (иначе бета-тестеров разлогинило бы обновлением сервера)
 db.prepare('DELETE FROM sessions WHERE expires_at > 0 AND expires_at < ?').run(Date.now());
 db.prepare('UPDATE sessions SET expires_at = ? WHERE expires_at = 0').run(Date.now() + SESSION_TTL_MS);
+for(const row of db.prepare("SELECT token FROM sessions WHERE token NOT LIKE 'sha256:%'").all()){
+  db.prepare('UPDATE sessions SET token=? WHERE token=?').run(sessionDigest(row.token),row.token);
+}
+db.prepare('DELETE FROM email_codes WHERE length(code)<>64').run();
 
 function createSession(userId) {
   const token = randomBytes(32).toString('hex');
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
-    .run(token, userId, Date.now() + SESSION_TTL_MS);
+    .run(sessionDigest(token), userId, Date.now() + SESSION_TTL_MS);
   return token;
 }
 function publicUser(row) {
@@ -104,39 +127,44 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Такого почтового домена не существует — проверь адрес' });
   }
 
-  const exists = db.prepare(
-    'SELECT id FROM users WHERE login = ? OR email = ?'
-  ).get(login, email);
-  if (exists) {
-    return res.status(409).json({ error: 'Логин или почта уже заняты' });
-  }
+  db.prepare('DELETE FROM pending_registrations WHERE expires_at<?').run(Date.now());
+  const token=randomBytes(32).toString('hex'), tokenHash=sessionDigest(token);
+  const {salt,hash}=hashPassword(password),code=String(randomInt(100000,1000000));
+  db.prepare(`INSERT INTO pending_registrations(token_hash,login,email,pass_hash,pass_salt,code_hash,expires_at,sent_at) VALUES(?,?,?,?,?,?,?,?)`)
+    .run(tokenHash,login,email,hash,salt,emailCodeDigest(tokenHash,code),Date.now()+CODE_TTL_MS,Date.now());
+  let verificationEmailSent=false;
+  try{verificationEmailSent=(await sendMail(email,'disbit — код подтверждения',verifyCodeHtml(code))).sent===true;}catch{console.error('[mail] registration delivery failed');}
+  res.status(201).json({token,user:{id:null,login,email,emailVerified:false},needVerify:true,pendingRegistration:true,verificationEmailSent});
 
-  const { salt, hash } = hashPassword(password);
-  // Account and consent records are written together or not at all.
-  db.exec('BEGIN IMMEDIATE');
-  let info;
-  try {
-    info = db.prepare(
-      'INSERT INTO users (login, email, pass_hash, pass_salt) VALUES (?, ?, ?, ?)'
-    ).run(login, email, hash, salt);
-    recordConsent(db, Number(info.lastInsertRowid), 'email');
-    db.exec('COMMIT');
-  } catch (err) { db.exec('ROLLBACK'); throw err; }
-
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-  const token = createSession(user.id);
-
-  // шлём код подтверждения; письмо не должно ронять регистрацию
-  const code = issueCode(user.id);
-  let verificationEmailSent = false;
-  try { verificationEmailSent = (await sendMail(email, 'disbit — код подтверждения', verifyCodeHtml(code))).sent === true; }
-  catch (e) { console.error('[mail] не удалось отправить:', e.message); }
-
-  res.status(201).json({ token, user: publicUser(user), needVerify: true, verificationEmailSent });
 });
 
 /* POST /api/auth/verify — { code } подтвердить почту */
 router.post('/verify', (req, res) => {
+  if(req.pendingRegistration){
+    const draft=req.pendingRegistration;
+    if(draft.attempts>=MAX_ATTEMPTS)return res.status(429).json({error:'Слишком много попыток. Начните регистрацию заново.'});
+    if(emailCodeDigest(draft.token_hash,String(req.body?.code||'').trim())!==draft.code_hash){
+      db.prepare('UPDATE pending_registrations SET attempts=attempts+1 WHERE token_hash=?').run(draft.token_hash);
+      return res.status(400).json({error:'Неверный код'});
+    }
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      if(db.prepare('SELECT 1 FROM users WHERE email=?').get(draft.email)){
+        db.prepare('DELETE FROM pending_registrations WHERE token_hash=?').run(draft.token_hash);db.exec('COMMIT');
+        return res.status(409).json({error:'Для этой почты уже есть аккаунт. Войдите или используйте «Забыли пароль?».'});
+      }
+      if(db.prepare('SELECT 1 FROM users WHERE login=?').get(draft.login)){
+        db.prepare('DELETE FROM pending_registrations WHERE token_hash=?').run(draft.token_hash);db.exec('COMMIT');
+        return res.status(409).json({error:'Выберите другой логин и начните регистрацию заново.'});
+      }
+      const created=db.prepare('INSERT INTO users(login,email,pass_hash,pass_salt,email_verified) VALUES(?,?,?,?,1)').run(draft.login,draft.email,draft.pass_hash,draft.pass_salt);
+      recordConsent(db,Number(created.lastInsertRowid),'email');
+      db.prepare('DELETE FROM pending_registrations WHERE token_hash=?').run(draft.token_hash);
+      const user=db.prepare('SELECT * FROM users WHERE id=?').get(created.lastInsertRowid);
+      const token=createSession(user.id);db.exec('COMMIT');
+      return res.json({ok:true,verified:true,token,user:publicUser(user)});
+    }catch(error){db.exec('ROLLBACK');throw error;}
+  }
   if (!req.userId) return res.status(401).json({ error: 'Не авторизован' });
   const code = String(req.body?.code || '').trim();
   const row = db.prepare('SELECT * FROM email_codes WHERE user_id = ?').get(req.userId);
@@ -147,7 +175,7 @@ router.post('/verify', (req, res) => {
   if (Date.now() > row.expires_at) {
     return res.status(400).json({ error: 'Код истёк — запроси новый' });
   }
-  if (code !== row.code) {
+  if (emailCodeDigest(req.userId,code) !== row.code) {
     db.prepare('UPDATE email_codes SET attempts = attempts + 1 WHERE user_id = ?').run(req.userId);
     return res.status(400).json({ error: 'Неверный код' });
   }
@@ -158,6 +186,14 @@ router.post('/verify', (req, res) => {
 
 /* POST /api/auth/resend — выслать код заново */
 router.post('/resend', async (req, res) => {
+  if(req.pendingRegistration){
+    const draft=req.pendingRegistration;
+    if(Date.now()-draft.sent_at<RESEND_COOLDOWN_MS)return res.status(429).json({error:'Подождите минуту перед повторной отправкой.'});
+    const code=String(randomInt(100000,1000000));
+    db.prepare('UPDATE pending_registrations SET code_hash=?,sent_at=?,expires_at=?,attempts=0 WHERE token_hash=?').run(emailCodeDigest(draft.token_hash,code),Date.now(),Date.now()+CODE_TTL_MS,draft.token_hash);
+    try{const delivery=await sendMail(draft.email,'disbit — код подтверждения',verifyCodeHtml(code));return res.json({ok:true,sent:delivery.sent,configured:mailConfigured()});}
+    catch{return res.status(502).json({error:'Не удалось отправить письмо. Повторите позже.'});}
+  }
   if (!req.userId) return res.status(401).json({ error: 'Не авторизован' });
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
   if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
@@ -190,7 +226,8 @@ router.post('/login', (req, res) => {
     'SELECT * FROM users WHERE login = ? OR email = ?'
   ).get(id, id);
 
-  if (!user || !verifyPassword(password, user.pass_salt, user.pass_hash)) {
+  const validPassword = verifyPassword(password, user?.pass_salt || 'missing-account-fixed-salt', user?.pass_hash || '0'.repeat(128));
+  if (!user || !validPassword) {
     return res.status(401).json({ error: 'Неверный логин или пароль' });
   }
 
@@ -216,7 +253,7 @@ router.post('/password-reset/request', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (process.env.PASSWORD_RESET_ENABLED !== '1' || !mailConfigured()) return res.status(503).json({ error: 'Восстановление пароля пока недоступно' });
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const reply = { ok: true, message: 'Если адрес подтверждён, инструкция будет отправлена на почту.' };
+  const reply = { ok: true, message: 'Если адрес зарегистрирован, инструкция будет отправлена на почту.' };
   // Account existence, cooldown and SMTP latency must not affect the response.
   const respond = async () => {
     await delay(Math.max(0, 250 + randomInt(50) - (Date.now() - started)));
@@ -227,7 +264,7 @@ router.post('/password-reset/request', async (req, res) => {
   if (!recoveryLimit('request:ip:' + ipBucket, 20, 15 * 60 * 1000) || !recoveryLimit('request:global', 100, 15 * 60 * 1000)) return respond();
   if (!isEmailFormatValid(email)) return respond();
   if (!recoveryLimit('request:' + addressBucket, 3, 60 * 60 * 1000)) return respond();
-  const user = db.prepare('SELECT id, email FROM users WHERE email = ? AND email_verified = 1').get(email);
+  const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
   if (!user) return respond();
   const now = Date.now();
   const existing = db.prepare('SELECT sent_at FROM password_resets WHERE user_id = ?').get(user.id);
@@ -258,7 +295,7 @@ router.post('/password-reset/confirm', (req, res) => {
   if (!isEmailFormatValid(email) || !/^[a-f0-9]{64}$/.test(token) || password.length < 6 || password.length > 1024) return res.status(400).json({ error: 'Проверьте почту, код и пароль (от 6 до 1024 символов).' });
   const digest = createHash('sha256').update(token).digest('hex');
   const row = db.prepare(`SELECT r.user_id FROM password_resets r JOIN users u ON u.id = r.user_id
-    WHERE r.token_hash = ? AND r.expires_at > ? AND u.email = ? AND u.email_verified = 1`).get(digest, Date.now(), email);
+    WHERE r.token_hash = ? AND r.expires_at > ? AND u.email = ?`).get(digest, Date.now(), email);
   if (!row) return res.status(400).json({ error: 'Код недействителен или истёк' });
   if (req.userId && req.userId !== row.user_id) return res.status(400).json({ error: 'Код недействителен или истёк' });
   const { salt, hash } = hashPassword(password);
@@ -266,7 +303,8 @@ router.post('/password-reset/confirm', (req, res) => {
   try {
     const consumed = db.prepare('DELETE FROM password_resets WHERE user_id = ? AND token_hash = ? AND expires_at > ?').run(row.user_id, digest, Date.now());
     if (!consumed.changes) { db.exec('ROLLBACK'); return res.status(400).json({ error: 'Код недействителен или истёк' }); }
-    db.prepare('UPDATE users SET pass_hash = ?, pass_salt = ? WHERE id = ?').run(hash, salt, row.user_id);
+    db.prepare('UPDATE users SET pass_hash = ?, pass_salt = ?, email_verified = 1 WHERE id = ?').run(hash, salt, row.user_id);
+    db.prepare('DELETE FROM email_codes WHERE user_id = ?').run(row.user_id);
     db.prepare('DELETE FROM oauth_results WHERE user_id = ?').run(row.user_id);
     db.prepare('DELETE FROM oauth_flows WHERE user_id = ?').run(row.user_id);
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.user_id);
@@ -293,22 +331,27 @@ router.post('/logout', (req, res) => {
 /* middleware: достаёт пользователя из Authorization: Bearer <token> */
 export function authMiddleware(req, res, next) {
   req.userId = null;
+  req.pendingRegistration = null;
   req.token = null;
   const m = /^Bearer\s+([a-f0-9]{64})$/i.exec(req.headers.authorization || '');
   if (m) {
     const now = Date.now();
-    const s = db.prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?').get(m[1]);
+    const digest=sessionDigest(m[1]);
+    let s = db.prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?').get(digest);
+    // Transitional compatibility for older writers during a rolling upgrade.
+    if(!s){s=db.prepare('SELECT user_id,expires_at FROM sessions WHERE token=?').get(m[1]);if(s)db.prepare('UPDATE sessions SET token=? WHERE token=?').run(digest,m[1]);}
+    if(!s)req.pendingRegistration=db.prepare('SELECT * FROM pending_registrations WHERE token_hash=? AND expires_at>?').get(digest,now);
     if (s && s.expires_at > now) {
       req.userId = s.user_id;
-      req.token = m[1];
+      req.token = digest;
       // сдвигаем окно, но пишем на диск не чаще раза в сутки: иначе UPDATE
       // уходил бы на КАЖДЫЙ запрос приложения
       if (s.expires_at - now < SESSION_TTL_MS - SESSION_REFRESH_MS) {
         db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?')
-          .run(now + SESSION_TTL_MS, m[1]);
+          .run(now + SESSION_TTL_MS, digest);
       }
     } else if (s) {
-      db.prepare('DELETE FROM sessions WHERE token = ?').run(m[1]);   // протухла — убираем
+      db.prepare('DELETE FROM sessions WHERE token = ?').run(digest);
     }
   }
   next();

@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
 import { replayErasures,cleanupErasedMedia } from '../backend/lib/account-erasure.js';
+import {pruneProofMedia} from '../backend/lib/proof-retention.js';
 
 function hash(file) {
   const digest = crypto.createHash('sha256');
@@ -31,7 +32,8 @@ function inspectDatabase(file, proofs) {
     const counts = {};
     for (const { name } of tables) counts[name] = db.prepare(`SELECT count(*) AS n FROM "${name.replaceAll('"','""')}"`).get().n;
     if (tables.some(t => t.name === 'proofs')) {
-      for (const row of db.prepare('SELECT file FROM proofs').all()) {
+      const hasRetention=db.prepare('PRAGMA table_info(proofs)').all().some(c=>c.name==='media_deleted');
+      for (const row of db.prepare('SELECT file FROM proofs'+(hasRetention?' WHERE media_deleted=0':'')).all()) {
         if (!row.file || row.file.includes('/') || row.file.includes('\\') || row.file === '..') throw Error('Unsafe media reference');
         if (!fs.statSync(path.join(proofs, row.file)).isFile()) throw Error('Missing proof file');
       }
@@ -94,10 +96,10 @@ export function restoreBackup(source, destination, deletionJournal) {
     throw error;
   }
   const verified=verifyBackup(target);
-  if(deletionJournal) {
+  {
     const restored=new DatabaseSync(path.join(target,'disbit.db'));
-    let erased;
-    try { erased=replayErasures(restored,deletionJournal);cleanupErasedMedia(restored,path.join(target,'proofs')); }
+    let erased=0;
+    try { if(deletionJournal){erased=replayErasures(restored,deletionJournal);cleanupErasedMedia(restored,path.join(target,'proofs'));}pruneProofMedia(restored,path.join(target,'proofs')); }
     finally {restored.close();}
     // The scrubbed restore is a new verified snapshot, not the original manifest.
     const manifest={format:1,createdAt:new Date().toISOString(),rows:inspectDatabase(path.join(target,'disbit.db'),path.join(target,'proofs')),files:{}};

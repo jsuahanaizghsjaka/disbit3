@@ -48,6 +48,7 @@ router.put('/', (req, res) => {
   const ts = String(requestedTs || Date.now());
   const previous = db.prepare('SELECT updated_at FROM user_state WHERE user_id=?').get(uid(req));
   const hasBase = Object.prototype.hasOwnProperty.call(req.body, 'baseUpdatedAt');
+  if(!hasBase)return res.status(409).json({error:'Обновите приложение перед сохранением настроек',code:'state_conflict'});
   if ((hasBase && String(req.body.baseUpdatedAt ?? '') !== String(previous?.updated_at ?? ''))
       || (previous && Number(ts) <= Number(previous.updated_at))) {
     return res.status(409).json({error:'Настройки уже изменены на другом устройстве. Обновите данные перед сохранением.',code:'state_conflict'});

@@ -20,7 +20,8 @@ test('server export excludes credentials and other accounts; Groq is disabled',a
  assert.equal((await request('POST','/ai/ask',{question:'test'})).status,410);
 });
 test('blocking prevents friendship and invitations; reporting is authenticated',async()=>{
- assert.equal((await request('POST','/friends',{login:'recovery_two'})).status,201);
+ assert.equal((await request('POST','/friends',{login:'recovery_two'})).status,202);
+ assert.equal((await request('POST','/friends',{login:'recovery_one'},'2'.repeat(64))).status,201);
  assert.equal((await request('POST','/moderation/blocks',{login:'recovery_two'})).status,200);
  assert.equal((await request('POST','/friends',{login:'recovery_one'},'2'.repeat(64))).status,403);
  const fixture=new DatabaseSync(path.join(dir,'test.db'));

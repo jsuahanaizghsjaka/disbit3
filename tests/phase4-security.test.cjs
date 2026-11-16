@@ -7,7 +7,7 @@ const path=require('node:path');
 const {DatabaseSync}=require('node:sqlite');
 test('login and proof limits persist; wrong owners, forged media and oversized uploads are rejected',async()=>{
  const dir=mkdtempSync(path.join(tmpdir(),'disbit-phase4-')),file=path.join(dir,'test.db');let child;
- const start=async()=>{child=spawn(process.execPath,[path.join(__dirname,'recovery-fixture.mjs')],{env:{...process.env,PORT:'3504',ADMIN_KEY:'synthetic-phase4-admin-key',DB_PATH:file,PROOFS_DIR:path.join(dir,'proofs')},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup')),15000);child.stdout.on('data',b=>{if(String(b).includes('localhost:3504')){clearTimeout(timer);resolve();}});child.on('exit',()=>{clearTimeout(timer);reject(Error('exit'));});});};
+ const start=async()=>{child=spawn(process.execPath,[path.join(__dirname,'recovery-fixture.mjs')],{env:{...process.env,PORT:'3504',ADMIN_KEY:'synthetic-phase4-admin-key-1234567890',DB_PATH:file,PROOFS_DIR:path.join(dir,'proofs')},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup')),15000);child.stdout.on('data',b=>{if(String(b).includes('localhost:3504')){clearTimeout(timer);resolve();}});child.on('exit',()=>{clearTimeout(timer);reject(Error('exit'));});});};
  const stop=async()=>{const end=new Promise(r=>child.once('exit',r));child.kill();await end;};
  const login=()=>fetch('http://127.0.0.1:3504/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:'absent',password:'synthetic'})});
  const upload=(body,habit='own',mime='image/png')=>fetch('http://127.0.0.1:3504/api/proofs?habitId='+habit+'&day='+day,{method:'POST',headers:{Authorization:'Bearer '+'1'.repeat(64),'Content-Type':mime},body});
@@ -47,7 +47,7 @@ test('login and proof limits persist; wrong owners, forged media and oversized u
   for(const source of ['gallery','camera','unknown'])assert.equal((await upload(png,'own&source='+source)).status,201);
   assert.equal((await upload(png,'own&source=forged')).status,400);
   assert.equal((await fetch('http://127.0.0.1:3504/api/proofs')).status,401);
-  const listed=await (await fetch('http://127.0.0.1:3504/api/proofs',{headers:{'X-Admin-Key':'synthetic-phase4-admin-key'}})).json();
+  const listed=await (await fetch('http://127.0.0.1:3504/api/proofs',{headers:{'X-Admin-Key':'synthetic-phase4-admin-key-1234567890'}})).json();
   assert.deepEqual(listed.items.map(p=>p.source),['unknown','camera','gallery']);
  } finally {if(child?.exitCode===null)await stop();}
 });

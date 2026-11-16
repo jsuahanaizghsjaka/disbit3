@@ -26,6 +26,7 @@ import accountRouter from './routes/account.js';
 import moderationRouter from './routes/moderation.js';
 import blockingRouter from './routes/blocking.js';
 import {enforceModeration} from './lib/moderation.js';
+import {securityHeaders,corsOrigin} from './lib/http-security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -33,8 +34,14 @@ app.disable('x-powered-by');
 // Caddy connects locally; never trust forwarding headers from public peers.
 app.set('trust proxy', 'loopback');
 
-app.use(cors());                    // чтобы фронтенд с другого порта мог обращаться
+app.use(securityHeaders);
+app.use(cors({origin:corsOrigin}));
 app.use(express.json({ limit: '1mb' }));
+app.use((req,res,next)=>{
+  const invalid=value=>value&&typeof value==='object'&&(Object.keys(value).some(k=>['__proto__','constructor','prototype','toString','valueOf'].includes(k))||Object.values(value).some(invalid));
+  if(invalid(req.body))return res.status(400).json({error:'Некорректные поля запроса'});
+  next();
+});
 app.use(authMiddleware);            // Authorization: Bearer → req.userId
 app.use(enforceModeration);
 
@@ -100,7 +107,7 @@ app.use(express.static(path.join(__dirname, '..', 'frontend'), {
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   const status = err.status >= 400 && err.status < 600 ? err.status : 500;
-  if (status >= 500) console.error(err);
+  if (status >= 500) console.error('[request] internal error');
   const error = err.type === 'entity.too.large' ? 'Слишком большой запрос'
     : err.type === 'entity.parse.failed' ? 'Некорректный JSON в запросе'
     : status >= 500 ? 'Внутренняя ошибка сервера' : 'Некорректный запрос';

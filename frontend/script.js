@@ -1371,7 +1371,7 @@ function walkerForeground(sc) {
 // будет телепортироваться вместо шага
 function walkerSceneHtml(g, sc) {
   return `
-    <section class="walker-card" data-goal="${g.id}" data-scene="${sc.id}" data-gear="${gearOf(sc)}" style="--w-ink:${sc.ink || '#F3EDE4'}">
+    <section class="walker-card" data-goal="${escapeHtml(g.id)}" data-scene="${sc.id}" data-gear="${gearOf(sc)}" style="--w-ink:${sc.ink || '#F3EDE4'}">
       <header class="w-head">
         <h3 class="w-goal"></h3>
         <span class="w-flame" title="Серия — не рви её"></span>
@@ -1721,16 +1721,16 @@ function habitCard(h, off) {
   const streak = computeStreak(h);
 
   let checkContent = icon('i-check');
-  if (!done && h.goal.type === 'count') checkContent = String(h.counts?.[TODAY] || 0);
+  if (!done && h.goal.type === 'count') checkContent = escapeHtml(String(h.counts?.[TODAY] || 0));
   else if (!done) checkContent = '';
 
   const goalText = h.goal.type === 'count'
-    ? `${h.counts?.[TODAY] || 0}/${h.goal.target} ${h.goal.unit || ''}`.trim()
+    ? escapeHtml(`${h.counts?.[TODAY] || 0}/${h.goal.target} ${h.goal.unit || ''}`.trim())
     : '';
   const weeklyText = h.weekTarget ? `${doneInWeekBefore(h, new Date()) + (done ? 1 : 0)} из ${h.weekTarget} на неделе` : '';
 
   const stake = h.stake.mode === 'money'
-    ? `<span class="stake-badge money">${icon('i-coins')}${h.stake.amount}₽</span>`
+    ? `<span class="stake-badge money">${icon('i-coins')}${escapeHtml(String(h.stake.amount))}₽</span>`
     : `<span class="stake-badge lock">${icon('i-lock')}Блокировка недоступна</span>`;
 
   const schedText = h.schedule.length === 7
@@ -1744,10 +1744,10 @@ function habitCard(h, off) {
     const f = friendByLogin(h.buddy);
     const bDone = buddyDoneToday(h);
     const myAva = `<span class="pair-ava${done ? ' lit' : ''}" style="${
-      done ? `background:${profile.color || COLORS[0]}` : ''}" title="Ты${done ? ' — сделано' : ' — ещё нет'}">${
+      done ? `background:${safeColor(profile.color)}` : ''}" title="Ты${done ? ' — сделано' : ' — ещё нет'}">${
       profile.emoji ? escapeHtml(profile.emoji) : escapeHtml((profile.name || 'Я')[0])}</span>`;
     const fAva = `<span class="pair-ava${bDone === true ? ' lit' : ''}" style="${
-      bDone === true ? `background:${f?.color || COLORS[2]}` : ''}" title="${
+      bDone === true ? `background:${safeColor(f?.color)}` : ''}" title="${
       escapeHtml(f?.name || h.buddy)}${bDone === true ? ' — сделал' : bDone === false ? ' — ещё нет' : ' — нет данных'}">${
       escapeHtml(f?.emoji || (f?.name || h.buddy)[0])}</span>`;
     buddyHtml = `<span class="buddy-pair" title="Вместе с ${escapeHtml(f?.name || h.buddy)}">${myAva}${fAva}</span>`;
@@ -1757,7 +1757,7 @@ function habitCard(h, off) {
   let minHtml = '';
   if (!off && h.min) {
     if (min) minHtml = `<span class="min-badge">${icon('i-check', 'ic ic-s')} минимум зачтён</span>`;
-    else if (!done) minHtml = `<button class="min-btn" data-min="${h.id}" title="Нет сил на полное? Сделай минимум: ${escapeHtml(h.min)}">${icon('i-zap', 'ic ic-s')} Минимум</button>`;
+    else if (!done) minHtml = `<button class="min-btn" data-min="${escapeHtml(h.id)}" title="Нет сил на полное? Сделай минимум: ${escapeHtml(h.min)}">${icon('i-zap', 'ic ic-s')} Минимум</button>`;
   }
 
   const card = document.createElement('div');
@@ -1766,7 +1766,7 @@ function habitCard(h, off) {
   card.style.setProperty('--habit-color', safeColor(h.color));
   card.innerHTML = `
     <div class="habit-icon">${iconOf(h.icon)}</div>
-    <button type="button" class="habit-main" data-stats="${h.id}" aria-label="Детали: ${escapeHtml(h.name)}">
+    <button type="button" class="habit-main" data-stats="${escapeHtml(h.id)}" aria-label="Детали: ${escapeHtml(h.name)}">
       <div class="habit-name">${escapeHtml(h.name)}</div>
       <div class="habit-meta">
         <span class="habit-caption">${off ? 'Не сегодня' : isSkipOn(h, TODAY) ? 'Пропуск · серия сохранена' : min ? 'Минимум выполнен' : goalText || weeklyText || `Серия ${streak} ${plural(streak, 'день', 'дня', 'дней')}`}</span>
@@ -1774,7 +1774,7 @@ function habitCard(h, off) {
         ${buddyHtml}
       </div>
     </button>
-    <button class="habit-pin${h.pinned ? ' on' : ''}" data-pin="${h.id}"
+    <button class="habit-pin${h.pinned ? ' on' : ''}" data-pin="${escapeHtml(h.id)}"
       aria-pressed="${h.pinned ? 'true' : 'false'}"
       aria-label="${h.pinned ? 'Открепить' : 'Закрепить'}: ${escapeHtml(h.name)}">
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1783,7 +1783,7 @@ function habitCard(h, off) {
         <path d="M9 10.8V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5.8a2 2 0 0 0 .6 1.4l1.3 1.3A2 2 0 0 1 16.4 17H7.6a2 2 0 0 1-1.5-3.5l1.3-1.3A2 2 0 0 0 9 10.8Z"/>
       </svg>
     </button>
-    ${off ? '' : `<button class="habit-check" data-check="${h.id}" ${pendingHabitMarks.has(h.id) ? 'disabled aria-busy="true"' : ''} aria-pressed="${done}" aria-label="${done ? 'Отменить выполнение' : 'Отметить'}: ${escapeHtml(h.name)}">${pendingHabitMarks.has(h.id) ? '…' : isSkipOn(h, TODAY) ? 'Ⅱ' : checkContent}</button>`}
+    ${off ? '' : `<button class="habit-check" data-check="${escapeHtml(h.id)}" ${pendingHabitMarks.has(h.id) ? 'disabled aria-busy="true"' : ''} aria-pressed="${done}" aria-label="${done ? 'Отменить выполнение' : 'Отметить'}: ${escapeHtml(h.name)}">${pendingHabitMarks.has(h.id) ? '…' : isSkipOn(h, TODAY) ? 'Ⅱ' : checkContent}</button>`}
   `;
   return card;
 }
@@ -2236,17 +2236,17 @@ function renderDaySheet() {
       } else if (h.goal.type === 'count') {
         control = `
           <div class="stepper">
-            <button data-step="-1" data-h="${h.id}" aria-label="Меньше">${icon('i-minus', 'ic ic-s')}</button>
+            <button data-step="-1" data-h="${escapeHtml(h.id)}" aria-label="Меньше">${icon('i-minus', 'ic ic-s')}</button>
             <span class="stp-val ${done ? 'ok' : ''}">${min ? 'мин' : `${val}/${h.goal.target}`}</span>
-            <button data-step="1" data-h="${h.id}" aria-label="Больше">${icon('i-plus', 'ic ic-s')}</button>
+            <button data-step="1" data-h="${escapeHtml(h.id)}" aria-label="Больше">${icon('i-plus', 'ic ic-s')}</button>
           </div>`;
       } else {
         control = `
-          <button class="habit-check ${done ? '' : ''}" style="width:42px;height:42px" data-dtoggle="${h.id}"
+          <button class="habit-check ${done ? '' : ''}" style="width:42px;height:42px" data-dtoggle="${escapeHtml(h.id)}"
             aria-pressed="${done}" aria-label="${done ? 'Отменить выполнение' : 'Отметить'}: ${escapeHtml(h.name)}">${done ? icon('i-check') : ''}</button>`;
       }
       const minBtn = editable && h.min && !done && !skip
-        ? `<button class="min-btn" data-dmin="${h.id}" title="${escapeHtml(h.min)}">мин</button>` : '';
+        ? `<button class="min-btn" data-dmin="${escapeHtml(h.id)}" title="${escapeHtml(h.min)}">мин</button>` : '';
       const minBadge = min ? `<span class="min-badge">минимум</span>` : '';
       const pending = calendarPending.has(h.id+':'+key);
       const error = calendarErrors.get(h.id+':'+key);
@@ -2685,8 +2685,8 @@ function renderGoals() {
     // с путником прогресс считается сам из выполненных обещаний — крутилки ±5 не нужны
     const walking = g.steps > 0;
     const manual = `
-      <button class="mini-btn" data-gminus="${g.id}" aria-label="Минус 5%">−5</button>
-      <button class="mini-btn" data-gplus="${g.id}" aria-label="Плюс 5%">+5</button>`;
+      <button class="mini-btn" data-gminus="${escapeHtml(g.id)}" aria-label="Минус 5%">−5</button>
+      <button class="mini-btn" data-gplus="${escapeHtml(g.id)}" aria-label="Плюс 5%">+5</button>`;
     const steps = `<span class="goal-text">${Math.min(done, g.steps)} / ${g.steps} шагов</span>`;
     return `
       ${pct >= 100 && (index === 0 || ordered[index-1].pct < 100) ? '<h3 class="journey-section-label">Завершено</h3>' : ''}
@@ -2700,10 +2700,10 @@ function renderGoals() {
         <div class="goal-controls">
           <span class="g-pct">${pct}%</span>
           ${walking ? steps : manual}
-          ${walking ? `<button class="mini-btn" data-gselect="${g.id}" aria-pressed="${activeId === g.id}">${activeId === g.id ? 'Выбран' : 'Показать маршрут'}</button>` : ''}
-          ${walking && pct >= 100 ? `<button class="mini-btn journey-summary-link" data-gresult="${g.id}">Итоги</button>` : ''}
-          <button class="mini-btn" data-gedit="${g.id}">изменить</button>
-          <button class="mini-btn danger" data-gdel="${g.id}">удалить</button>
+          ${walking ? `<button class="mini-btn" data-gselect="${escapeHtml(g.id)}" aria-pressed="${activeId === g.id}">${activeId === g.id ? 'Выбран' : 'Показать маршрут'}</button>` : ''}
+          ${walking && pct >= 100 ? `<button class="mini-btn journey-summary-link" data-gresult="${escapeHtml(g.id)}">Итоги</button>` : ''}
+          <button class="mini-btn" data-gedit="${escapeHtml(g.id)}">изменить</button>
+          <button class="mini-btn danger" data-gdel="${escapeHtml(g.id)}">удалить</button>
         </div>
       </div>`;
   }).join('');
@@ -2773,7 +2773,7 @@ function buildMarathonHabits(g) {
     const checked = mine.has(h.id);
     return `
       <label class="mh-row ${taken ? 'taken' : ''}">
-        <input type="checkbox" class="mh-check" value="${h.id}"
+        <input type="checkbox" class="mh-check" value="${escapeHtml(h.id)}"
                ${checked ? 'checked' : ''} ${taken ? 'disabled' : ''} />
         <span class="mh-icon">${iconOf(h.icon)}</span>
         <span class="mh-name">${escapeHtml(h.name)}</span>
@@ -2937,6 +2937,7 @@ function saveReward() {
    живёт на сервере: добавляешь по логину, связь взаимная, у друга видно
    его серию и % недели (он публикует их сам в своей «визитке»). */
 let serverFriends = [];
+let incomingFriends = [];
 let myLogin = null;
 let friendsLoading = false, friendsError = '', friendsRequest = 0;
 let friendsCacheOwner = null, friendsLoadedAt = 0;
@@ -2953,7 +2954,7 @@ async function loadFriends(force = false) {
   if (request !== friendsRequest || token !== authToken) return;
   friendsLoading = false;
   if (r.error || !Array.isArray(r.friends)) friendsError = r.error || 'Не удалось загрузить друзей';
-  else { serverFriends = r.friends; myLogin = r.me || null; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
+  else { serverFriends = r.friends; incomingFriends = r.incoming || []; myLogin = r.me || null; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
   renderFriends(); renderFriendsBoard();
 }
 
@@ -2985,10 +2986,19 @@ function renderFriends() {
       <button class="mini-btn danger" data-fdel="${escapeHtml(f.login)}" aria-label="Удалить друга ${escapeHtml(f.name || f.login)}">✕</button>
       <span class="friend-metrics">Серия ${friendMetric(f.streak, ' дн.')} · Неделя ${friendMetric(f.weekPct, '%')}</span>
       <details class="friend-shared"><summary>Совместных обещаний: ${habits.filter(h => h.buddy === f.login).length}</summary>
-        ${habits.filter(h => h.buddy === f.login).map(h => `<button data-shared-habit="${h.id}">${escapeHtml(h.name)}<small>${isDoneToday(h) ? 'Ты выполнил' : 'У тебя не выполнено'}</small></button>`).join('') || '<p class="hint">Открой детали обещания и выбери «Делать вместе», чтобы связать его с другом.</p>'}
+        ${habits.filter(h => h.buddy === f.login).map(h => `<button data-shared-habit="${escapeHtml(h.id)}">${escapeHtml(h.name)}<small>${isDoneToday(h) ? 'Ты выполнил' : 'У тебя не выполнено'}</small></button>`).join('') || '<p class="hint">Открой детали обещания и выбери «Делать вместе», чтобы связать его с другом.</p>'}
       </details>
     </article>`).join('');
   box.querySelector('#friends-retry')?.addEventListener('click', () => loadFriends(true));
+  if(friendsCacheOwner===authToken)for(const request of incomingFriends){
+    const row=document.createElement('article');row.className='friend-row friend-request';
+    const label=document.createElement('span');label.textContent='@'+request.login+' хочет добавить тебя в друзья';row.append(label);
+    for(const [text,method] of [['Принять','POST'],['Отклонить','DELETE']]){
+      const button=document.createElement('button');button.className='btn-secondary';button.textContent=text;
+      button.onclick=async()=>{const owner=authToken;row.querySelectorAll('button').forEach(b=>b.disabled=true);const result=await apiCallStrict(method,method==='POST'?'/friends':'/friends/'+encodeURIComponent(request.login),method==='POST'?{login:request.login}:undefined);if(owner!==authToken)return;if(result.error)toast(result.error);await loadFriends(true);};row.append(button);
+    }
+    box.prepend(row);
+  }
   if (friendsError && serverFriends.length) box.insertAdjacentHTML('afterbegin', '<p class="hint">Показаны последние загруженные данные. Они могут быть устаревшими.</p>');
   box.querySelectorAll('[data-shared-habit]').forEach(b => b.onclick = () => openHabitStats(b.dataset.sharedHabit));
   box.querySelectorAll('[data-fdel]').forEach(b =>
@@ -3220,7 +3230,7 @@ async function addFriendByLogin(login, silent = false) {
   renderFriends();
   renderFriendsBoard();
   if (!silent) closeSheet('friend-overlay');
-  toast('Теперь вы друзья 👥');
+  toast(r.pending ? 'Заявка отправлена. Данные друга появятся после принятия.' : 'Теперь вы друзья 👥');
 }
 
 // перешёл по ссылке-приглашению (?add=login) — добавляем сразу после входа
@@ -3446,7 +3456,7 @@ async function startGoogleSignIn(mode) {
   try {
     if (link) {
       clearTimeout(statePushTimer);
-      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now(), baseUpdatedAt: stateRemoteVersion });
       if (!saved?.ok) throw Error('Не удалось сохранить данные. Проверьте связь и повторите привязку.');
     }
     if (owner !== authToken) return;
@@ -3569,7 +3579,7 @@ async function submitReset(resend = false) {
   try {
     if (!request && owner) {
       clearTimeout(statePushTimer);
-      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now(), baseUpdatedAt: stateRemoteVersion });
       if (!saved?.ok) return show('Не удалось синхронизировать данные. Пароль не изменён. Проверьте связь и повторите сохранение.');
     }
     if (owner !== authToken) return;
@@ -3583,7 +3593,7 @@ async function submitReset(resend = false) {
       resetTimer = setInterval(updateResetResend, 1000);
       document.getElementById('reset-email-field').hidden = true;
       document.getElementById('reset-confirm-fields').hidden = false;
-      document.getElementById('reset-hint').textContent = `Если ${email} — подтверждённая почта аккаунта, код придёт в письме. Код действует 15 минут. После смены пароля войдите заново на всех устройствах.`;
+      document.getElementById('reset-hint').textContent = `Если ${email} — почта аккаунта, код придёт в письме. Код действует 15 минут. После смены пароля войдите заново на всех устройствах.`;
       button.textContent = 'Сохранить пароль';
       show('Проверьте входящие и «Спам». Если письма нет, повторите отправку через минуту (не более 3 запросов в час).', false);
     } else {
@@ -3643,6 +3653,7 @@ async function submitAuth() {
     if (res.error) { showAuthError(res.error); return; }
 
     setAuth(res.token, res.user);
+    if(res.pendingRegistration){openVerifySheet(res.user.email,res.verificationEmailSent);return;}
     // вошёл другой человек — стираем данные прежнего владельца и перезагружаемся
     if (claimDeviceFor(res.user)) return;
     passGate();
@@ -3696,6 +3707,11 @@ async function submitVerify() {
   button.disabled=false;button.textContent='Подтвердить';
   if(owner!==authToken) return;
   if (r?.error) { err.hidden = false; err.textContent = r.error; return; }
+  if(r.token&&r.user){
+    setAuth(r.token,r.user);
+    if(claimDeviceFor(r.user))return;
+    passGate();closeSheet('auth-overlay');apiBootstrap();
+  }
   if (authUser) { authUser.emailVerified = true; setAuth(authToken, authUser); }
   closeSheet('verify-overlay');
   renderAccount();
@@ -3721,7 +3737,7 @@ async function resendVerify() {
    выход не стоил несинхронизированных изменений. */
 async function logout() {
   if (API && authToken) {
-    const pushed = await apiCall('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+    const pushed = await apiCall('PUT', '/state', { data: stateBlob(), ts: Date.now(), baseUpdatedAt: stateRemoteVersion });
     if (pushed?.error && !confirm(
       'Не удалось отправить последние изменения на сервер. Выйти всё равно? Несохранённое будет потеряно.')) return;
   }

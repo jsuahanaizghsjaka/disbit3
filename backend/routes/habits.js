@@ -94,7 +94,7 @@ router.post('/', (req, res) => {
     }
     });
   } catch (e) {
-    return res.status(400).json({ error: e.message });
+    return res.status(400).json({ error: 'Не удалось сохранить обещание. Проверьте поля.' });
   }
 
   res.status(201).json(getHabit(p.id, uid(req)));

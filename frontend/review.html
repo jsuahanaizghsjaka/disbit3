@@ -157,7 +157,7 @@
             <span class="p-source">${p.source === 'gallery' ? 'Из галереи' : p.source === 'camera' ? 'Камера приложения' : 'Источник не указан'} · способ загрузки указан приложением</span>
             <span class="p-meta">${escapeHtml(p.user_login || 'гость')} · ${p.day}</span>
           </div>
-          <button class="btn" data-load>Открыть ${p.type === 'video' ? 'видео' : 'фото'}</button>
+          <button class="btn" data-load ${p.media_deleted ? 'disabled' : ''}>${p.media_deleted ? 'Медиа удалено по сроку хранения' : 'Открыть '+(p.type === 'video' ? 'видео' : 'фото')}</button>
           ${media}
           ${actions}`;
         list.appendChild(el);

@@ -11,6 +11,7 @@
 import { Router } from 'express';
 import { db } from '../db/db.js';
 import { blocked } from '../lib/moderation.js';
+import { requestLimit } from '../lib/request-limits.js';
 
 const router = Router();
 
@@ -19,6 +20,14 @@ function authRequired(req, res, next) {
   next();
 }
 router.use(authRequired);
+db.exec(`CREATE TABLE IF NOT EXISTS friend_requests (
+ sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(sender_id,recipient_id));`);
+router.post('/',requestLimit('friend-request',20,3600000,req=>req.userId));
+// Legacy rows cannot prove either party initiated the relationship.
+// Do not turn them into requests: that would let one party confirm for both.
+db.exec('DELETE FROM friendships WHERE confirmed=0');
 
 /* Проверка «это твой собственный логин» появилась не сразу — у аккаунтов,
    заведённых до неё, строка «сам себе друг» осталась лежать в базе и вылезала
@@ -51,11 +60,12 @@ router.get('/', (req, res) => {
   const rows = db.prepare(`
     SELECT u.id, u.login FROM friendships f
     JOIN users u ON u.id = f.friend_id
-    WHERE f.user_id = ? AND f.friend_id <> f.user_id
+    WHERE f.user_id = ? AND f.friend_id <> f.user_id AND f.confirmed=1
     ORDER BY f.created_at DESC
   `).all(req.userId);
   const me = db.prepare('SELECT login FROM users WHERE id = ?').get(req.userId);
   res.json({
+    incoming: db.prepare('SELECT u.login FROM friend_requests f JOIN users u ON u.id=f.sender_id WHERE f.recipient_id=?').all(req.userId).filter(r=>{const u=db.prepare('SELECT id FROM users WHERE login=?').get(r.login);return !blocked(req.userId,u.id);}),
     me: me?.login || null,
     friends: rows.filter(r=>!blocked(req.userId,r.id)).map(r => ({ id: r.id, login: r.login, ...publicCard(r.id) }))
   });
@@ -67,18 +77,22 @@ router.post('/', (req, res) => {
   if (!login) return res.status(400).json({ error: 'Укажи логин друга' });
 
   const friend = db.prepare('SELECT id, login FROM users WHERE login = ?').get(login);
-  if (!friend) return res.status(404).json({ error: 'Пользователь с таким логином не найден' });
+  if (!friend) return res.status(202).json({ok:true,pending:true});
   if (friend.id === req.userId) return res.status(400).json({ error: 'Это твой собственный логин' });
   if (blocked(req.userId,friend.id)) return res.status(403).json({error:'Добавление этого пользователя недоступно'});
 
   const exists = db.prepare(
-    'SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?'
+    'SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ? AND confirmed=1'
   ).get(req.userId, friend.id);
   if (exists) return res.status(409).json({ error: 'Вы уже друзья' });
 
+  const requested = db.prepare('SELECT 1 FROM friend_requests WHERE sender_id=? AND recipient_id=?').get(friend.id,req.userId);
+  if(!requested){db.prepare('INSERT OR IGNORE INTO friend_requests(sender_id,recipient_id) VALUES(?,?)').run(req.userId,friend.id);return res.status(202).json({ok:true,pending:true});}
   const add = db.prepare('INSERT OR IGNORE INTO friendships (user_id, friend_id) VALUES (?, ?)');
   add.run(req.userId, friend.id);
   add.run(friend.id, req.userId);        // взаимно — друг тоже видит меня
+  db.prepare('UPDATE friendships SET confirmed=1 WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)').run(req.userId,friend.id,friend.id,req.userId);
+  db.prepare('DELETE FROM friend_requests WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)').run(req.userId,friend.id,friend.id,req.userId);
 
   res.status(201).json({ ok: true, friend: { id: friend.id, login: friend.login, ...publicCard(friend.id) } });
 });
@@ -88,6 +102,7 @@ router.delete('/:login', (req, res) => {
   const login = String(req.params.login || '').trim().toLowerCase();
   const friend = db.prepare('SELECT id FROM users WHERE login = ?').get(login);
   if (!friend) return res.status(404).json({ error: 'Не найден' });
+  db.prepare('DELETE FROM friend_requests WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)').run(req.userId,friend.id,friend.id,req.userId);
   const del = db.prepare('DELETE FROM friendships WHERE user_id = ? AND friend_id = ?');
   del.run(req.userId, friend.id);
   del.run(friend.id, req.userId);

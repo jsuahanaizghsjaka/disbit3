@@ -1,4 +1,6 @@
 import path from 'node:path';
+// Applies to Docker and direct node launches as well as systemd.
+process.umask(0o077);
 
 // Validate before importing routes: a bad deployment must not migrate a wrong DB.
 export function validateRuntime(env = process.env) {

@@ -101,7 +101,9 @@ test('new promises preserve color; history import and duplicate ids cannot backd
 
 test('friends add mutually, reject self and remove', async () => {
   assert.equal((await request('POST', '/friends', { login: 'beta_tester' })).status, 400);
-  assert.equal((await request('POST', '/friends', { login: 'beta_friend' })).status, 201);
+  assert.equal((await request('POST', '/friends', { login: 'beta_friend' })).status, 202);
+  assert.equal((await (await request('GET','/friends')).json()).friends.length,0);
+  assert.equal((await request('POST','/friends',{login:'beta_tester'},'2'.repeat(64))).status,201);
   const data = await (await request('GET', '/friends')).json();
   assert.equal(data.friends[0].streak, 12);
   const reverse = await (await request('GET', '/friends', undefined, '2'.repeat(64))).json();
@@ -203,8 +205,8 @@ test('proof upload ownership, date, MIME and completion after quota is exhausted
   });
   assert.equal((await decision('approved')).status,200);
   assert.equal((await (await request('GET','/habits/skips/quota')).json()).trustedBits,beforeBits+1);
-  assert.equal((await decision('rejected')).status,200);
-  assert.equal((await (await request('GET','/habits/skips/quota')).json()).trustedBits,beforeBits);
+  assert.equal((await decision('rejected')).status,409);
+  assert.equal((await (await request('GET','/habits/skips/quota')).json()).trustedBits,beforeBits+1);
   assert.equal((await (await request('GET','/proofs/quota')).json()).used,5);
 });
 

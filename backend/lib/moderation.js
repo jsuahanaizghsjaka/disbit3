@@ -12,12 +12,13 @@ CREATE TABLE IF NOT EXISTS moderation_notices (
  report_id INTEGER NOT NULL,message TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT (datetime('now')),
  UNIQUE(user_id,report_id));`);
 export function enforceModeration(req,res,next) {
+ const requestPath=req.path.toLowerCase();
  if(!req.userId || !db.prepare('SELECT 1 FROM moderation_bans WHERE user_id=?').get(req.userId))return next();
  // Keep access to export, erasure, financial obligations and the appeal channel.
- if(/^\/api\/(auth|account|wallet)(\/|$)/.test(req.path)||req.path==='/api/moderation/appeals'||req.method==='GET')return next();
+ if(/^\/api\/(auth|account|wallet)(\/|$)/.test(requestPath)||requestPath==='/api/moderation/appeals'||req.method==='GET')return next();
  // Do not prevent fulfilling personal promises or using a proof skip.
  // Moderation must not itself cause a missed promise or financial penalty.
- if(!/^\/api\/(friends|invites)(\/|$)/.test(req.path) && req.path!=='/api/proofs' && req.path!=='/api/proofs/')return next();
+ if(!/^\/api\/(friends|invites)(\/|$)/.test(requestPath) && requestPath!=='/api/proofs' && requestPath!=='/api/proofs/')return next();
  return res.status(403).json({error:'Публикация и социальные действия ограничены модератором. Обжалование: disbitx1@gmail.com',code:'ACCOUNT_RESTRICTED'});
 }
 db.exec(`CREATE TABLE IF NOT EXISTS user_blocks (

@@ -14,6 +14,16 @@
 
 ## Как ставить тег
 
+### Сверка production 13 ноября 2026
+
+`/srv/disbit/current` и `/api/ready` сообщают прежний идентификатор
+`777ff1012f6b98e7897edde2c5b364d5b69124ce`. Этого объекта в текущей истории Git нет.
+Содержимое `frontend/`, `backend/` (без node_modules и .env), `scripts/`,
+`package.json` и `package-lock.json` на production сравнено с архивом тега
+`server-2026-11-07` (`2c975b7d4651f53a9634900a7973ae8308e56270`): различий нет.
+Это подтверждение совпадения перечисленных файлов, а не наличия старого коммита
+в текущем репозитории. Тег не перемещался; production не переустанавливался.
+
 - Сервер: `git tag server-ГГГГ-ММ-ДД <коммит>`
 - Android: `git tag android-<versionName>-<versionCode> <коммит>`
 - iOS: `git tag ios-<version>-<build> <коммит>`
