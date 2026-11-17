@@ -10,7 +10,8 @@
 | 2026-10-25 | Android APK/AAB | 1.0.4 / 5 | `d487aab` | — | RELEASE-FOUNDATION-REPORT.md |
 | 2026-10-27 | Android APK (Galaxy A22) | 1.0.6 / 7 | `e65ec69` | — | plans/DISBIT-PERFORMANCE-AUDIT-AND-SPEC.md |
 | 2026-11-07 | Сервер production + staging | — | `2c975b7` | `server-2026-11-07` | ops/INTRO-SKIP-GOOGLE-2026-11-07.md |
-| не выпущен | Android (в `android/app/build.gradle`) | 1.0.7 / 8 | — | — | build.gradle |
+| 2026-11-16 | Сервер production + staging | — | `8fb575c` | — | SECURITY-PUBLICATION-2026-11-16.md |
+| 2026-11-16 | Android release APK, локально | 1.0.8 / 9 | `fc813a6` | `android-1.0.8-9` | ANDROID-1.0.8-BUILD-2026-11-16.md |
 
 ## Как ставить тег
 
