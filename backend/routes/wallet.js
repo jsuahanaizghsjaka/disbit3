@@ -7,15 +7,14 @@ import { Router } from 'express';
 import express from 'express';
 import crypto from 'node:crypto';
 import { getBalance, credit, history, chargedTotal } from '../lib/wallet.js';
-import { createTopup, parseWebhook, paymentsInfo } from '../lib/payments.js';
+import { createTopup, paymentsInfo } from '../lib/payments.js';
 import { db } from '../db/db.js';
 import { createYooKassaClient } from '../lib/yookassa-client.js';
+import { topupProblem, topupQuote, TOPUP_MIN, TOPUP_MAX, BALANCE_MAX } from '../lib/money-limits.js';
 import { sandboxConfig, sandboxAllowed, sandboxSnapshot, sandboxHistory, createSandboxService } from '../lib/sandbox-deposit.js';
 
 const router = Router();
 
-const MIN_TOPUP = 5000;        // 50 ₽ — меньше нет смысла: съест комиссия
-const MAX_TOPUP = 5000000;     // 50 000 ₽ за раз
 const testShop = sandboxConfig();
 const sandbox = testShop.enabled
   ? createSandboxService(db,createYooKassaClient({shopId:testShop.shopId,secretKey:testShop.secretKey}),testShop.shopId)
@@ -34,6 +33,7 @@ router.get('/', authRequired, (req, res) => {
     balance, currency,
     charged: chargedTotal(req.userId),
     payments: paymentsInfo(),
+    limits: { topupMin: TOPUP_MIN, topupMax: TOPUP_MAX, balanceMax: BALANCE_MAX, feePercent: 3.8 },
     history: history(req.userId, 30),
     sandbox: testAllowed(req.userId) ? sandboxSnapshot(db,req.userId) : null
   });
@@ -57,9 +57,12 @@ router.post('/sandbox/topup', authRequired, express.json(), async (req, res) => 
   if (!testAllowed(req.userId)) return res.status(404).json({ error: 'Тестовый депозит недоступен' });
   const amount = req.body?.amount;
   const requestId = req.body?.requestId;
-  if (!Number.isSafeInteger(amount) || amount < MIN_TOPUP || amount > MAX_TOPUP ||
-      typeof requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(requestId))
-    return res.status(400).json({ error: 'Нужны сумма от 50 до 50 000 ₽ и ID запроса' });
+  if (typeof requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(requestId))
+    return res.status(400).json({ error: 'Нужен ID запроса' });
+  const snapshot = sandboxSnapshot(db,req.userId);
+  const pending = db.prepare("SELECT COALESCE(SUM(amount),0) AS n FROM sandbox_payment_intents WHERE user_id=? AND status IN ('created','pending') AND request_id<>?").get(req.userId,requestId).n;
+  const problem = topupProblem(amount, snapshot?.balance || 0, pending);
+  if (problem) return res.status(400).json(problem);
   try {
     const result = await sandbox.start(req.userId,amount,requestId,new URL('/?sandbox_paid=1',process.env.PUBLIC_URL).href);
     res.json({ ok:true, sandbox:true, ...result });
@@ -93,12 +96,9 @@ router.post('/sandbox/webhook', express.json(), async (req, res) => {
 // POST /api/wallet/topup { amount } — amount в КОПЕЙКАХ
 router.post('/topup', authRequired, express.json(), async (req, res) => {
   if (!paymentsInfo().available) return res.status(503).json({ error: 'Пополнение пока недоступно', code: 'PAYMENTS_DISABLED' });
-  const amount = Number(req.body?.amount);
-  if (!Number.isInteger(amount) || amount < MIN_TOPUP || amount > MAX_TOPUP) {
-    return res.status(400).json({
-      error: `Сумма должна быть от ${MIN_TOPUP / 100} до ${MAX_TOPUP / 100} ₽`
-    });
-  }
+  const amount = req.body?.amount;
+  const problem = topupProblem(amount, getBalance(req.userId).balance);
+  if (problem) return res.status(400).json(problem);
   const idempotenceKey = crypto.randomUUID();
   try {
     const info = paymentsInfo();
@@ -112,36 +112,17 @@ router.post('/topup', authRequired, express.json(), async (req, res) => {
       const r = credit(req.userId, amount, {
         provider: 'manual', providerId: t.providerId, meta: { test: true }
       });
-      return res.json({ ok: true, instant: true, balance: r.balance, simulated: true });
+      return res.json({ ok: true, instant: true, balance: r.balance, simulated: true, quote: topupQuote(amount) });
     }
-    res.json({ ok: true, url: t.url, providerId: t.providerId, simulated: info.simulated });
+    res.json({ ok: true, url: t.url, providerId: t.providerId, simulated: info.simulated, quote: topupQuote(amount) });
   } catch (e) {
     console.error('[wallet] topup:', e.message);
     res.status(502).json({ error: 'Не удалось создать платёж' });
   }
 });
 
-/* POST /api/wallet/webhook — уведомление от провайдера об оплате.
-   Без авторизации (приходит от банка), поэтому:
-   • зачисляем только по данным из вебхука, а не из тела запроса клиента;
-   • повторный вебхук не зачисляет дважды (UNIQUE provider+provider_id). */
-router.post('/webhook', express.json(), (req, res) => {
-  if (!paymentsInfo().live) return res.status(503).json({ error: 'Payments disabled' });
-  const ev = parseWebhook(req.body);
-  if (!ev) return res.status(400).json({ error: 'Неизвестный формат' });
-  if (!ev.paid || !ev.userId || !ev.amountKop) return res.json({ ok: true, ignored: true });
-
-  try {
-    const r = credit(ev.userId, ev.amountKop, {
-      provider: paymentsInfo().provider,
-      providerId: ev.providerId,
-      meta: { source: 'webhook' }
-    });
-    res.json({ ok: true, duplicate: !!r.duplicate });
-  } catch (e) {
-    console.error('[wallet] webhook:', e.message);
-    res.status(500).json({ error: 'Ошибка зачисления' });
-  }
-});
+// The old unverified webhook is closed for good. Real top-ups are credited only
+// from an authenticated provider GET (lib/money-service.js).
+router.post('/webhook', (req, res) => res.status(503).json({ error: 'Payments disabled' }));
 
 export default router;

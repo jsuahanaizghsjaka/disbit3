@@ -46,7 +46,7 @@ async function fixture() {
   return db;
 }
 function payment(intent, id='payment-12345678901234567890') {
-  return { id, amount:{value:(intent.amount/100).toFixed(2),currency:'RUB'},
+  return { id, amount:{value:((intent.amount+(intent.fee||0))/100).toFixed(2),currency:'RUB'},
     metadata:{disbit_intent:intent.id},status:'succeeded',paid:true,test:false,
     confirmation:{confirmation_url:'https://yookassa.ru/confirm/test'} };
 }

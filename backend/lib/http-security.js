@@ -4,7 +4,8 @@ const frontend=new URL('../../frontend/',import.meta.url);
 const hashes=[];
 for(const file of readdirSync(frontend).filter(f=>f.endsWith('.html'))){
   for(const match of readFileSync(new URL(file,frontend),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){
-    if(match[1].trim())hashes.push("'sha256-"+createHash('sha256').update(match[1]).digest('base64')+"'");
+    // Browsers hash the parsed text, where CRLF is already LF (HTML spec, input stream preprocessing).
+    if(match[1].trim())hashes.push("'sha256-"+createHash('sha256').update(match[1].replace(/\r\n?/g,'\n')).digest('base64')+"'");
   }
 }
 export function securityHeaders(req,res,next){

@@ -46,10 +46,11 @@ async page => {
   await page.screenshot({path:'test-results/register-consent.png'});
 
   // Legal pages exist, carry the anchors the checkbox links use, and fit a phone.
-  for(const [url,anchors] of [['terms.html',['content','refunds']],['consent.html',[]]]){
+  for(const [url,anchors] of [['terms.html',['content','refunds']],['consent.html',[]],['privacy.html',[]]]){
     const r=await page.goto('http://localhost:3337/'+url);assert(r.status()===200,url+' '+r.status());
     for(const a of anchors) assert(await page.locator('#'+a).count()===1,url+' missing #'+a);
-    assert(await page.locator('.draft').count()===1,url+' missing draft notice');
+    assert(await page.locator('.draft').count()===0,url+' still marked as draft');
+    assert(/17 ноября 2026/.test(await page.locator('.edition').textContent()),url+' missing edition date');
     assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),url+' overflows');
   }
   await page.goto('http://localhost:3337/terms.html');await page.screenshot({path:'test-results/terms.png',fullPage:false});

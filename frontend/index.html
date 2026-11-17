@@ -760,8 +760,8 @@
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="topup-title">Пополнить депозит</h2>
       <p id="topup-mode" class="sim-note"></p>
-      <p class="hint" id="topup-help">Штрафы списываются с депозита — карта не привязывается,
-        деньги сами не уходят. Остаток всегда виден.</p>
+      <p class="hint" id="topup-help">Депозит — обеспечительный платёж: неустойка за невыполненное обещание засчитывается из него. Карта не привязывается, свободный остаток можно вернуть.</p>
+      <p class="hint"><a href="terms.html#refunds" target="_blank" rel="noopener">Условия пополнения и возврата</a></p>
 
       <div class="topup-amounts" id="topup-amounts">
         <button class="topup-chip" data-sum="10000">100 ₽</button>
@@ -772,8 +772,9 @@
 
       <label class="field-label" for="topup-custom">Другая сумма, ₽</label>
       <input class="field-input" id="topup-custom" name="topup-amount" type="number" inputmode="decimal"
-        min="50" max="50000" step="0.01" placeholder="Например, 300…" autocomplete="off" aria-describedby="topup-error" />
-      <p class="hint">От 50 до 50 000 ₽ за одно пополнение.</p>
+        min="1" max="10000" step="0.01" placeholder="Например, 300…" autocomplete="off" aria-describedby="topup-fee topup-error" />
+      <p class="hint">От 1 до 10 000 ₽ за одно пополнение. Депозит — не больше 100 000 ₽.</p>
+      <p class="hint" id="topup-fee" aria-live="polite"></p>
       <p class="auth-error" id="topup-error" role="alert" hidden></p>
 
       <div class="sheet-actions">
@@ -1327,7 +1328,7 @@
       <p id="auth-tabs" class="auth-switch"><span id="auth-switch-label">Уже есть аккаунт?</span> <a id="auth-switch-link" href="#login">Войти</a></p>
       <fieldset class="auth-legal auth-consents" id="auth-consents">
         <legend class="sr-only">Согласия для регистрации</legend>
-        <label class="auth-consent"><input type="checkbox" id="rg-accept-terms" /><span>Принимаю <a href="terms.html" target="_blank" rel="noopener">пользовательское соглашение</a> и <a href="terms.html#content" target="_blank" rel="noopener">правила контента</a></span></label>
+        <label class="auth-consent"><input type="checkbox" id="rg-accept-terms" /><span>Мне исполнилось 16 лет. Принимаю <a href="terms.html" target="_blank" rel="noopener">пользовательское соглашение</a> и <a href="terms.html#content" target="_blank" rel="noopener">правила контента</a></span></label>
         <label class="auth-consent"><input type="checkbox" id="rg-accept-pd" /><span>Даю <a href="consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a> по <a href="privacy.html" target="_blank" rel="noopener">политике</a></span></label>
       </fieldset>
       </div>

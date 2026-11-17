@@ -1,3 +1,4 @@
+import { topupProblem, topupQuote } from './money-limits.js';
 import { randomUUID } from 'node:crypto';
 
 // All amounts are integer kopecks. These tables never read the old manual wallet.
@@ -36,17 +37,20 @@ function proofState(db,userId,habitId,day) {
 
 export function openMoneyPayment(db, { userId, amount, id = randomUUID() }) {
   positive(amount);
-  if (amount < 5000 || amount > 5000000) throw Error('Topup outside allowed range');
+  const pending = db.prepare("SELECT COALESCE(SUM(amount),0) AS n FROM money_payment_intents WHERE user_id=? AND status IN ('created','pending')").get(userId).n;
+  const problem = topupProblem(amount, account(db, userId).balance, pending);
+  if (problem) throw Object.assign(Error(problem.error), { code: problem.code });
+  const { fee } = topupQuote(amount);
   const key = `topup-${id}`;
-  db.prepare(`INSERT INTO money_payment_intents(id,user_id,amount,provider,idempotency_key)
-    VALUES (?, ?, ?, 'yookassa', ?)`).run(id, userId, amount, key);
-  return { id, userId, amount, idempotencyKey: key };
+  db.prepare(`INSERT INTO money_payment_intents(id,user_id,amount,fee,provider,idempotency_key)
+    VALUES (?, ?, ?, ?, 'yookassa', ?)`).run(id, userId, amount, fee, key);
+  return { id, userId, amount, fee, idempotencyKey: key };
 }
 export function attachProviderPayment(db, intentId, payment) {
   return tx(db, () => {
     const intent = db.prepare('SELECT * FROM money_payment_intents WHERE id=?').get(intentId);
     if (!intent) throw Error('Unknown payment intent');
-    if (!payment?.id || !providerAmountMatches(payment, intent.amount) ||
+    if (!payment?.id || !providerAmountMatches(payment, intent.amount + (intent.fee || 0)) ||
         payment.metadata?.disbit_intent !== intent.id || payment.test === true) throw Error('Provider payment does not match intent');
     if (intent.provider_payment_id && intent.provider_payment_id !== payment.id) throw Error('Payment intent already bound');
     if (intent.status === 'succeeded' || intent.status === 'canceled') return { id:intent.id, providerId:payment.id, duplicate:true };
@@ -61,7 +65,7 @@ export function confirmProviderPayment(db, payment) {
   return tx(db, () => {
     const intent = db.prepare('SELECT * FROM money_payment_intents WHERE provider_payment_id=?').get(payment?.id);
     if (!intent) return { ignored: true, reason: 'unknown-intent' };
-    if (!providerAmountMatches(payment, intent.amount) || payment.metadata?.disbit_intent !== intent.id ||
+    if (!providerAmountMatches(payment, intent.amount + (intent.fee || 0)) || payment.metadata?.disbit_intent !== intent.id ||
         payment.test === true) throw Error('Verified payment mismatch');
     if (payment.status === 'canceled') {
       if (intent.status !== 'succeeded') db.prepare("UPDATE money_payment_intents SET status='canceled' WHERE id=?").run(intent.id);

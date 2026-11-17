@@ -260,20 +260,33 @@ function openTopupSheet() {
   document.getElementById('topup-custom').value='';
   document.getElementById('topup-custom').removeAttribute('aria-invalid');
   document.getElementById('topup-title').textContent=sandboxMode?'Тестовое пополнение':'Пополнить депозит';
-  document.getElementById('topup-help').textContent=sandboxMode?'ЮKassa откроет тестовую платёжную страницу. Реальные деньги не спишутся; остаток нельзя вывести или использовать для настоящих штрафов.':'Штрафы списываются с депозита — карта не привязывается, деньги сами не уходят. Остаток всегда виден.';
+  document.getElementById('topup-help').textContent=sandboxMode?'ЮKassa откроет тестовую платёжную страницу. Реальные деньги не спишутся; остаток нельзя вывести или использовать для настоящих штрафов.':'Депозит — обеспечительный платёж: неустойка за невыполненное обещание засчитывается из него. Карта не привязывается, свободный остаток можно вернуть.';
   document.getElementById('topup-mode').textContent=sandboxMode?'Тестовый магазин ЮKassa':wallet.payments?.simulated?'Тестовое пополнение. С карты ничего не спишется.':'Перейдёшь к платёжному провайдеру. Зачисление появится после подтверждения.';
   document.getElementById('topup-go').textContent=sandboxMode?'Перейти к тестовой оплате':wallet.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';
+  updateTopupFee();
   openSheet('topup-overlay');
+}
+// Same numbers as backend/lib/money-limits.js and the offer, section 5.
+const TOPUP_MIN_KOP=100, TOPUP_MAX_KOP=1000000, DEPOSIT_MAX_KOP=10000000;
+function topupQuote(kop){const payment=Math.ceil(kop*28/1000),service=Math.ceil(kop*10/1000);return {fee:payment+service,total:kop+payment+service};}
+function selectedTopupKop(){const raw=document.getElementById('topup-custom').value;return raw!==''?Math.round(Number(raw)*100):Number(document.querySelector('#topup-amounts .on')?.dataset.sum||30000);}
+function updateTopupFee(){
+  const box=document.getElementById('topup-fee'); if(!box) return;
+  const kop=selectedTopupKop(), sandboxMode=!!wallet?.sandbox?.available;
+  if(!Number.isFinite(kop)||kop<TOPUP_MIN_KOP||kop>TOPUP_MAX_KOP||(wallet?.payments?.simulated&&!sandboxMode)){box.textContent='';return;}
+  const {fee,total}=topupQuote(kop);
+  box.textContent=`К оплате ${rub(total)}: на депозит ${rub(kop)}, комиссия ${rub(fee)} (2,8% платёжного сервиса и 1% сервисного сбора, не возвращается).`;
 }
 async function doTopup() {
   const sandboxMode=!!wallet?.sandbox?.available;
   if(topupBusy||topupUncertain||pendingPayment()||!authToken||(!sandboxMode&&wallet?.payments?.available!==true)) return;
-  const input=document.getElementById('topup-custom'), raw=input.value;
-  const kop=raw!==''?Math.round(Number(raw)*100):Number(document.querySelector('#topup-amounts .on')?.dataset.sum || 30000);
+  const input=document.getElementById('topup-custom'), kop=selectedTopupKop();
   const err=document.getElementById('topup-error');
   err.hidden=true;
   input.removeAttribute('aria-invalid');
-  if(!Number.isFinite(kop)||kop<5000||kop>5000000) {err.textContent='Введи сумму от 50 до 50 000 ₽';err.hidden=false;input.setAttribute('aria-invalid','true');input.focus();return;}
+  if(!Number.isFinite(kop)||kop<TOPUP_MIN_KOP||kop>TOPUP_MAX_KOP) {err.textContent='Введи сумму от 1 до 10 000 ₽';err.hidden=false;input.setAttribute('aria-invalid','true');input.focus();return;}
+  const balanceKop=Number((sandboxMode?wallet?.sandbox?.balance:wallet?.balance)||0);
+  if(balanceKop+kop>DEPOSIT_MAX_KOP) {err.textContent=`Депозит не может превышать 100 000 ₽. Можно пополнить ещё на ${rub(Math.max(0,DEPOSIT_MAX_KOP-balanceKop))}.`;err.hidden=false;input.setAttribute('aria-invalid','true');input.focus();return;}
   topupBusy=true; const owner=authToken, btn=document.getElementById('topup-go');
   btn.disabled=true;btn.textContent='Отправляем…';btn.setAttribute('aria-busy','true');
   try {
@@ -334,7 +347,7 @@ function wireInsightsUI() {
     });
   });
   $('operation-close').onclick=()=>closeSheet('operation-overlay');
-  $('topup-custom').addEventListener('input',()=>{$('topup-custom').removeAttribute('aria-invalid');$('topup-error').hidden=true;});
+  $('topup-custom').addEventListener('input',()=>{$('topup-custom').removeAttribute('aria-invalid');$('topup-error').hidden=true;updateTopupFee();});
   document.querySelectorAll('#topup-amounts button').forEach(b=>b.addEventListener('click',()=>queueMicrotask(()=>document.querySelectorAll('#topup-amounts button').forEach(c=>c.setAttribute('aria-pressed',String(c.classList.contains('on')))))));
   ['li-id','li-pass','rg-login','rg-email','rg-pass','verify-code','topup-custom','mot-text','rw-days','rw-text','idea-name'].forEach(id=>{const el=$(id);el.name=id;if(!el.autocomplete)el.autocomplete='off';});
   ['li-id','rg-login','rg-email','verify-code'].forEach(id=>{$(id).spellcheck=false;$(id).setAttribute('autocapitalize','none');});

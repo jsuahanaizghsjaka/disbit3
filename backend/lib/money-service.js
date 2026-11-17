@@ -26,7 +26,7 @@ export function createMoneyService(db, provider, { now = () => Date.now() } = {}
       return { id:intent.id, providerId:intent.provider_payment_id, url:intent.confirmation_url, result };
     }
     requireRetryWindow(intent.created_at);
-    const remote=await provider.createPayment({id:intent.id,amount:intent.amount,idempotencyKey:intent.idempotency_key},returnUrl);
+    const remote=await provider.createPayment({id:intent.id,amount:intent.amount+(intent.fee||0),idempotencyKey:intent.idempotency_key},returnUrl);
     return attachProviderPayment(db,intent.id,remote);
   }
   async function startPayment(userId,amount,returnUrl) {

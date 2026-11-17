@@ -17,6 +17,7 @@ async page => {
     return {safe};
   });
   if(!result.safe)throw Error('Habit unit was interpreted as markup');
+  await page.locator('#dock [data-screen="friends"]').click();
   for(const width of [1280,390,320]){
     await page.setViewportSize({width,height:844});
     await page.locator('.friend-request').waitFor();

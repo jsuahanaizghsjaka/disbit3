@@ -5737,6 +5737,7 @@ function init() {
       document.querySelectorAll('#topup-amounts .topup-chip').forEach(c => c.classList.remove('on'));
       chip.classList.add('on');
       document.getElementById('topup-custom').value = '';   // выбрали готовую сумму
+      if (typeof updateTopupFee === 'function') updateTopupFee();
     }));
 
   document.getElementById('join-yes').addEventListener('click', acceptJoin);
