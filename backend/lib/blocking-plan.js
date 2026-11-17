@@ -10,5 +10,5 @@ export function accountInterval(now,timeZone){
 export function buildBlockingPlan({habits,skippedDays,timeZone,now=Date.now()}){
  const interval=accountInterval(now,timeZone);
  const decision=restrictionDecision({...interval,now,habits,skippedDays});
- return {serverNow:now,timeZone,...decision,windows:decision.habitIds.map(habitId=>({habitId,startsAt:interval.startsAt,endsAt:interval.endsAt,reason:'missed_promise'}))};
+ return {serverNow:now,timeZone,today:interval.today,...decision,windows:decision.habitIds.map(habitId=>({habitId,startsAt:interval.startsAt,endsAt:interval.endsAt,reason:'missed_promise'}))};
 }

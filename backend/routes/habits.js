@@ -3,6 +3,7 @@
    к пользователю. Все маршруты требуют Bearer-токен: данные строго свои.
    ============================================================ */
 
+import {enforcementEnabled,hasUsableDevice,allowedPackages} from '../lib/blocking-devices.js';
 import { Router } from 'express';
 import { db, rowToHabit, habitToParams } from '../db/db.js';
 import { accountDay, proofSatisfied } from '../proof-policy.js';
@@ -66,10 +67,21 @@ router.get('/', (req, res) => {
   res.json(rows.map(r => rowToHabit(r, stmt.all(r.id))));
 });
 
+// A lock promise is accepted only when it can actually be enforced: the server
+// switch is on, a phone of this account is enrolled with the current consent,
+// and at least one restrictable app is chosen.
+function lockRefusal(req) {
+  if (!enforcementEnabled()) return { error: 'Блокировка приложений пока не поддерживается', code: 'blocking_disabled' };
+  if (!hasUsableDevice(uid(req))) return { error: 'Сначала подключите телефон в настройках блокировки', code: 'device_required' };
+  if (!allowedPackages(req.body?.stake?.apps).length) return { error: 'Выберите хотя бы одно приложение для ограничения', code: 'apps_required' };
+  return null;
+}
+
 // POST /api/habits — создать обещание (id может прислать фронтенд)
 router.post('/', (req, res) => {
   if (req.body?.stake?.mode === 'lock') {
-    return res.status(422).json({ error: 'Блокировка приложений пока не поддерживается' });
+    const refusal = lockRefusal(req);
+    if (refusal) return res.status(422).json(refusal);
   }
   const p = habitToParams({ id: 'h' + Date.now(), ...req.body });
   if (db.prepare('SELECT id FROM habits WHERE id=?').get(p.id)) {
@@ -127,7 +139,8 @@ router.put('/:id', (req, res) => {
   ).get(req.params.id, uid(req));
   if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
   if (req.body?.stake?.mode === 'lock' && exists.stake_mode !== 'lock') {
-    return res.status(422).json({ error: 'Блокировка приложений пока не поддерживается' });
+    const refusal = lockRefusal(req);
+    if (refusal) return res.status(422).json(refusal);
   }
 
   const p = habitToParams({ ...req.body, id: req.params.id });

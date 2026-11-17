@@ -34,7 +34,7 @@ export function eraseAccount(db,user,{preserveFinancial=false}={}) {
   }
   db.prepare('DELETE FROM habit_invites WHERE owner_id=? OR habit_id IN (SELECT id FROM habits WHERE user_id=?)').run(id,id);
   db.prepare('DELETE FROM completions WHERE habit_id IN (SELECT id FROM habits WHERE user_id=?)').run(id);
-  const tables=['moderation_appeals','moderation_notices','moderation_bans','sessions','social_identities','oauth_flows','password_resets','legal_acceptances','money_settlement_cursors','sandbox_ledger','sandbox_payment_intents','sandbox_accounts','proofs','proof_skips','promise_day_skips','promise_full_day_skips','promise_skip_purchases','trusted_bit_awards','trusted_bits','charges','transactions','wallets','user_state','habits','email_codes','account_delete_limits','account_deletion_requests'];
+  const tables=['blocking_receipts','blocking_devices','moderation_appeals','moderation_notices','moderation_bans','sessions','social_identities','oauth_flows','password_resets','legal_acceptances','money_settlement_cursors','sandbox_ledger','sandbox_payment_intents','sandbox_accounts','proofs','proof_skips','promise_day_skips','promise_full_day_skips','promise_skip_purchases','trusted_bit_awards','trusted_bits','charges','transactions','wallets','user_state','habits','email_codes','account_delete_limits','account_deletion_requests'];
   if(!preserveFinancial)tables.unshift('money_penalties','money_terms','money_accounts');
   for(const table of tables){
    if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table) && db.prepare(`PRAGMA table_info(${table})`).all().some(c=>c.name==='user_id'))db.prepare(`DELETE FROM ${table} WHERE user_id=?`).run(id);

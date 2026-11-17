@@ -39,6 +39,8 @@ router.get('/export', (req, res) => {
   data.completions = db.prepare('SELECT c.* FROM completions c JOIN habits h ON h.id=c.habit_id WHERE h.user_id=?').all(id);
   data.proofs = db.prepare('SELECT id,habit_id,habit_name,day,type,source,status,created_at FROM proofs WHERE user_id=?').all(id);
   data.friends = db.prepare('SELECT u.login FROM friendships f JOIN users u ON u.id=f.friend_id WHERE f.user_id=?').all(id);
+  data.blockingDevices = db.prepare("SELECT name FROM sqlite_master WHERE name='blocking_devices'").get()
+    ? db.prepare('SELECT id,platform,label,app_version,consent_version,consent_at,created_at,last_seen_at FROM blocking_devices WHERE user_id=?').all(id) : [];
   data.socialProviders = db.prepare('SELECT provider FROM social_identities WHERE user_id=?').all(id);
   res.json(data);
 });
