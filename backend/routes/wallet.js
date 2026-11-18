@@ -48,8 +48,8 @@ function authRequired(req, res, next) {
 // the latest open top-up per account, at most every 10 seconds.
 const lastPendingCheck = new Map();
 async function refreshPending(userId) {
-  const open = db.prepare(`SELECT id FROM money_payment_intents WHERE user_id=? AND status='pending'
-    AND provider_payment_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`).get(userId);
+  const open = db.prepare(`SELECT id FROM money_payment_intents WHERE user_id=? AND status IN ('created','pending')
+    ORDER BY created_at DESC LIMIT 1`).get(userId);
   if (!open || Date.now() - (lastPendingCheck.get(userId) || 0) < 10000) return;
   lastPendingCheck.set(userId, Date.now());
   // The wallet answer waits at most 4 s; a slower check finishes in the background.

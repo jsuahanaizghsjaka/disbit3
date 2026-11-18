@@ -374,12 +374,12 @@ function renderLiveWallet() {
   document.getElementById('wallet-sim').hidden=true;
   document.getElementById('wallet-mode').textContent='Пополнение через ЮKassa · рубли отдельно от битов';
   const pending=wallet.pending, topup=document.getElementById('btn-topup');
-  topup.textContent=pending?.url?'Продолжить оплату':'Пополнить';
-  topup.disabled=walletLoading||topupBusy||(!!pending&&!pending.url);
+  topup.textContent=pending?.url?'Продолжить оплату':pending?'Повторить запрос оплаты':'Пополнить';
+  topup.disabled=walletLoading||topupBusy;
   topup.setAttribute('aria-describedby','wallet-mode wallet-state');
   document.getElementById('wallet-state').textContent=walletLoading?'Обновляем депозит…'
     :walletError?'Не удалось обновить. Показаны последние загруженные данные. '+walletError
-    :pending?`Пополнение на ${rub(pending.amount)} ждёт оплаты. Зачислим после подтверждения ЮKassa.`
+    :pending?(pending.url?`Пополнение на ${rub(pending.amount)} ждёт оплаты. Зачислим после подтверждения ЮKassa.`:`Ссылка для пополнения на ${rub(pending.amount)} ещё не получена. Повтори запрос оплаты.`)
     :paymentReturnNotice;
   document.getElementById('wallet-retry').hidden=false;
   document.getElementById('wallet-retry').disabled=walletLoading;
@@ -400,9 +400,10 @@ function openLiveTopup() {
     document.getElementById('wallet-legal').scrollIntoView({block:'center'});
     toast('Сначала прими действующую редакцию соглашения');return;
   }
-  if(walletLoading||topupBusy||pending) return;
+  if(walletLoading||topupBusy) return;
   document.getElementById('topup-error').hidden=true;
-  document.getElementById('topup-custom').value='';
+  document.getElementById('topup-custom').value=pending?String(pending.amount/100):'';
+  if(pending) setLiveTopupRequest({requestId:pending.id,amount:pending.amount});
   document.getElementById('topup-custom').removeAttribute('aria-invalid');
   document.getElementById('topup-title').textContent='Пополнить депозит';
   document.getElementById('topup-help').textContent='Депозит — обеспечительный платёж: неустойка по обещаниям с денежным условием засчитывается из него. Карта не привязывается, свободный остаток можно вернуть.';

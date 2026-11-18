@@ -50,6 +50,20 @@ test('live deposit: top-up, idempotency, webhook, edition, money condition, refu
     assert.equal(wallet.payments.live,true);assert.equal(wallet.payments.simulated,false);
     assert.equal(wallet.balance,0);assert.equal(wallet.legal.current,true);assert.deepEqual(wallet.history,[]);
 
+    // A process/network failure before the provider reply leaves a created intent.
+    // Refresh must recover that SAME intent, rather than locking the deposit UI.
+    const recoveryDb=new DatabaseSync(file);
+    const {openMoneyPayment}=await import('../backend/lib/money-core.js');
+    const interrupted=openMoneyPayment(recoveryDb,{userId:3,amount:10000});
+    recoveryDb.close();
+    const recovered=(await call('/wallet',null,3)).body.pending;
+    assert.equal(recovered.id,interrupted.id);
+    assert.equal(recovered.status,'pending');
+    assert.match(recovered.url,/^https:\/\//);
+    setBank(s=>{for(const p of Object.values(s.payments)) p.status='canceled';});
+    await call(`/wallet/topup/${interrupted.id}`,null,3);
+    setBank(s=>{s.payments={};});
+
     // Fee on top: 1000 ₽ to the deposit, 1038 ₽ to pay.
     const requestId=uuid();
     const started=await call('/wallet/topup',{amount:100000,requestId});
