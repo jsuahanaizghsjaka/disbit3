@@ -939,6 +939,7 @@ function showSettleModal(entries) {
   if (money) {
     html += `<div class="summary-total"><div class="amount">−${money}₽</div>
       <div class="label">штрафов за пропуски</div></div>`;
+    if (wallet?.payments?.live) html += `<p class="hint">Из депозита удерживается только неустойка по обещаниям с денежным условием — сервер посчитает её после проверки пруфов. Итог смотри в истории депозита.</p>`;
   }
   if (apps.size) {
     const maxLock = Math.max(...entries.map(e => Number(e.minutes) || 0));
@@ -5101,6 +5102,49 @@ function segValue(segId, attr) {
   return document.querySelector(`#${segId} .seg-btn.active`).dataset[attr];
 }
 
+/* ---------- ДЕНЕЖНОЕ УСЛОВИЕ (раздел 6 соглашения) ----------
+   Работает, только когда сервер подключил ЮKassa. Без отметки штраф деньгами —
+   запись в журнале; с отметкой — неустойка из депозита со следующего дня. */
+function acceptedMoneyTerms(id) {
+  return id ? (wallet?.terms || []).find(t => t.habitId === id) : null;
+}
+function updateMoneyTerms() {
+  const box = document.getElementById('money-terms');
+  if (!box) return;
+  const live = !!(API && authToken && wallet?.payments?.live);
+  const money = segValue('stake-mode', 'stake') === 'money';
+  const charity = document.querySelector('#recipient [data-rec="charity"]');
+  charity.disabled = live;
+  charity.title = live ? 'В этой редакции соглашения неустойка уплачивается только создателям' : '';
+  if (live && segValue('recipient', 'rec') !== 'creators') setSegActive('recipient', 'rec', 'creators');
+  box.hidden = !(live && money);
+  if (box.hidden) return;
+  const accepted = acceptedMoneyTerms(editingId);
+  const row = document.getElementById('money-terms-row');
+  const check = document.getElementById('f-money-accept');
+  const state = document.getElementById('money-terms-state');
+  if (accepted) {
+    row.hidden = true; check.checked = false;
+    state.textContent = `Денежное условие действует с ${formatDayLong(accepted.effectiveDay)}: ${rub(accepted.amount)} за невыполненный день. Сумму, расписание и цель изменить нельзя — для новых условий создай новое обещание.`;
+    return;
+  }
+  row.hidden = false;
+  const amount = Math.max(0, Math.round(Number(document.getElementById('f-amount').value) || 0));
+  const start = wtValue > 0 ? 'с ближайшего понедельника' : 'со следующего дня';
+  document.getElementById('money-terms-text').textContent =
+    `Включить денежное условие: неустойка ${amount} ₽ из депозита за каждый невыполненный ${wtValue > 0 ? 'период, когда недельная норма уже недостижима' : 'день по расписанию'}, ${start}. День засчитывается с отметкой и принятым пруфом. Удержание можно оспорить в течение 30 дней.`;
+  const legalOk = wallet?.legal?.current !== false;
+  check.disabled = !legalOk || amount < 10;
+  if (check.disabled) check.checked = false;
+  state.textContent = !legalOk ? 'Чтобы включить денежное условие, прими новую редакцию соглашения в разделе «Деньги».'
+    : amount < 10 ? 'Денежное условие — от 10 ₽ за день.'
+    : 'Без этой отметки штраф — только запись в журнале, деньги не удерживаются.';
+}
+function formatDayLong(day) {
+  const d = new Date(day + 'T12:00:00Z');
+  return Number.isNaN(d.valueOf()) ? day : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+}
+
 /* ---------- ФОРМА ОБЕЩАНИЯ ---------- */
 function openAddSheet() {
   editingId = null;
@@ -5108,6 +5152,8 @@ function openAddSheet() {
   document.getElementById('btn-save').textContent = 'Дать обещание';
   resetAddForm();
   restoreHabitDraft('new');
+  document.getElementById('f-money-accept').checked = false;
+  updateMoneyTerms();
   openSheet('add-overlay');
   document.getElementById('f-name').focus();
 }
@@ -5146,6 +5192,8 @@ function openEditSheet(id) {
   }
 
   restoreHabitDraft(id);
+  document.getElementById('f-money-accept').checked = false;
+  updateMoneyTerms();
   openSheet('add-overlay');
 }
 
@@ -5204,8 +5252,9 @@ async function submitHabit() {
 
   const data = {
     name,
-    icon: document.querySelector('#icon-picker .selected').dataset.icon,
-    color: document.querySelector('#color-picker .selected').dataset.color,
+    // цвет или иконка из старой палитры не выделены в пикере — сохраняем прежние
+    icon: document.querySelector('#icon-picker .selected')?.dataset.icon || habits.find(x => x.id === editingId)?.icon || HABIT_ICONS[0],
+    color: document.querySelector('#color-picker .selected')?.dataset.color || habits.find(x => x.id === editingId)?.color || COLORS[0],
     schedule,
     weekTarget,
     min: document.getElementById('f-min').value.trim(),
@@ -5230,6 +5279,9 @@ async function submitHabit() {
 
   const old = habits.find(h => h.id === editingId);
   const draftKey = editingId || 'new';
+  const moneyAccept = stakeMode === 'money' && !document.getElementById('money-terms').hidden &&
+    document.getElementById('f-money-accept').checked;
+  if (moneyAccept && data.stake.recipient !== 'creators') { habitFormError('Неустойка уплачивается только создателям.'); return; }
   const h = old ? { ...old, ...data } : { id: 'h' + Date.now(), ...data, createdAt: TODAY, counts: {}, history: {} };
   habitFormSaving = true;
   const saveButton = document.getElementById('btn-save');
@@ -5251,6 +5303,14 @@ async function submitHabit() {
       pendingBacklogId = null;
     }
     save(); succeeded = true;
+    if (moneyAccept) {
+      const terms = await apiCallStrict('POST', '/wallet/terms', { habitId: h.id, accept: true });
+      if (terms.error) toast('Обещание сохранено, но денежное условие не включено: ' + terms.error);
+      else {
+        toast(`Денежное условие: ${rub(terms.amount)} за пропуск с ${formatDayLong(terms.effectiveDay)}`);
+        loadWallet();
+      }
+    }
   } finally {
     habitFormSaving = false;
     saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); saveButton.textContent = label;
@@ -5432,6 +5492,8 @@ function onAppResume() {
   if (dateKey() !== TODAY) { location.reload(); return; }
   checkNotifPermission();
   scheduleNotifSync();          // расписание тоже могло протухнуть
+  // вернулись со страницы оплаты ЮKassa (она открывается в браузере) — спросим сервер
+  if (wallet?.payments?.live && wallet.pending) loadWallet();
 }
 
 /* В браузере и PWA события resume нет, а вкладка может жить сутками. Без этой
@@ -5777,8 +5839,14 @@ function init() {
     const money = btn.dataset.stake === 'money';
     document.getElementById('stake-money').hidden = !money;
     document.getElementById('stake-lock').hidden = money;
+    updateMoneyTerms();
   });
   wireSeg('recipient');
+  // сумма, расписание и недельная норма меняют текст денежного условия
+  ['input', 'click'].forEach(type => document.getElementById('add-overlay').addEventListener(type, event => {
+    if (event.target.closest?.('#money-terms')) return;
+    queueMicrotask(updateMoneyTerms);
+  }));
 
   // навигация (клик игнорируем, если это был «хвост» перетаскивания капли)
   // Stable tap targets: no draggable lens or hover magnification in navigation.

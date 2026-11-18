@@ -21,7 +21,7 @@ node tests/run-browser.mjs                       # все сценарии
 node tests/run-browser.mjs tests/browser-intro.js # один сценарий
 ```
 
-Для каждого сценария запускается свежий fixture-сервер (`fixture-server.mjs`, `sandbox-ui-fixture.mjs` или `recovery-fixture.mjs`) на порту, указанном в самом сценарии. Нужный вход в тестовый аккаунт и переменные окружения заданы в таблице `special` внутри `run-browser.mjs`. При падении снимок экрана сохраняется в `test-results/fail-<сценарий>.png`.
+Для каждого сценария запускается свежий fixture-сервер (`fixture-server.mjs`, `sandbox-ui-fixture.mjs`, `recovery-fixture.mjs` или `money-live-fixture.mjs`) на порту, указанном в самом сценарии. Нужный вход в тестовый аккаунт и переменные окружения заданы в таблице `special` внутри `run-browser.mjs`. При падении снимок экрана сохраняется в `test-results/fail-<сценарий>.png`.
 
 `browser-password-recovery.js` — вторая половина ручной проверки: код восстановления берётся из тестовой почты той же сессии, поэтому общий прогон его пропускает.
 
@@ -30,3 +30,9 @@ node tests/run-browser.mjs tests/browser-intro.js # один сценарий
 ## Что не заменяют эти проверки
 
 Физические Android/iOS, настоящую камеру, установку поверх старой версии, настоящие Google-вход, письма и платежи, приёмку production.
+
+## Живые платежи ЮKassa
+
+`money-live.test.cjs` поднимает сервер с `PAYMENTS_PROVIDER=yookassa`, а `fake-yookassa.mjs` подменяет api.yookassa.ru. Настоящий магазин и сеть не используются. Проверяются: комиссия сверху, повтор запроса без второго платежа, вебхук только через проверку платежа запросом в API, новая редакция соглашения, денежное условие, возврат, отметка чеков в «Мой налог».
+
+`browser-money-live.js` проходит то же в интерфейсе на `money-live-fixture.mjs` (порт 3421, управление «банком» — 3422) и сохраняет снимки `test-results/money-*.png`.

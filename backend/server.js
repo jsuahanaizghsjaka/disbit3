@@ -21,7 +21,8 @@ import proofsRouter from './routes/proofs.js';
 import friendsRouter from './routes/friends.js';
 import invitesRouter from './routes/invites.js';
 import aiRouter from './routes/ai.js';
-import walletRouter from './routes/wallet.js';
+import walletRouter, { moneyService, moneyReturnUrl } from './routes/wallet.js';
+import { settleClosedMoneyDays } from './lib/money-settlement.js';
 import accountRouter from './routes/account.js';
 import moderationRouter from './routes/moderation.js';
 import blockingRouter from './routes/blocking.js';
@@ -50,7 +51,7 @@ app.get('/api/health', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ ok: true, service: 'disbit-backend', storage: 'sqlite', auth: true,
     environment: runtime.name, release: runtime.release, apiVersion: 1,
-    capabilities: { proofRequired: true, proofSkipsPerMonth: 5, pastDaysReadOnly: true, livePayments: false } });
+    capabilities: { proofRequired: true, proofSkipsPerMonth: 5, pastDaysReadOnly: true, livePayments: runtime.provider === 'yookassa' } });
 });
 
 app.get('/api/ready', (req, res) => {
@@ -118,6 +119,24 @@ const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
   console.log(`disbit backend запущен: http://localhost:${PORT}`);
 });
+/* Live deposit jobs: penalties for closed days of accepted money conditions,
+   then a retry of open payments/refunds with the same idempotency keys. */
+if (moneyService) {
+  let busy = false;
+  const moneyJobs = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const penalties = settleClosedMoneyDays(db).filter(r => r.status);
+      if (penalties.length) console.log(`[money] penalties settled: ${penalties.length}`);
+      await moneyService.reconcile(moneyReturnUrl);
+    } catch (error) { console.error('[money] jobs failed:', error.message); }
+    finally { busy = false; }
+  };
+  setTimeout(moneyJobs, 30000).unref();
+  setInterval(moneyJobs, 10 * 60000).unref();
+}
+
 function shutdown() {
   server.close(() => { db.close(); process.exit(0); });
   setTimeout(() => process.exit(1), 10000).unref();

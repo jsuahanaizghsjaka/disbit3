@@ -56,11 +56,34 @@ for (const sql of [
   // сессии без срока жизни: старые строки получат его в routes/auth.js
   "ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE money_payment_intents ADD COLUMN fee INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE sandbox_payment_intents ADD COLUMN fee INTEGER NOT NULL DEFAULT 0"
+  "ALTER TABLE sandbox_payment_intents ADD COLUMN fee INTEGER NOT NULL DEFAULT 0",
+  // when the operator registered the receipt in «Мой налог» (самозанятый, 422-ФЗ)
+  "ALTER TABLE money_payment_intents ADD COLUMN receipt_at TEXT",
+  "ALTER TABLE money_refund_parts ADD COLUMN receipt_at TEXT"
 ]) {
   const [, table, column] = sql.match(/^ALTER TABLE (\w+) ADD COLUMN (\w+)/);
   const exists = db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
   if (!exists) db.exec(sql); // Disk/permission/schema failures must abort startup.
+}
+
+// 'app' = a new edition accepted inside the app after registration. SQLite
+// cannot change a CHECK in place, so older databases rebuild the table once.
+if (!(db.prepare("SELECT sql FROM sqlite_master WHERE name='legal_acceptances'").get()?.sql || '').includes("'app'")) {
+  db.exec(`BEGIN IMMEDIATE;
+    CREATE TABLE legal_acceptances_next (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document TEXT NOT NULL CHECK(document IN ('terms','personal_data')),
+      version TEXT NOT NULL,
+      source TEXT NOT NULL CHECK(source IN ('email','google','app')),
+      accepted_at INTEGER NOT NULL
+    );
+    INSERT INTO legal_acceptances_next(id,user_id,document,version,source,accepted_at)
+      SELECT id,user_id,document,version,source,accepted_at FROM legal_acceptances;
+    DROP TABLE legal_acceptances;
+    ALTER TABLE legal_acceptances_next RENAME TO legal_acceptances;
+    CREATE INDEX IF NOT EXISTS legal_acceptances_user ON legal_acceptances(user_id);
+    COMMIT;`);
 }
 
 // до авторизации гостевые данные писались под user_id=1; теперь гость = 0.

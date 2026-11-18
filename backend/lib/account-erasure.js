@@ -9,7 +9,7 @@ export function ensureErasureTables(db) {
 }
 export function financialState(db,id) {
  const account=db.prepare('SELECT balance,reserved FROM money_accounts WHERE user_id=?').get(id);
- const pending=db.prepare("SELECT 1 FROM money_payment_intents WHERE user_id=? AND status IN ('created','pending') UNION ALL SELECT 1 FROM money_refund_requests WHERE user_id=? AND status IN ('pending','partial') LIMIT 1").get(id,id);
+ const pending=db.prepare("SELECT 1 FROM money_payment_intents WHERE user_id=? AND status IN ('created','pending') UNION ALL SELECT 1 FROM money_refund_parts r JOIN money_refund_requests q ON q.id=r.request_id WHERE q.user_id=? AND r.status IN ('reserved','pending') LIMIT 1").get(id,id);
  const history=db.prepare('SELECT 1 FROM money_ledger WHERE user_id=? UNION ALL SELECT 1 FROM money_payment_intents WHERE user_id=? UNION ALL SELECT 1 FROM money_refund_requests WHERE user_id=? LIMIT 1').get(id,id,id);
  return {pending:!!pending || !!account?.balance || !!account?.reserved,history:!!history};
 }

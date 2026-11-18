@@ -16,8 +16,8 @@ const PROVIDER = runtime.provider;
 export function paymentsInfo() {
   return {
     provider: PROVIDER,
-    live: false,
-    available: PROVIDER === 'manual',
+    live: PROVIDER === 'yookassa',
+    available: PROVIDER === 'manual' || PROVIDER === 'yookassa',
     currency: process.env.PAYMENTS_CURRENCY || 'RUB',
     // подсказка фронту: в ручном режиме деньги ненастоящие
     simulated: PROVIDER === 'manual'
@@ -32,6 +32,6 @@ function manualCreateTopup(userId, amountKop, opts) {
 
 /* ---------- Публичный интерфейс ---------- */
 export async function createTopup(userId, amountKop, opts) {
-  if (PROVIDER !== 'manual') throw new Error('Payments are disabled pending release approval');
+  if (PROVIDER !== 'manual') throw new Error('Manual top-up is local only');
   return manualCreateTopup(userId, amountKop, opts);
 }

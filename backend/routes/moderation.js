@@ -2,7 +2,30 @@ import { Router } from 'express';
 import { db } from '../db/db.js';
 import '../lib/moderation.js';
 import { adminOnly } from './proofs.js';
+import { correctMoneyPenalty } from '../lib/money-core.js';
 const router=Router();
+// Operator money desk: receipts to register in «Мой налог» and penalty corrections.
+router.get('/money/admin',adminOnly,(_req,res)=>res.json({
+ payments:db.prepare(`SELECT p.id,u.login,u.email,p.amount,p.fee,p.amount+p.fee AS total,p.provider_payment_id,p.created_at,p.receipt_at
+  FROM money_payment_intents p JOIN users u ON u.id=p.user_id WHERE p.status='succeeded' ORDER BY p.receipt_at IS NOT NULL,p.created_at DESC LIMIT 200`).all(),
+ refunds:db.prepare(`SELECT r.id,u.login,u.email,r.amount,r.provider_refund_id,q.created_at,r.receipt_at
+  FROM money_refund_parts r JOIN money_refund_requests q ON q.id=r.request_id JOIN users u ON u.id=q.user_id
+  WHERE r.status='succeeded' ORDER BY r.receipt_at IS NOT NULL,q.created_at DESC LIMIT 200`).all(),
+ penalties:db.prepare(`SELECT n.id,u.login,n.day,n.amount,n.status,n.created_at,h.name,
+  EXISTS(SELECT 1 FROM money_ledger l WHERE l.source_key='correction:penalty:'||n.id) AS corrected
+  FROM money_penalties n JOIN users u ON u.id=n.user_id LEFT JOIN habits h ON h.id=n.habit_id
+  WHERE n.created_at>datetime('now','-60 days') ORDER BY n.created_at DESC LIMIT 200`).all()
+}));
+router.post('/money/receipt',adminOnly,(req,res)=>{
+ const table={payment:'money_payment_intents',refund:'money_refund_parts'}[req.body?.kind];
+ if(!table||typeof req.body?.id!=='string')return res.status(400).json({error:'Нужны вид операции и её ID'});
+ const r=db.prepare(`UPDATE ${table} SET receipt_at=datetime('now') WHERE id=? AND status='succeeded' AND receipt_at IS NULL`).run(req.body.id);
+ res.status(r.changes?200:409).json(r.changes?{ok:true}:{error:'Операция не найдена или чек уже отмечен'});
+});
+router.post('/money/penalties/:id/correct',adminOnly,(req,res)=>{
+ try{res.json(correctMoneyPenalty(db,req.params.id));}
+ catch{res.status(409).json({error:'Вернуть можно только удержанную неустойку'});}
+});
 router.get('/appeals/admin',adminOnly,(_req,res)=>res.json({items:db.prepare("SELECT a.*,u.login FROM moderation_appeals a JOIN users u ON u.id=a.user_id WHERE a.status='pending' ORDER BY a.id LIMIT 200").all()}));
 router.post('/appeals/:id/decision',adminOnly,(req,res)=>{
  const status=req.body?.status,reason=String(req.body?.reason||'').trim();

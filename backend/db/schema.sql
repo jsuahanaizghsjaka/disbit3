@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS legal_acceptances (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   document TEXT NOT NULL CHECK(document IN ('terms','personal_data')),
   version TEXT NOT NULL,
-  source TEXT NOT NULL CHECK(source IN ('email','google')),
+  source TEXT NOT NULL CHECK(source IN ('email','google','app')),
   accepted_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS legal_acceptances_user ON legal_acceptances(user_id);
@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS money_payment_intents (
   provider_payment_id TEXT UNIQUE,
   status TEXT NOT NULL DEFAULT 'created' CHECK(status IN ('created','pending','succeeded','canceled')),
   confirmation_url TEXT,
+  receipt_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_money_payment_user ON money_payment_intents(user_id,id);
@@ -229,7 +230,8 @@ CREATE TABLE IF NOT EXISTS money_refund_parts (
   amount INTEGER NOT NULL CHECK(amount > 0),
   idempotency_key TEXT NOT NULL UNIQUE,
   provider_refund_id TEXT UNIQUE,
-  status TEXT NOT NULL DEFAULT 'reserved' CHECK(status IN ('reserved','pending','succeeded','failed'))
+  status TEXT NOT NULL DEFAULT 'reserved' CHECK(status IN ('reserved','pending','succeeded','failed')),
+  receipt_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_money_refund_payment ON money_refund_parts(payment_intent_id,status);
 CREATE TABLE IF NOT EXISTS money_ledger (

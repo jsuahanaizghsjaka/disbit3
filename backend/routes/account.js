@@ -6,6 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {ensureErasureTables,financialState,recordErasure,eraseAccount,replayErasures,cleanupErasedMedia} from '../lib/account-erasure.js';
 import '../lib/moderation.js';
+import { hasConsent, recordConsent } from '../lib/legal.js';
+import { legalState } from '../lib/money-live.js';
 
 const proofDir = process.env.PROOFS_DIR || path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(path.dirname(fileURLToPath(import.meta.url)), '../db'), 'proofs');
 db.exec(`CREATE TABLE IF NOT EXISTS account_media_cleanup (file TEXT PRIMARY KEY);
@@ -26,6 +28,13 @@ router.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
   next();
+});
+// Current edition of the offer and the personal-data consent (offer, 9.2).
+router.get('/legal', (req, res) => res.json(legalState(db, req.userId)));
+router.post('/legal', (req, res) => {
+  if (!hasConsent(req.body)) return res.status(400).json({ error: 'Отметь оба согласия' });
+  if (!legalState(db, req.userId).current) recordConsent(db, req.userId, 'app');
+  res.json(legalState(db, req.userId));
 });
 router.get('/export', (req, res) => {
   const id = req.userId;

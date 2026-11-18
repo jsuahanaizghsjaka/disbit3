@@ -129,9 +129,10 @@ export function attachProviderRefund(db, partId, refund) {
 }
 function refreshRefundRequest(db, requestId) {
   const rows = db.prepare('SELECT status FROM money_refund_parts WHERE request_id=?').all(requestId);
-  const status = rows.every(p=>p.status==='succeeded') ? 'succeeded' :
-    rows.every(p=>p.status==='failed') ? 'failed' :
-    rows.some(p=>p.status==='failed'||p.status==='succeeded') ? 'partial' : 'pending';
+  // 'partial' is final: some parts came back, some were refused by the provider.
+  const status = rows.some(p=>p.status==='reserved'||p.status==='pending') ? 'pending' :
+    rows.every(p=>p.status==='succeeded') ? 'succeeded' :
+    rows.every(p=>p.status==='failed') ? 'failed' : 'partial';
   db.prepare('UPDATE money_refund_requests SET status=? WHERE id=?').run(status,requestId);
   return status;
 }
@@ -208,5 +209,22 @@ export function settleMoneyPenalty(db, { userId, habitId, day, today }) {
         .run(userId,`penalty:${userId}:${habitId}:${day}`,-terms.amount,next);
     }
     return { status, amount:terms.amount, balance:moneyBalance(db,userId) };
+  });
+}
+
+// Offer, appendix 3, 2.2: a penalty held by mistake goes back to the deposit as
+// a separate correction. The original record stays; a second call is a no-op.
+export function correctMoneyPenalty(db, penaltyId) {
+  return tx(db, () => {
+    const penalty = db.prepare('SELECT * FROM money_penalties WHERE id=?').get(penaltyId);
+    if (!penalty || penalty.status !== 'paid') throw Error('Only a paid penalty can be corrected');
+    const key = `correction:penalty:${penalty.id}`;
+    if (db.prepare('SELECT 1 FROM money_ledger WHERE source_key=?').get(key)) return { duplicate:true };
+    const before = account(db, penalty.user_id);
+    const next = before.balance + penalty.amount;
+    db.prepare('UPDATE money_accounts SET balance=? WHERE user_id=?').run(next, penalty.user_id);
+    db.prepare("INSERT INTO money_ledger(user_id,type,source_key,amount,balance_after) VALUES (?,'correction',?,?,?)")
+      .run(penalty.user_id, key, penalty.amount, next);
+    return { corrected:true, balance:next };
   });
 }
