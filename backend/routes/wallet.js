@@ -156,10 +156,14 @@ async function liveTopup(req, res) {
     if (own && own.user_id !== req.userId) return res.status(404).json({ error: 'Платёж не найден' });
     if (own) return res.json(await resumeOwnPayment(req.userId, requestId));
     if (!legalState(db, req.userId).current) return res.status(409).json(LEGAL_OUTDATED);
-    const open = db.prepare(`SELECT id FROM money_payment_intents WHERE user_id=? AND status IN ('created','pending')
-      AND created_at > datetime('now','-10 minutes') ORDER BY created_at DESC LIMIT 1`).get(req.userId);
-    if (open) return res.status(409).json({ code: 'payment_pending', id: open.id,
-      error: 'Предыдущее пополнение ещё не завершено. Продолжи оплату или подожди подтверждения.' });
+    // An unpaid top-up of the same amount from the last 10 minutes is continued
+    // (a second tap or a return from the payment page); another amount starts anew.
+    const open = db.prepare(`SELECT id FROM money_payment_intents WHERE user_id=? AND amount=? AND status IN ('created','pending')
+      AND created_at > datetime('now','-10 minutes') ORDER BY created_at DESC LIMIT 1`).get(req.userId, amount);
+    if (open) {
+      const reply = await resumeOwnPayment(req.userId, open.id);
+      if (reply.status !== 'canceled') return res.json(reply);
+    }
     const problem = topupProblem(amount, moneyBalance(db, req.userId).balance);
     if (problem) return res.status(400).json(problem);
     await moneyService.startPayment(req.userId, amount, moneyReturnUrl, requestId);

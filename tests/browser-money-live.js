@@ -26,8 +26,8 @@ async page => {
   // Top-up: fee on top, then the payment page.
   await page.locator('#btn-topup').click();
   await page.locator('#topup-amounts [data-sum="50000"]').click();
-  const fee=await page.locator('#topup-fee').textContent();
-  assert(fee.includes('519')&&fee.includes('19'),'fee text must show 519 ₽ to pay: '+fee);
+  assert(await page.locator('#topup-fee').count()===0,'fee breakdown must not be printed in the sheet');
+  assert(!(await page.locator('#topup-overlay').textContent()).includes('К оплате'),'no fee line in the sheet');
   assert(!(await page.locator('#topup-overlay').textContent()).match(/черновик|демо|тестов/i),'top-up sheet must not mention a draft or test mode');
   await shot('2-topup-sheet');
   await Promise.all([page.waitForURL(/yoomoney\.ru/),page.locator('#topup-go').click()]);
@@ -38,6 +38,15 @@ async page => {
   await page.evaluate(()=>{switchScreen('profile');document.getElementById('profile-money').open=true;});
   assert((await page.locator('#btn-topup').textContent()).includes('Продолжить оплату'),'open payment must be resumable');
   await page.locator('#wallet-card').scrollIntoViewIfNeeded(); await shot('3-wallet-pending');
+  // A stale screen (page restored by «Назад») that does not know about the open
+  // payment: the same amount continues it instead of showing an error.
+  const firstUrl=await page.evaluate(()=>{const url=wallet.pending.url;wallet.pending=null;renderWallet();return url;});
+  await page.locator('#btn-topup').click();
+  await page.locator('#topup-amounts [data-sum="50000"]').click();
+  await Promise.all([page.waitForURL(url=>url.href===firstUrl),page.locator('#topup-go').click()]);
+  await page.goto('http://localhost:3421/#profile');
+  await page.waitForFunction(()=>wallet?.pending?.amount===50000);
+  await page.evaluate(()=>{switchScreen('profile');document.getElementById('profile-money').open=true;});
 
   // The bank confirms; the app asks the server, never trusts the return.
   await fetch('http://127.0.0.1:3422/pay',{method:'POST'});

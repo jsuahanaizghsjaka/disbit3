@@ -62,8 +62,14 @@ test('live deposit: top-up, idempotency, webhook, edition, money condition, refu
     // A repeated request resumes the same payment; another one waits for it.
     assert.equal((await call('/wallet/topup',{amount:100000,requestId})).body.providerId,providerId);
     assert.equal(Object.keys(bank().payments).length,1);
+    // Same amount again with a new request (back from the payment page): the open payment continues.
+    assert.equal((await call('/wallet/topup',{amount:100000,requestId:uuid()})).body.providerId,providerId);
+    assert.equal(Object.keys(bank().payments).length,1);
+    // Another amount is a new payment, not an error.
     const second=await call('/wallet/topup',{amount:5000,requestId:uuid()});
-    assert.equal(second.status,409);assert.equal(second.body.code,'payment_pending');
+    assert.equal(second.status,200);assert.notEqual(second.body.providerId,providerId);
+    setBank(s=>{s.payments[second.body.providerId].status='canceled';});
+    assert.equal((await call(`/wallet/topup/${second.body.id}`)).body.status,'canceled');
     assert.equal((await call('/wallet/topup',{amount:100000,requestId},3)).status,404);
     assert.equal((await call(`/wallet/topup/${requestId}`,null,3)).status,404);
 
@@ -76,8 +82,9 @@ test('live deposit: top-up, idempotency, webhook, edition, money condition, refu
     assert.equal((await call('/wallet/webhook',{type:'notification',event:'payment.succeeded',object:{id:providerId}},0)).status,200);
     wallet=(await call('/wallet')).body;
     assert.equal(wallet.balance,100000);assert.equal(wallet.pending,null);
-    assert.equal(wallet.history.length,1);
-    assert.deepEqual([wallet.history[0].type,wallet.history[0].status,wallet.history[0].amount,wallet.history[0].meta.fee],['topup','succeeded',100000,3800]);
+    assert.deepEqual(wallet.history.map(op=>op.status).sort(),['canceled','succeeded']);
+    const paid=wallet.history.find(op=>op.status==='succeeded');
+    assert.deepEqual([paid.type,paid.amount,paid.meta.fee],['topup',100000,3800]);
     assert.equal((await call(`/wallet/topup/${requestId}`)).body.status,'succeeded');
 
     // The deposit limit counts the confirmed balance.
@@ -117,9 +124,9 @@ test('live deposit: top-up, idempotency, webhook, edition, money condition, refu
     assert.equal(Object.values(bank().refunds)[0].amount.value,'300.00');
     wallet=(await call('/wallet')).body;
     assert.equal(wallet.balance,70000);
-    assert.deepEqual(wallet.history.map(op=>op.type).sort(),['refund','topup','topup']);
+    assert.deepEqual(wallet.history.map(op=>op.type).sort(),['refund','topup','topup','topup']);
     const page=(await call('/wallet/history?offset=0')).body;
-    assert.equal(page.history.length,3);assert.equal(page.hasMore,false);
+    assert.equal(page.history.length,4);assert.equal(page.hasMore,false);
 
     // Operator desk: receipts for «Мой налог», admin key only.
     assert.equal((await call('/moderation/money/admin')).status,401);

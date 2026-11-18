@@ -297,12 +297,11 @@ function openTopupSheet() {
 const TOPUP_MIN_KOP=100, TOPUP_MAX_KOP=1000000, DEPOSIT_MAX_KOP=10000000;
 function topupQuote(kop){const payment=Math.ceil(kop*28/1000),service=Math.ceil(kop*10/1000);return {fee:payment+service,total:kop+payment+service};}
 function selectedTopupKop(){const raw=document.getElementById('topup-custom').value;return raw!==''?Math.round(Number(raw)*100):Number(document.querySelector('#topup-amounts .on')?.dataset.sum||30000);}
+// The sheet no longer prints the fee breakdown: the total is on the ЮKassa page.
 function updateTopupFee(){
-  const box=document.getElementById('topup-fee'); if(!box) return;
-  const kop=selectedTopupKop(), sandboxMode=!!wallet?.sandbox?.available;
-  if(!Number.isFinite(kop)||kop<TOPUP_MIN_KOP||kop>TOPUP_MAX_KOP||(wallet?.payments?.simulated&&!sandboxMode&&!liveMoney())){box.textContent='';return;}
-  const {fee,total}=topupQuote(kop);
-  box.textContent=`К оплате ${rub(total)}: на депозит ${rub(kop)}, комиссия ${rub(fee)} (2,8% платёжного сервиса и 1% сервисного сбора, не возвращается).`;
+  const button=document.getElementById('topup-go');
+  if(!button||topupBusy) return;
+  button.textContent=liveMoney()?'Перейти к оплате':wallet?.sandbox?.available?'Перейти к тестовой оплате':wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';
 }
 async function doTopup() {
   if(liveMoney()) return doLiveTopup();
@@ -412,7 +411,7 @@ function openLiveTopup() {
   updateTopupFee();
   openSheet('topup-overlay');
 }
-async function doLiveTopup() {
+async function doLiveTopup(retry=true) {
   if(topupBusy||!authToken) return;
   const input=document.getElementById('topup-custom'), kop=selectedTopupKop(), err=document.getElementById('topup-error');
   err.hidden=true; input.removeAttribute('aria-invalid');
@@ -428,18 +427,20 @@ async function doLiveTopup() {
     const result=await apiCallStrict('POST','/wallet/topup',{amount:kop,requestId});
     if(owner!==authToken) return;
     if(result.error) {
-      if(result.status&&result.status<500&&result.code!=='payment_pending') setLiveTopupRequest(null);
+      if(result.status&&result.status<500) setLiveTopupRequest(null);
+      if(result.code==='legal_outdated') {closeSheet('topup-overlay');await loadWallet();toast(result.error);return;}
       err.textContent=result.error;err.hidden=false;
-      if(result.code==='payment_pending'||result.code==='legal_outdated') {closeSheet('topup-overlay');await loadWallet();toast(result.error);}
       return;
     }
     if(result.status==='succeeded') {setLiveTopupRequest(null);closeSheet('topup-overlay');await loadWallet();return;}
+    // the earlier payment with this request ID expired at ЮKassa — start a fresh one
+    if(result.status==='canceled'&&retry) {setLiveTopupRequest(null);topupBusy=false;return await doLiveTopup(false);}
     const url=result.url?new URL(result.url):null;
     if(!url||url.protocol!=='https:') {err.textContent='ЮKassa не вернула ссылку оплаты. Обнови депозит и повтори.';err.hidden=false;return;}
     closeSheet('topup-overlay');
     location.assign(url.href);
   } catch {err.textContent='Не удалось получить ответ. Повтори — второй платёж не создастся.';err.hidden=false;}
-  finally {topupBusy=false;btn.disabled=false;btn.removeAttribute('aria-busy');btn.textContent='Перейти к оплате';renderWallet();}
+  finally {topupBusy=false;btn.disabled=false;btn.removeAttribute('aria-busy');updateTopupFee();renderWallet();}
 }
 let refundBusy=false;
 function refundFree() { return Math.max(0,Number(wallet?.available||0)); }
@@ -501,6 +502,8 @@ function wireInsightsUI() {
   $('legal-accept-go').onclick=acceptLegalEdition;
   // Back from the payment page (browser tab or the app resumed): ask the server.
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&liveMoney()&&wallet?.pending&&!walletLoading) loadWallet(); });
+  // «Назад» со страницы оплаты возвращает страницу из кэша браузера со старым состоянием.
+  window.addEventListener('pageshow',event=>{ if(event.persisted&&liveMoney()&&!walletLoading) loadWallet(); });
   $('operations-more').onclick=()=>loadOperationHistory();
   $('operations-list').addEventListener('click',event=>{
     const button=event.target.closest('[data-operation]');

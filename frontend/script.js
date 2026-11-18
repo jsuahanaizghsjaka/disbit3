@@ -420,7 +420,7 @@ async function apiCallStrict(method, path, body) {
       signal: controller.signal
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) return { error: data.error || ('Ошибка ' + r.status), status: r.status };
+    if (!r.ok) return { code: data.code, id: data.id, left: data.left, error: data.error || ('Ошибка ' + r.status), status: r.status };
     return data;
   } catch (e) {
     // e.name различает: AbortError — не дождались ответа за 15с; TypeError —
