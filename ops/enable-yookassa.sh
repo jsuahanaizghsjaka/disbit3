@@ -31,7 +31,8 @@ key=$(tr -d '\r\n ' < "$keyfile"); rm -f "$keyfile"
 case "$key" in live_*) ;; *) echo "Нужен боевой секретный ключ ЮKassa (начинается с live_)." >&2; exit 2 ;; esac
 
 previous=$(cat "$envfile" 2>/dev/null || true)
-printf 'PAYMENTS_PROVIDER=yookassa\nYOOKASSA_SHOP_ID=%s\nYOOKASSA_SECRET_KEY=%s\n' "$shop" "$key" > "$envfile.next"
+previous_dropin=$(cat "$dropin" 2>/dev/null || true)
+printf 'PAYMENTS_PROVIDER=yookassa\nYOOKASSA_TEST_ENABLED=0\nYOOKASSA_SHOP_ID=%s\nYOOKASSA_SECRET_KEY=%s\n' "$shop" "$key" > "$envfile.next"
 chmod 600 "$envfile.next"; mv "$envfile.next" "$envfile"
 printf '[Service]\nEnvironmentFile=%s\n' "$envfile" > "$dropin"; chmod 644 "$dropin"
 systemctl daemon-reload; systemctl restart "$service"
@@ -40,7 +41,8 @@ if ready && curl -fsS "http://127.0.0.1:$port/api/health" | grep -q '"livePaymen
  exit 0
 fi
 echo "Server did not start with live payments; switching back." >&2
-if [ -n "$previous" ]; then printf '%s\n' "$previous" > "$envfile"; else rm -f "$envfile" "$dropin"; fi
+if [ -n "$previous" ]; then printf '%s\n' "$previous" > "$envfile"; else rm -f "$envfile"; fi
+if [ -n "$previous_dropin" ]; then printf '%s\n' "$previous_dropin" > "$dropin"; else rm -f "$dropin"; fi
 systemctl daemon-reload; systemctl restart "$service"; ready || true
-journalctl -u "$service" -n 20 --no-pager | grep -v YOOKASSA_SECRET_KEY >&2 || true
+echo "Inspect service diagnostics on the server; credentials are not printed." >&2
 exit 1
