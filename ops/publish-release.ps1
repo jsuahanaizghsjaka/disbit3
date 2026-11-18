@@ -1,4 +1,4 @@
-# Run from the disbit3 folder in PowerShell: .\ops\publish-release.ps1
+﻿# Run from the disbit3 folder in PowerShell: .\ops\publish-release.ps1
 # Ships the current commit to staging, then production, with the existing deploy key.
 $ErrorActionPreference = 'Stop'
 $key = "$env:USERPROFILE\.ssh\disbit_timeweb_ed25519"
