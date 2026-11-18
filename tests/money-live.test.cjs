@@ -30,7 +30,7 @@ test('live deposit: top-up, idempotency, webhook, edition, money condition, refu
   const env={...process.env,APP_ENV:'development',NODE_ENV:'test',PORT,HOST:'127.0.0.1',DB_PATH:file,PROOFS_DIR:path.join(dir,'proofs'),
     PAYMENTS_PROVIDER:'yookassa',YOOKASSA_SHOP_ID:'1527679',YOOKASSA_SECRET_KEY:'test_'+'k'.repeat(40),
     PUBLIC_URL:'https://disbit.test/',ADMIN_KEY:ADMIN,FAKE_YOOKASSA_STATE:stateFile,
-    NODE_OPTIONS:[process.env.NODE_OPTIONS,'--import='+path.join(__dirname,'fake-yookassa.mjs')].filter(Boolean).join(' ')};
+    NODE_OPTIONS:[process.env.NODE_OPTIONS,'--import='+require('node:url').pathToFileURL(path.join(__dirname,'fake-yookassa.mjs')).href].filter(Boolean).join(' ')};
   const child=spawn(process.execPath,['backend/server.js'],{cwd:path.join(__dirname,'..'),env,stdio:['ignore','pipe','pipe']});
   let logs='';child.stderr.on('data',d=>{logs+=d;});
   const call=(route,body,user=1,method=body?'POST':'GET',headers={})=>fetch(base+route,{method,

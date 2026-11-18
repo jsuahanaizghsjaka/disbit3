@@ -6,8 +6,9 @@ import { readFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const load = () => { try { return createRequire(import.meta.url)('playwright'); } catch { return createRequire(path.join(execSync('npm root -g').toString().trim(), 'x'))('playwright'); } };
 const { chromium } = load();
 
