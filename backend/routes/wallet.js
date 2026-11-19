@@ -170,7 +170,11 @@ async function liveTopup(req, res) {
     res.json(intentReply(db.prepare('SELECT * FROM money_payment_intents WHERE id=?').get(requestId)));
   } catch (error) {
     if (error.code) return res.status(400).json({ code: error.code, error: error.message });
-    if (/Manual reconciliation/.test(error.message)) return res.status(409).json({ error: 'Платёж проверяется вручную. Напиши в поддержку: disbitx1@gmail.com' });
+    if (/Manual reconciliation/.test(error.message)) return res.status(409).json({ error: 'Срок автоматической проверки этого запроса истёк. Для сверки напиши на disbitx1@gmail.com.' });
+    if (error.providerStatus === 401) {
+      console.error('[money] YooKassa rejected merchant credentials');
+      return res.status(503).json({ error: 'Пополнение временно недоступно. ЮKassa отклонила авторизацию магазина. Повтори после восстановления оплаты.' });
+    }
     console.error('[money] topup failed:', error.message);
     res.status(502).json({ error: 'Не удалось связаться с ЮKassa. Повтори — второй платёж не создастся.' });
   }

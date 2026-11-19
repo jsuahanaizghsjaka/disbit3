@@ -301,6 +301,13 @@ function selectedTopupKop(){const raw=document.getElementById('topup-custom').va
 function updateTopupFee(){
   const button=document.getElementById('topup-go');
   if(!button||topupBusy) return;
+  const custom=document.getElementById('topup-custom');
+  const chips=[...document.querySelectorAll('#topup-amounts .topup-chip')];
+  const selected=custom.value!==''?null:chips.find(chip=>chip.classList.contains('on'))||chips.find(chip=>chip.dataset.sum==='30000');
+  for(const chip of chips){
+    chip.classList.toggle('on',chip===selected);
+    chip.setAttribute('aria-pressed',String(chip===selected));
+  }
   button.textContent=liveMoney()?'Перейти к оплате':wallet?.sandbox?.available?'Перейти к тестовой оплате':wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';
 }
 async function doTopup() {
