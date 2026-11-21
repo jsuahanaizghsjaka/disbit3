@@ -84,6 +84,9 @@ router.post('/', (req, res) => {
     if (refusal) return res.status(422).json(refusal);
   }
   const p = habitToParams({ id: 'h' + Date.now(), ...req.body });
+  // без даты от клиента — «сегодня» по часовому поясу аккаунта, а не по UTC:
+  // с 00:00 до 03:00 МСК UTC-дата — это вчера, и новое обещание считалось бы пропущенным
+  if (!req.body?.createdAt) p.created_day = accountDay(req);
   if (db.prepare('SELECT id FROM habits WHERE id=?').get(p.id)) {
     return res.status(409).json({ error: 'Обещание с этим id уже существует' });
   }
