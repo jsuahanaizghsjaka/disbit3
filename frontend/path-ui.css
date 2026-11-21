@@ -113,6 +113,13 @@ body > .aura, .intro .aura { display: none; }
 .sheet { scroll-padding-block: 20px 150px; }
 .sheet-actions > button { min-width: 0; }
 .sheet [data-close-sheet] { margin-top: 12px; width: 100%; }
+/* Карточка обещания: сверху свободная полоса (нажатие по ней закрывает
+   шторку), шапка с «Назад» и меню остаётся на месте при прокрутке. */
+#hstat-overlay .sheet { max-height: calc(100dvh - max(96px, 14dvh)); padding-top: 0; }
+#hstat-overlay .sheet-handle { margin-top: 10px; }
+#hstat-overlay .hstat-head { position: sticky; top: 0; z-index: 3; margin-inline: -20px; padding: 8px 20px 10px; background: var(--sheet-bg); }
+.sheet .hstat-back { margin: 0 0 0 -8px; width: auto; flex: none; }
+@media (max-width: 350px) { #hstat-overlay .hstat-head { margin-inline: -16px; padding-inline: 16px; } }
 .detail-actions { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-top: 24px; }
 .detail-actions [data-close-sheet], #detail-undo { grid-column: 1 / -1; }
 .detail-conditions { background: var(--surface); padding: 16px; border-radius: 18px; margin-bottom: 16px; font-size: 14px; }
