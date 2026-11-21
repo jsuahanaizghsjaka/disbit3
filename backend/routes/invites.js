@@ -10,8 +10,13 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { db, habitToParams, rowToHabit } from '../db/db.js';
+import { blocked } from '../lib/moderation.js';
+import {requestLimit} from '../lib/request-limits.js';
+import {transaction} from '../lib/promise-skips.js';
 
 const router = Router();
+router.use(requestLimit('invite-ip',60,60000));
+const liveInvite = code => db.prepare("SELECT * FROM habit_invites WHERE code=? AND created_at>datetime('now','-7 days')").get(code);
 
 // снимок обещания, который переносим другу (прогресс НЕ переносим)
 function snapshot(h) {
@@ -30,6 +35,8 @@ router.post('/', (req, res) => {
   const habitId = String(req.body?.habitId || '');
   const h = db.prepare('SELECT * FROM habits WHERE id = ? AND user_id = ?').get(habitId, req.userId);
   if (!h) return res.status(404).json({ error: 'Обещание не найдена' });
+  if(h.buddy)return res.status(409).json({error:'Обещание уже совместное'});
+  db.prepare("DELETE FROM habit_invites WHERE owner_id=? AND created_at<=datetime('now','-7 days')").run(req.userId);
 
   const existing = db.prepare(
     'SELECT code FROM habit_invites WHERE owner_id = ? AND habit_id = ?'
@@ -50,7 +57,7 @@ router.post('/', (req, res) => {
 
 // GET /api/invites/:code — что за приглашение (открыто, без входа: показать превью)
 router.get('/:code', (req, res) => {
-  const inv = db.prepare('SELECT * FROM habit_invites WHERE code = ?').get(req.params.code);
+  const inv = liveInvite(req.params.code);
   if (!inv) return res.status(404).json({ error: 'Приглашение не найдено' });
   const owner = db.prepare('SELECT login FROM users WHERE id = ?').get(inv.owner_id);
   let p = {};
@@ -59,29 +66,33 @@ router.get('/:code', (req, res) => {
 });
 
 // POST /api/invites/:code/accept — принять: дружба + такое же обещание + связка buddy
-router.post('/:code/accept', (req, res) => {
+router.post('/:code/accept', (req, res) => transaction(db, () => {
   if (!req.userId) return res.status(401).json({ error: 'Нужен аккаунт' });
-  const inv = db.prepare('SELECT * FROM habit_invites WHERE code = ?').get(req.params.code);
+  const inv = liveInvite(req.params.code);
   if (!inv) return res.status(404).json({ error: 'Приглашение не найдено' });
   if (inv.owner_id === req.userId) return res.status(400).json({ error: 'Это твоё собственное приглашение' });
+  if (blocked(req.userId,inv.owner_id)) return res.status(403).json({error:'Приглашение недоступно'});
+  const original=db.prepare('SELECT buddy,archived FROM habits WHERE id=? AND user_id=?').get(inv.habit_id,inv.owner_id);
+  if(!original||original.archived||original.buddy)return res.status(409).json({error:'Приглашение больше недоступно'});
 
   const owner = db.prepare('SELECT id, login FROM users WHERE id = ?').get(inv.owner_id);
   const me = db.prepare('SELECT id, login FROM users WHERE id = ?').get(req.userId);
   if (!owner) return res.status(404).json({ error: 'Автор приглашения не найден' });
 
   // 1. дружба (взаимно)
-  const addF = db.prepare('INSERT OR IGNORE INTO friendships (user_id, friend_id) VALUES (?, ?)');
-  addF.run(me.id, owner.id);
-  addF.run(owner.id, me.id);
+  const addF = db.prepare('INSERT INTO friendships (user_id, friend_id, confirmed) VALUES (?, ?,1) ON CONFLICT(user_id,friend_id) DO UPDATE SET confirmed=1');
 
   // 2. такое же обещание у принявшего (если такой ещё нет — сверяем по названию)
   let p = {};
   try { p = JSON.parse(inv.payload); } catch {}
   const already = db.prepare(
-    'SELECT id FROM habits WHERE user_id = ? AND lower(name) = lower(?) AND archived = 0'
+    'SELECT id,buddy FROM habits WHERE user_id = ? AND lower(name) = lower(?) AND archived = 0'
   ).get(me.id, p.name || '');
 
   let myHabitId = already?.id;
+  if(already?.buddy&&already.buddy!==owner.login)return res.status(409).json({error:'Это обещание уже совместное'});
+  addF.run(me.id, owner.id);
+  addF.run(owner.id, me.id);
   if (!myHabitId) {
     myHabitId = 'h' + Date.now();
     const params = habitToParams({
@@ -113,12 +124,13 @@ router.post('/:code/accept', (req, res) => {
     .run(me.login, inv.habit_id, owner.id);
 
   const row = db.prepare('SELECT * FROM habits WHERE id = ?').get(myHabitId);
+  db.prepare('DELETE FROM habit_invites WHERE code=?').run(inv.code);
   res.json({
     ok: true,
     owner: owner.login,
     created: !already,                  // false — обещание было, просто связали
     habit: row ? rowToHabit(row, []) : null
   });
-});
+}));
 
 export default router;

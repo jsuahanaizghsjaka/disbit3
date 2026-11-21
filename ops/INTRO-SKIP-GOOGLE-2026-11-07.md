@@ -20,12 +20,14 @@ Archive SHA256: `a8b02f59c03faded61078b4469a54b503f012fe655b144f445b8e8e4dd2e7fc
 - Staging rollback: `sudo bash /srv/disbit-staging/rollback-777ff10.sh`.
 - Services disbit, disbit-staging, Caddy and monitoring timer active; approximately 2.8 GB disk free.
 
-## Google: pending, not enabled
+## Google: enabled; existing-account sign-in verified
 
-The existing OAuth client in project `disbit-staging-20261104` currently has staging and loopback redirects. A third URI `https://disbit.ru/api/auth/oauth/google/callback` is filled in the Google Cloud form but NOT saved. Browser policy requires action-time confirmation for extending OAuth access. An async confirmation question was sent; no answer received during this turn. Keep this form pending and do not save before approval.
+The user approved the production callback. Saved and re-opened the Google client to verify `https://disbit.ru/api/auth/oauth/google/callback` persisted alongside the existing staging and loopback URIs.
 
-Backend now supports production only with BOTH `GOOGLE_OAUTH_ENABLED=1` and `GOOGLE_OAUTH_PRODUCTION_ENABLED=1`, a client ID/secret and a valid HTTPS PUBLIC_URL. These were NOT enabled in production. Public `/api/auth/oauth/providers` still reports Google false, Apple false.
+The existing credential was installed through SSH stdin without printing its secret. Production now has both GOOGLE_OAUTH_ENABLED=1 and GOOGLE_OAUTH_PRODUCTION_ENABLED=1. Pre-change environment backup: `/etc/disbit/password-release.env.pre-google-enable-20261107`.
 
-Next: after approval save the prepared callback; inspect consent/audience settings; securely configure the existing credential on the server without printing it; enable flags and verify real first/repeat login and explicit account linking. Credential location and client ID are recorded in SOCIAL-AUTH-STAGING.md. No Gmail/Drive scopes are requested. Do not claim production Google works until the real flow passes.
+On November 8, 2026, public `/api/auth/oauth/providers` returned Google true, Apple false. Services disbit and Caddy were active; health reported release 777ff1012f6b98e7897edde2c5b364d5b69124ce and live payments false. Clicking the active Google button on production opened Google's account chooser with the correct production redirect, PKCE and only openid/email/profile scopes. No redirect mismatch was shown at that step.
 
-Native Android/iOS OAuth remains unavailable and requires a separate system-browser/native return flow. No new APK, real-device test or real Google production login was completed here. GitHub push remains a separate action.
+The user completed the real Google flow on November 8. Browser verification showed the existing @sinon account with its previous promises and confirmed email. A subsequent logout and Google sign-in performed through the browser returned to the same @sinon profile and its existing transaction history. Thus the real callback and repeat existing-account sign-in passed. New-account creation and a separate explicit linking flow were not exercised in this production session.
+
+Native Android/iOS OAuth remains unavailable and requires a separate system-browser/native return flow. No new APK or real-device test was completed. GitHub push remains a separate action.

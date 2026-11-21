@@ -1,0 +1,41 @@
+[
+  {
+    "output": [
+      "Total frames rendered: 98",
+      "Janky frames: 95 (96.94%)",
+      "50th percentile: 21ms",
+      "90th percentile: 61ms",
+      "95th percentile: 81ms",
+      "99th percentile: 109ms",
+      "Number Slow UI thread: 46",
+      "Number Slow issue draw commands: 95"
+    ],
+    "run": 1
+  },
+  {
+    "output": [
+      "Total frames rendered: 116",
+      "Janky frames: 98 (84.48%)",
+      "50th percentile: 17ms",
+      "90th percentile: 38ms",
+      "95th percentile: 48ms",
+      "99th percentile: 57ms",
+      "Number Slow UI thread: 20",
+      "Number Slow issue draw commands: 98"
+    ],
+    "run": 2
+  },
+  {
+    "output": [
+      "Total frames rendered: 88",
+      "Janky frames: 84 (95.45%)",
+      "50th percentile: 22ms",
+      "90th percentile: 53ms",
+      "95th percentile: 73ms",
+      "99th percentile: 105ms",
+      "Number Slow UI thread: 41",
+      "Number Slow issue draw commands: 84"
+    ],
+    "run": 3
+  }
+]

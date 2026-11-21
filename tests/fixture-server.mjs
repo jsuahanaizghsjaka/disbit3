@@ -23,8 +23,9 @@ for (const [id, token, expires] of [[7, 'a'.repeat(64), Date.now() + 3600000], [
   db.prepare('INSERT INTO password_resets (user_id,token_hash,expires_at,sent_at) VALUES (?,?,?,?)').run(id, createHash('sha256').update(token).digest('hex'), expires, Date.now());
 }
 db.prepare('UPDATE users SET email_verified = 0 WHERE id IN (4,5,6)').run();
+const {emailCodeDigest}=await import('../backend/lib/auth-secrets.js');
 for (const [id, code, expires] of [[4, '123456', Date.now() + 3600000], [5, '654321', Date.now() + 3600000], [6, '112233', Date.now() - 1000]]) {
-  db.prepare('INSERT INTO email_codes (user_id,code,expires_at,attempts,sent_at) VALUES (?,?,?,0,?)').run(id, code, expires, Date.now());
+  db.prepare('INSERT INTO email_codes (user_id,code,expires_at,attempts,sent_at) VALUES (?,?,?,0,?)').run(id, emailCodeDigest(id,code), expires, Date.now());
 }
 db.prepare('INSERT INTO trusted_bits(user_id,balance) VALUES (3,60)').run();
 for (const [id, name, color, type, target, mode] of [

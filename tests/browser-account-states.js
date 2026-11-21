@@ -10,6 +10,7 @@ async page => {
     await page.reload();
   }
   await page.waitForFunction(()=>myLogin==='beta_tester' && wallet);
+  await page.locator('#dock [data-screen="profile"]').click();
   await page.evaluate(()=>document.getElementById('profile-money').open=true);
   const realWallet=await page.evaluate(()=>structuredClone(wallet));
   await page.evaluate(()=>{wallet=null;walletLoading=true;renderWallet();});
@@ -43,7 +44,10 @@ async page => {
   assert(await page.locator('#topup-go').isDisabled(),'Uncertain result invites duplicate payment');
   await page.locator('#topup-cancel').click();await page.unroute('**/api/wallet/topup');
   await page.reload();await page.waitForFunction(()=>wallet&&!walletLoading);
-  await page.evaluate(()=>openAuthSheet('register'));
+  await page.locator('#dock [data-screen="profile"]').click();
+  // Registration now starts with a choice of method; the e-mail form needs both consents.
+  await page.evaluate(()=>{openAuthSheet('register');setAuthMode('register',true);});
+  await page.locator('#rg-accept-terms').check();await page.locator('#rg-accept-pd').check();
   await page.locator('#rg-login').fill('test_account');await page.locator('#rg-email').fill('not-an-email');await page.locator('#rg-pass').fill('123456');
   await page.locator('#auth-submit').click();assert(await page.locator('#rg-email').getAttribute('aria-invalid')==='true','Registration email not validated');
   await page.locator('#rg-email').fill('nobody@example.invalid');
@@ -66,7 +70,7 @@ async page => {
   await page.evaluate(async()=>{await apiCallStrict('PUT','/state',{data:stateBlob(),ts:Date.now()});openAuthSheet('login');});
   await page.route('**/api/auth/login',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({token:'2'.repeat(64),user:{id:2,login:'beta_friend',email:'beta_friend@example.invalid',emailVerified:true}})}));
   await page.locator('#li-id').fill('beta_friend');await page.locator('#li-pass').fill('fixture-only');await page.locator('#auth-submit').click();
-  await page.waitForFunction(()=>authUser?.login==='beta_friend'&&myLogin==='beta_friend'&&wallet&&!walletLoading);
+  await page.waitForFunction(()=>typeof authUser!=='undefined'&&authUser?.login==='beta_friend'&&myLogin==='beta_friend'&&wallet&&!walletLoading);
   assert(await page.evaluate(()=>habits.length===0 && !goals.length && !profile.motivation?.text && wallet?.balance===0),'Previous account data leaked');
   await page.unroute('**/api/auth/login');
   assert(errors.length===0,errors.join('\n'));

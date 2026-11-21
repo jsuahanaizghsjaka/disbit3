@@ -17,7 +17,11 @@ export function createYooKassaClient({ shopId, secretKey, request = fetch }) {
       signal: AbortSignal.timeout(12000)
     });
     // Provider response may contain personal/payment data; never log its body.
-    if (!response.ok) throw Error(`YooKassa ${method} ${path.split('/')[1]} returned HTTP ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`YooKassa ${method} ${path.split('/')[1]} returned HTTP ${response.status}`);
+      error.providerStatus = response.status;
+      throw error;
+    }
     return response.json();
   }
   const rub = amount => (amount / 100).toFixed(2);

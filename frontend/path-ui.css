@@ -169,6 +169,8 @@ body.kb-open #dock, body:has(.proof-overlay:not([hidden])) #dock { display: none
 .proof-flip, .proof-vidbtn { min-height: 48px; min-width: 48px; }
 .proof-skip { min-height: 48px; color: var(--text-2); }
 #proof-start { margin: 12px 0; width: 100%; }
+#proof-gallery { display: block; width: 100%; min-height: 52px; margin: 0 0 20px; }
+#proof-share-card { margin-top: 12px; }
 #proof-share-card { width: 100%; }
 .action-dialog { background: var(--sheet-bg); color: var(--text); padding: 24px; border: 1px solid var(--line); border-radius: 24px; }
 .action-dialog h2 { font-family: 'Onest', sans-serif; }

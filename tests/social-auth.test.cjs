@@ -39,7 +39,8 @@ test('Google staging: first/repeat login, explicit linking, browser binding, rep
     return {status:r.status,data,cookie:r.headers.get('set-cookie')?.split(';')[0],location:r.headers.get('location'),cache:r.headers.get('cache-control')};
   };
   const start=async(mode='login',token='',extra={})=>{
-    const r=await request('/google/start',{body:{mode,password:'current-password'},token,...extra});
+    const {body:extraBody={},...rest}=extra;
+    const r=await request('/google/start',{...rest,token,body:{mode,password:'current-password',acceptTerms:true,acceptPersonalData:true,...extraBody}});
     if(r.status===200){r.url=new URL(r.data.url);r.state=r.url.searchParams.get('state');}return r;
   };
   const callback=(flow,extra='')=>request('/google/callback?code=synthetic-code&state='+flow.state+extra,{cookie:flow.cookie});
@@ -49,6 +50,12 @@ test('Google staging: first/repeat login, explicit linking, browser binding, rep
   assert.equal((await start('login','',{source:'https://attacker.invalid'})).status,403);
   assert.equal((await start('link')).status,401);
   const badPassword=await request('/google/start',{body:{mode:'link',password:'wrong'},token:existingSession});assert.equal(badPassword.status,403);
+  // A new Google account is never created without both registration consents.
+  nextIdentity={subject:'subject-noconsent',email:'noconsent@example.org'};
+  const noConsent=await start('login','',{body:{acceptPersonalData:false}});await callback(noConsent);
+  assert.equal((await finish(noConsent)).data.result,'consent_required');
+  assert.equal(db.prepare('SELECT count(*) n FROM users').get().n,2);
+  exchanged=0;
   nextIdentity={subject:'subject-first',email:'new@example.org'};
   const first=await start();assert.equal(first.status,200);assert.equal(first.cache,'no-store');
   assert.equal(first.url.searchParams.get('code_challenge_method'),'S256');
@@ -61,6 +68,8 @@ test('Google staging: first/repeat login, explicit linking, browser binding, rep
   assert(!returned.location.includes('token'));assert(!returned.location.includes('synthetic-code'));
   assert.equal((await callback(first)).status,400);assert.equal(exchanged,1);
   const loggedIn=await finish(first);assert.equal(loggedIn.data.result,'login');assert(loggedIn.data.token);
+  assert.deepEqual(db.prepare('SELECT document,source FROM legal_acceptances WHERE user_id=? ORDER BY document').all(loggedIn.data.user.id).map(r=>({...r})),
+    [{document:'personal_data',source:'google'},{document:'terms',source:'google'}]);
   assert.equal((await finish(first)).data.result,'expired');
   const repeat=await successfulLogin(nextIdentity);assert.equal(repeat.data.user.id,loggedIn.data.user.id);
   assert.equal(db.prepare('SELECT count(*) n FROM users').get().n,3);

@@ -30,7 +30,10 @@
     .p-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; gap:8px; }
     .p-habit { font-weight:800; font-size:16px; }
     .p-meta { color:var(--text-3); font-size:12px; }
+    .p-top { flex-wrap:wrap; }
+    .p-source { order:3; flex-basis:100%; font-size:13px; color:var(--text-2); overflow-wrap:anywhere; }
     .p-media { width:100%; border-radius:12px; background:#000; display:block; max-height:60vh; object-fit:contain; }
+    .p-media[hidden] { display:none; }
     .p-actions { display:flex; gap:10px; margin-top:12px; }
     .btn-ok { background:rgba(62,190,125,0.16); color:var(--green); flex:1; }
     .btn-no { background:rgba(240,102,106,0.16); color:var(--red); flex:1; }
@@ -38,6 +41,11 @@
     .badge { font-size:11px; font-weight:800; padding:3px 8px; border-radius:20px; }
     .b-approved { background:rgba(62,190,125,0.16); color:var(--green); }
     .b-rejected { background:rgba(240,102,106,0.16); color:var(--red); }
+    :focus-visible { outline:3px solid var(--primary); outline-offset:3px; }
+    button { min-height:44px; }
+    .p-habit, .p-meta, .proof p { overflow-wrap:anywhere; }
+    .tabs { flex-wrap:wrap; }
+    .gate { padding:0 16px; }
   </style>
 </head>
 <body>
@@ -45,7 +53,8 @@
   <div class="gate" id="gate">
     <h1>Проверка пруфов</h1>
     <p class="sub">Введи админ-ключ, чтобы увидеть присланные подтверждения.</p>
-    <input class="inp" id="key" type="password" placeholder="Админ-ключ" autocomplete="off" />
+    <label for="key">Админ-ключ</label>
+    <input class="inp" id="key" type="password" autocomplete="off" />
     <button class="btn btn-primary" id="enter">Войти</button>
     <p class="err" id="gate-err" hidden></p>
   </div>
@@ -53,6 +62,7 @@
   <!-- панель -->
   <div class="wrap" id="panel" hidden>
     <h1>Проверка пруфов</h1>
+    <button class="btn" id="logout">Выйти</button>
     <p class="sub" id="counts"></p>
     <div class="tabs">
       <button class="tab on" data-status="pending">Ожидают</button>
@@ -60,91 +70,11 @@
       <button class="tab" data-status="rejected">Отклонены</button>
     </div>
     <div id="list"></div>
+    <h2>Обжалования ограничений</h2><button class="btn" id="appeals-refresh">Обновить обращения</button><div id="appeals" role="status"></div><h2>Жалобы пользователей</h2>
+    <button class="btn" id="reports-refresh">Обновить жалобы</button>
+    <div id="reports" role="status"></div>
   </div>
 
-  <script>
-    let KEY = '';
-    let status = 'pending';
-    const H = () => ({ 'X-Admin-Key': KEY });
-
-    async function load() {
-      const list = document.getElementById('list');
-      list.innerHTML = '<p class="empty">Загрузка…</p>';
-      let data;
-      try {
-        const r = await fetch('/api/proofs?status=' + status, { headers: H() });
-        if (!r.ok) throw new Error('unauth');
-        data = await r.json();
-      } catch { list.innerHTML = '<p class="empty">Ошибка загрузки</p>'; return; }
-
-      const c = data.counts || {};
-      document.getElementById('counts').textContent =
-        `Ожидают: ${c.pending || 0} · Одобрены: ${c.approved || 0} · Отклонены: ${c.rejected || 0}`;
-
-      if (!data.items.length) { list.innerHTML = '<p class="empty">Здесь пусто</p>'; return; }
-      list.innerHTML = '';
-      for (const p of data.items) {
-        const el = document.createElement('div');
-        el.className = 'proof';
-        const media = p.type === 'video'
-          ? `<video class="p-media" src="/api/proofs/${p.id}/media?key=${encodeURIComponent(KEY)}" controls playsinline></video>`
-          : `<img class="p-media" src="/api/proofs/${p.id}/media?key=${encodeURIComponent(KEY)}" alt="">`;
-        const actions = status === 'pending'
-          ? `<div class="p-actions">
-               <button class="btn btn-ok" data-ok="${p.id}">✓ Одобрить</button>
-               <button class="btn btn-no" data-no="${p.id}">✕ Отклонить</button>
-             </div>`
-          : `<span class="badge b-${p.status}">${p.status === 'approved' ? 'одобрен' : 'отклонён'}</span>`;
-        el.innerHTML = `
-          <div class="p-top">
-            <span class="p-habit">${escapeHtml(p.habit_name || 'Обещание')}</span>
-            <span class="p-meta">${escapeHtml(p.user_login || 'гость')} · ${p.day}</span>
-          </div>
-          ${media}
-          ${actions}`;
-        list.appendChild(el);
-      }
-      list.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => decide(b.dataset.ok, 'approved'));
-      list.querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no, 'rejected'));
-    }
-
-    async function decide(id, decision) {
-      await fetch('/api/proofs/' + id + '/decision', {
-        method: 'POST',
-        headers: { ...H(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: decision })
-      });
-      load();
-    }
-
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c =>
-        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-    }
-
-    document.getElementById('enter').onclick = async () => {
-      KEY = document.getElementById('key').value.trim();
-      const err = document.getElementById('gate-err');
-      const r = await fetch('/api/proofs?status=pending', { headers: H() });
-      if (!r.ok) { err.hidden = false; err.textContent = 'Неверный ключ'; return; }
-      sessionStorage.setItem('disbit_admin_key', KEY);
-      document.getElementById('gate').hidden = true;
-      document.getElementById('panel').hidden = false;
-      load();
-    };
-    document.getElementById('key').addEventListener('keydown', e => {
-      if (e.key === 'Enter') document.getElementById('enter').click();
-    });
-    document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
-      document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
-      t.classList.add('on');
-      status = t.dataset.status;
-      load();
-    });
-
-    // если ключ уже вводили в этой вкладке — сразу входим
-    const saved = sessionStorage.getItem('disbit_admin_key');
-    if (saved) { document.getElementById('key').value = saved; document.getElementById('enter').click(); }
-  </script>
+  <script src="review.js"></script>
 </body>
 </html>

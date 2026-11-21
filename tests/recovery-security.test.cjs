@@ -38,7 +38,7 @@ test('recovery: privacy, mail failure, account binding, revocation, expiry, limi
     const known=await request('recovery_one@example.org');
     assert.equal(known.status,200);assert.equal(known.cache,'no-store');
     for(const email of ['missing@example.org','unverified@example.org','bad']) assert.deepEqual(await request(email),known);
-    assert.equal(mails.length,1);
+    assert.equal(mails.length,2);
     const code=tokenOf(mails[0]);
     assert.equal((await change(code,'recovery_two@example.org')).status,400);
     assert.equal((await change(code,'recovery_one@example.org','2'.repeat(64))).status,400);

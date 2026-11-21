@@ -55,12 +55,23 @@ CREATE TABLE IF NOT EXISTS social_identities (
   PRIMARY KEY(provider, subject),
   UNIQUE(provider, user_id)
 );
+-- Acceptance of the user agreement and the personal-data consent (152-FZ art. 9).
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document TEXT NOT NULL CHECK(document IN ('terms','personal_data')),
+  version TEXT NOT NULL,
+  source TEXT NOT NULL CHECK(source IN ('email','google','app')),
+  accepted_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS legal_acceptances_user ON legal_acceptances(user_id);
 CREATE TABLE IF NOT EXISTS oauth_flows (
   state_hash TEXT PRIMARY KEY,
   binding_hash TEXT UNIQUE NOT NULL,
   nonce TEXT NOT NULL,
   verifier TEXT NOT NULL,
   mode TEXT NOT NULL CHECK(mode IN ('login','link')),
+  consent INTEGER NOT NULL DEFAULT 0,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   session_token TEXT REFERENCES sessions(token) ON DELETE CASCADE,
   expires_at INTEGER NOT NULL
@@ -149,6 +160,7 @@ CREATE TABLE IF NOT EXISTS proofs (
   type        TEXT NOT NULL DEFAULT 'photo',        -- 'photo' | 'video'
   file        TEXT NOT NULL,                        -- имя файла в PROOFS_DIR
   mime        TEXT,
+  source      TEXT NOT NULL DEFAULT 'unknown',      -- client-declared: camera/gallery/unknown
   status      TEXT NOT NULL DEFAULT 'pending',      -- 'pending' | 'approved' | 'rejected'
   created_at  TEXT DEFAULT (datetime('now'))
 );
@@ -194,11 +206,13 @@ CREATE TABLE IF NOT EXISTS money_payment_intents (
   id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   amount INTEGER NOT NULL CHECK(amount > 0),
+  fee INTEGER NOT NULL DEFAULT 0 CHECK(fee >= 0),
   provider TEXT NOT NULL CHECK(provider = 'yookassa'),
   idempotency_key TEXT NOT NULL UNIQUE,
   provider_payment_id TEXT UNIQUE,
   status TEXT NOT NULL DEFAULT 'created' CHECK(status IN ('created','pending','succeeded','canceled')),
   confirmation_url TEXT,
+  receipt_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_money_payment_user ON money_payment_intents(user_id,id);
@@ -216,7 +230,8 @@ CREATE TABLE IF NOT EXISTS money_refund_parts (
   amount INTEGER NOT NULL CHECK(amount > 0),
   idempotency_key TEXT NOT NULL UNIQUE,
   provider_refund_id TEXT UNIQUE,
-  status TEXT NOT NULL DEFAULT 'reserved' CHECK(status IN ('reserved','pending','succeeded','failed'))
+  status TEXT NOT NULL DEFAULT 'reserved' CHECK(status IN ('reserved','pending','succeeded','failed')),
+  receipt_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_money_refund_payment ON money_refund_parts(payment_intent_id,status);
 CREATE TABLE IF NOT EXISTS money_ledger (
@@ -240,7 +255,8 @@ CREATE TABLE IF NOT EXISTS sandbox_payment_intents (
   id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   request_id TEXT NOT NULL,
-  amount INTEGER NOT NULL CHECK(amount BETWEEN 5000 AND 5000000),
+  amount INTEGER NOT NULL CHECK(amount BETWEEN 100 AND 1000000),
+  fee INTEGER NOT NULL DEFAULT 0 CHECK(fee >= 0),
   idempotency_key TEXT NOT NULL UNIQUE,
   provider_payment_id TEXT UNIQUE,
   status TEXT NOT NULL DEFAULT 'created' CHECK(status IN ('created','pending','succeeded','canceled')),

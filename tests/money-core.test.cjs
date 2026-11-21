@@ -46,7 +46,7 @@ async function fixture() {
   return db;
 }
 function payment(intent, id='payment-12345678901234567890') {
-  return { id, amount:{value:(intent.amount/100).toFixed(2),currency:'RUB'},
+  return { id, amount:{value:((intent.amount+(intent.fee||0))/100).toFixed(2),currency:'RUB'},
     metadata:{disbit_intent:intent.id},status:'succeeded',paid:true,test:false,
     confirmation:{confirmation_url:'https://yookassa.ru/confirm/test'} };
 }
@@ -89,7 +89,7 @@ test('refund reserves only confirmed money, splits by original payment and relea
     assert.throws(()=>core.reserveMoneyRefund(db,{userId:1,amount:5000}),/Insufficient/);
     const one={id:'refund-11111111111111111111',payment_id:providerByIntent.get(reserved.parts[0].paymentIntentId),amount:{value:'70.00',currency:'RUB'},status:'succeeded'};
     core.attachProviderRefund(db,reserved.parts[0].id,one);
-    assert.equal(core.confirmProviderRefund(db,one).status,'partial');
+    assert.equal(core.confirmProviderRefund(db,one).status,'pending');
     assert.equal(core.confirmProviderRefund(db,one).duplicate,true);
     const two={id:'refund-22222222222222222222',payment_id:providerByIntent.get(reserved.parts[1].paymentIntentId),amount:{value:'30.00',currency:'RUB'},status:'canceled'};
     core.attachProviderRefund(db,reserved.parts[1].id,two);
@@ -116,6 +116,12 @@ test('accepted terms start tomorrow; server settles closed days only, once, from
     assert.equal(settlement.settleClosedMoneyDays(db,{now:new Date('2026-10-04T12:00:00Z')})[0].reason,'completed-or-skipped');
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM money_penalties').get().n,1);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM money_ledger WHERE type='penalty'").get().n,1);
+    // A mistaken penalty goes back as a separate correction, only once.
+    const penalty=db.prepare('SELECT id FROM money_penalties').get().id;
+    assert.equal(core.correctMoneyPenalty(db,penalty).balance,10000);
+    assert.equal(core.correctMoneyPenalty(db,penalty).duplicate,true);
+    assert.throws(()=>core.correctMoneyPenalty(db,'missing'),/paid penalty/);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM money_ledger WHERE type='correction'").get().n,1);
   } finally { db.close(); }
 });
 

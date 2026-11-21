@@ -26,11 +26,11 @@ export function createMoneyService(db, provider, { now = () => Date.now() } = {}
       return { id:intent.id, providerId:intent.provider_payment_id, url:intent.confirmation_url, result };
     }
     requireRetryWindow(intent.created_at);
-    const remote=await provider.createPayment({id:intent.id,amount:intent.amount,idempotencyKey:intent.idempotency_key},returnUrl);
+    const remote=await provider.createPayment({id:intent.id,amount:intent.amount+(intent.fee||0),idempotencyKey:intent.idempotency_key},returnUrl);
     return attachProviderPayment(db,intent.id,remote);
   }
-  async function startPayment(userId,amount,returnUrl) {
-    const intent=openMoneyPayment(db,{userId,amount});
+  async function startPayment(userId,amount,returnUrl,id) {
+    const intent=openMoneyPayment(db,{userId,amount,...(id?{id}:{})});
     return resumePayment(intent.id,returnUrl);
   }
   async function resumeRefundPart(partId) {
@@ -45,8 +45,8 @@ export function createMoneyService(db, provider, { now = () => Date.now() } = {}
     attachProviderRefund(db,part.id,remote);
     return confirmProviderRefund(db,remote);
   }
-  async function startRefund(userId,amount) {
-    const request=reserveMoneyRefund(db,{userId,amount});
+  async function startRefund(userId,amount,id) {
+    const request=reserveMoneyRefund(db,{userId,amount,...(id?{id}:{})});
     const results=[];
     for(const part of request.parts) {
       try { results.push({ id:part.id,result:await resumeRefundPart(part.id) }); }

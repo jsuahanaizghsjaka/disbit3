@@ -51,10 +51,13 @@ test('hosted staging starts isolated, rejects topup and fake webhook, preserves 
         assert.equal((await fetch(base+'/auth/resend',{method:'POST',headers})).status,502);
         // The synthetic staging account has no configured mail provider. Read
         // its code from the isolated test DB without printing it to the logs.
-        const inspect = new DatabaseSync(database,{readOnly:true});
-        const code = inspect.prepare('SELECT code FROM email_codes WHERE user_id = 1').get().code;
+        const inspect = new DatabaseSync(database);
+        const stored = inspect.prepare('SELECT code FROM email_codes WHERE user_id = 1').get().code;
+        assert.match(stored,/^[a-f0-9]{64}$/);
+        const code='123456';
+        const digest=require('node:crypto').createHmac('sha256',fs.readFileSync(path.join(dir,'.email-code-key'))).update('1:'+code).digest('hex');
+        inspect.prepare('UPDATE email_codes SET code=? WHERE user_id=1').run(digest);
         inspect.close();
-        assert.match(code,/^[1-9][0-9]{5}$/);
         const wrong = code === '100000' ? '100001' : '100000';
         assert.equal((await fetch(base+'/auth/verify',{method:'POST',headers,body:JSON.stringify({code:wrong})})).status,400);
         assert.equal((await fetch(base+'/auth/verify',{method:'POST',headers,body:JSON.stringify({code})})).status,200);

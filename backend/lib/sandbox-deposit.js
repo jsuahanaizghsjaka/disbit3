@@ -1,3 +1,4 @@
+import { TOPUP_MIN, TOPUP_MAX, topupQuote } from './money-limits.js';
 import { randomUUID } from 'node:crypto';
 
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,14 +38,14 @@ function moneyFromProvider(value) {
 
 function matches(payment, intent, shopId) {
   return payment?.test === true && typeof payment.id === 'string' &&
-    payment.amount?.currency === 'RUB' && moneyFromProvider(payment.amount.value) === intent.amount &&
+    payment.amount?.currency === 'RUB' && moneyFromProvider(payment.amount.value) === intent.amount + (intent.fee || 0) &&
     payment.metadata?.disbit_intent === intent.id &&
     String(payment.recipient?.account_id || '') === shopId;
 }
 
 function publicIntent(intent) {
   return { id: intent.id, providerId: intent.provider_payment_id, status: intent.status,
-    url: intent.confirmation_url, amount: intent.amount };
+    url: intent.confirmation_url, amount: intent.amount, fee: intent.fee || 0 };
 }
 
 export function sandboxHistory(db, userId, limit = 30, offset = 0) {
@@ -63,7 +64,7 @@ export function sandboxSnapshot(db, userId) {
 }
 
 export function openSandboxIntent(db, { userId, amount, requestId }) {
-  if (!Number.isSafeInteger(amount) || amount < 5000 || amount > 5000000) throw Error('Invalid test topup amount');
+  if (!Number.isSafeInteger(amount) || amount < TOPUP_MIN || amount > TOPUP_MAX) throw Error('Invalid test topup amount');
   if (!REQUEST_ID.test(requestId || '')) throw Error('Invalid request ID');
   return tx(db, () => {
     const existing = db.prepare('SELECT * FROM sandbox_payment_intents WHERE user_id=? AND request_id=?').get(userId,requestId);
@@ -72,8 +73,8 @@ export function openSandboxIntent(db, { userId, amount, requestId }) {
       return existing;
     }
     const id = randomUUID();
-    db.prepare(`INSERT INTO sandbox_payment_intents(id,user_id,request_id,amount,idempotency_key)
-      VALUES (?,?,?,?,?)`).run(id,userId,requestId,amount,`sandbox-topup-${id}`);
+    db.prepare(`INSERT INTO sandbox_payment_intents(id,user_id,request_id,amount,fee,idempotency_key)
+      VALUES (?,?,?,?,?,?)`).run(id,userId,requestId,amount,topupQuote(amount).fee,`sandbox-topup-${id}`);
     return db.prepare('SELECT * FROM sandbox_payment_intents WHERE id=?').get(id);
   });
 }
@@ -133,7 +134,7 @@ export function createSandboxService(db, provider, shopId) {
     const intent = openSandboxIntent(db,{userId,amount,requestId});
     if (intent.provider_payment_id) return refresh(intent);
     const payment = await provider.createPayment({
-      id:intent.id, amount:intent.amount, idempotencyKey:intent.idempotency_key
+      id:intent.id, amount:intent.amount + (intent.fee || 0), idempotencyKey:intent.idempotency_key
     },returnUrl);
     return attachSandboxPayment(db,intent.id,payment,shopId);
   }

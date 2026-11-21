@@ -21,13 +21,6 @@
 <body>
   <a class="skip-link" href="#today">К основному содержимому</a>
 
-  <!-- АУРА: размытые пятна света за контентом -->
-  <div class="aura" aria-hidden="true">
-    <i class="blob b1"></i>
-    <i class="blob b2"></i>
-    <i class="blob b3"></i>
-  </div>
-
   <!-- ===== СПРАЙТ SVG-ИКОНОК (Lucide-style, stroke 2) ===== -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
@@ -292,7 +285,7 @@
       <!-- пригласить: свой логин + ссылка -->
       <section class="card">
         <h3 class="card-title"><svg class="ic ic-s" style="vertical-align:-3px"><use href="#i-users"/></svg> Пригласить друга</h3>
-        <p class="hint" style="margin:0 0 10px">Дай другу свой логин или отправь ссылку — он добавится в один тап.</p>
+        <p class="hint" style="margin:0 0 10px">Поделись логином или ссылкой. Вы увидите прогресс друг друга после принятия заявки.</p>
         <div class="invite-login">
           <span class="il-label">Твой логин</span>
           <b class="il-value" id="my-login">—</b>
@@ -469,11 +462,17 @@
         </div>
         <p class="sim-note" id="wallet-sim" hidden>
           <svg class="ic ic-s"><use href="#i-alert"/></svg>
-          Реальные платежи пока не подключены. Показанные суммы — внутренние записи приложения.
+          Пополнение пока недоступно. Показанные суммы — внутренние записи приложения.
         </p>
+        <div class="wallet-legal" id="wallet-legal" hidden>
+          <p class="hint">Опубликована редакция соглашения от 17 ноября 2026 года. Чтобы пополнять депозит и включать денежные условия, прими её.</p>
+          <label class="auth-consent"><input type="checkbox" id="legal-accept-terms" /><span>Мне исполнилось 16 лет. Принимаю <a href="terms.html" target="_blank" rel="noopener">пользовательское соглашение</a> и <a href="terms.html#content" target="_blank" rel="noopener">правила контента</a></span></label>
+          <label class="auth-consent"><input type="checkbox" id="legal-accept-pd" /><span>Даю <a href="consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a> по <a href="privacy.html" target="_blank" rel="noopener">политике</a></span></label>
+          <button class="btn-ghost full" id="legal-accept-go" type="button">Принять редакцию</button>
+        </div>
         <p id="wallet-state" class="hint" role="status"></p>
         <button class="btn-ghost" id="wallet-retry">Обновить депозит</button>
-        <details class="refund-info"><summary>Возврат остатка</summary><p class="hint">Возврат на исходный способ оплаты пока не подключён. Заявку отправить нельзя.</p><label class="field-label" for="refund-amount">Сумма возврата, ₽</label><input id="refund-amount" class="field-input" type="number" disabled aria-describedby="refund-status"><p id="refund-status" class="hint">Недоступно. Деньги не перемещаются.</p></details>
+        <details class="refund-info" id="refund-box"><summary>Возврат остатка</summary><p class="hint" id="refund-help">Возврат станет доступен после подключения платежей.</p><label class="field-label" for="refund-amount">Сумма возврата, ₽</label><input id="refund-amount" class="field-input" type="number" inputmode="decimal" min="1" step="0.01" disabled aria-describedby="refund-status"><button class="btn-primary full refund-go" id="refund-go" type="button" hidden>Вернуть на карту</button><p id="refund-status" class="hint" role="status">Пока недоступно.</p></details>
         <div class="wallet-history-heading"><h4 class="history-heading">Последние операции</h4><a class="history-link" href="#operations">История</a></div>
         <div id="wallet-history"></div>
       </section>
@@ -573,6 +572,9 @@
       <section class="card">
         <h3 class="card-title">Данные</h3>
         <p class="hint" id="data-scope">JSON содержит локальную копию обещаний, истории, оформления и настроек. Баланс депозита, медиафайлы и пароли в неё не входят.</p>
+        <a class="row-btn" href="delete-account.html">Удалить аккаунт и данные</a>
+        <a class="row-btn" href="support.html">Поддержка</a>
+        <a class="row-btn" href="safety.html">Пожаловаться или заблокировать пользователя</a>
         <button class="row-btn" id="btn-export">
           <svg class="ic"><use href="#i-download"/></svg><span>Экспорт данных (JSON)</span>
         </button>
@@ -711,6 +713,10 @@
           <button class="seg-btn" data-rec="charity"><svg class="ic ic-s"><use href="#i-heart"/></svg>Благотворительность</button>
           <button class="seg-btn active" data-rec="creators"><svg class="ic ic-s"><use href="#i-tool"/></svg>Создателям</button>
         </div>
+        <div class="money-terms" id="money-terms" hidden>
+          <p class="hint" id="money-terms-state"></p>
+          <label class="auth-consent" id="money-terms-row"><input type="checkbox" id="f-money-accept" /><span id="money-terms-text"></span></label>
+        </div>
       </div>
 
       <div class="stake-lock" id="stake-lock" hidden>
@@ -719,8 +725,8 @@
             min="15" step="15" value="60" aria-label="На сколько блокировать" disabled />
           <span class="suffix" id="f-lock-suffix">минут за пропуск</span>
         </div>
-        <input class="field-input" id="f-apps" type="text" placeholder="Приложения" aria-label="Приложения старого тестового режима" disabled />
-        <p class="hint">Это настройки старого тестового режима. Денежный штраф можно выбрать отдельно — автоматически он не включается.</p>
+        <input class="field-input" id="f-apps" type="text" placeholder="Приложения" aria-label="Приложения для ограничения" disabled />
+        <p class="hint">Ограничение приложений пока не действует: настройки сохранены, но ничего не блокируют. Денежный штраф можно выбрать отдельно.</p>
       </div>
 
       <p class="form-summary" id="habit-summary"></p>
@@ -764,8 +770,8 @@
       <div class="sheet-handle"></div>
       <h2 class="sheet-title" id="topup-title">Пополнить депозит</h2>
       <p id="topup-mode" class="sim-note"></p>
-      <p class="hint" id="topup-help">Штрафы списываются с депозита — карта не привязывается,
-        деньги сами не уходят. Остаток всегда виден.</p>
+      <p class="hint" id="topup-help">Депозит — обеспечительный платёж: неустойка за невыполненное обещание засчитывается из него. Карта не привязывается, свободный остаток можно вернуть.</p>
+      <p class="hint"><a href="terms.html#refunds" target="_blank" rel="noopener">Условия пополнения и возврата</a></p>
 
       <div class="topup-amounts" id="topup-amounts">
         <button class="topup-chip" data-sum="10000">100 ₽</button>
@@ -776,8 +782,8 @@
 
       <label class="field-label" for="topup-custom">Другая сумма, ₽</label>
       <input class="field-input" id="topup-custom" name="topup-amount" type="number" inputmode="decimal"
-        min="50" max="50000" step="0.01" placeholder="Например, 300…" autocomplete="off" aria-describedby="topup-error" />
-      <p class="hint">От 50 до 50 000 ₽ за одно пополнение.</p>
+        min="1" max="10000" step="0.01" placeholder="Например, 300…" autocomplete="off" aria-describedby="topup-error" />
+      <p class="hint">От 1 до 10 000 ₽ за одно пополнение. Депозит — не больше 100 000 ₽.</p>
       <p class="auth-error" id="topup-error" role="alert" hidden></p>
 
       <div class="sheet-actions">
@@ -1065,8 +1071,11 @@
       <button class="icon-btn proof-close" id="proof-close" aria-label="Закрыть съёмку"><svg class="ic"><use href="#i-x"/></svg></button>
       <h2 class="proof-title" id="proof-title">Поделиться моментом</h2>
       <p class="proof-habit" id="proof-habit-name"></p>
-      <p class="proof-sub">Фото или видео до 15 секунд. Камера включится по нажатию. Для сохранения шага отправь пруф или используй пропуск.</p>
+      <p class="proof-sub">Фото до 5 МБ или видео до 15 секунд и 10 МБ. Камера включится по нажатию. Для сохранения шага отправь пруф или используй пропуск.</p>
       <button class="btn-primary" id="proof-start">Включить камеру</button>
+      <button class="btn-secondary" id="proof-gallery" type="button">Выбрать из галереи</button>
+      <input id="proof-file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" aria-label="Фото или видео из галереи" hidden />
+      <p class="proof-sub" id="proof-source" role="status" hidden></p>
 
       <div class="proof-stage">
         <video class="proof-media proof-cam" id="proof-cam" autoplay playsinline muted></video>
@@ -1326,10 +1335,11 @@
         Аккаунт хранит обещания на сервере и синхронизирует устройства.
       </p>
       <p id="auth-tabs" class="auth-switch"><span id="auth-switch-label">Уже есть аккаунт?</span> <a id="auth-switch-link" href="#login">Войти</a></p>
-      <p class="auth-legal">
-        Продолжая регистрацию, вы принимаете
-        <a href="privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.
-      </p>
+      <fieldset class="auth-legal auth-consents" id="auth-consents">
+        <legend class="sr-only">Согласия для регистрации</legend>
+        <label class="auth-consent"><input type="checkbox" id="rg-accept-terms" /><span>Мне исполнилось 16 лет. Принимаю <a href="terms.html" target="_blank" rel="noopener">пользовательское соглашение</a> и <a href="terms.html#content" target="_blank" rel="noopener">правила контента</a></span></label>
+        <label class="auth-consent"><input type="checkbox" id="rg-accept-pd" /><span>Даю <a href="consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a> по <a href="privacy.html" target="_blank" rel="noopener">политике</a></span></label>
+      </fieldset>
       </div>
     </div>
   </div>
@@ -1381,7 +1391,12 @@
   <div class="sheet-overlay" id="capability-overlay" hidden>
     <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="capability-title">
       <h2 id="capability-title" class="sheet-title">Блокировка приложений</h2>
-      <p class="hint">Не подключена. Ни один шаг ниже не запрашивает доступ и не ограничивает телефон. Это описание будущего нативного сценария для Android и iOS.</p>
+      <div id="blocking-native-controls" hidden>
+        <p class="hint">Нативная проверка: выбери приложения, предоставь разрешение и проверь временное ограничение. Автоматическая связь с обещаниями пока выключена.</p>
+        <button type="button" class="btn-primary full" id="blocking-native-open">Настроить на этом устройстве</button>
+        <p id="blocking-native-status" role="status" aria-live="polite"></p>
+      </div>
+      <p class="hint">В браузере ограничивать другие приложения нельзя. Ниже — макеты состояний; они не запрашивают разрешения. В совместимой нативной сборке выше появляется отдельная кнопка настройки устройства.</p>
       <fieldset class="capability-picker"><legend>Макеты состояний</legend>
         <button type="button" data-capability="choose" aria-pressed="true">Выбор</button>
         <button type="button" data-capability="permission" aria-pressed="false">Разрешение</button>
@@ -1419,6 +1434,7 @@
   <script src="path-motion.js"></script>
   <script src="path-faces.js"></script>
   <script src="path-archive.js"></script>
+  <script src="path-performance.js"></script>
   <script src="script.js"></script>
   <script type="module" src="path-welcome.js"></script>
   <script type="module" src="path-intro.js"></script>

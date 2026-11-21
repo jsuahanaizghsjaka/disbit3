@@ -1,0 +1,38 @@
+[
+  {
+    "output": [
+      "Starting: Intent { cmp=io.disbit.app/.MainActivity }",
+      "Status: ok",
+      "LaunchState: COLD",
+      "Activity: io.disbit.app/.MainActivity",
+      "TotalTime: 1066",
+      "WaitTime: 1077",
+      "Complete"
+    ],
+    "run": 1
+  },
+  {
+    "output": [
+      "Starting: Intent { cmp=io.disbit.app/.MainActivity }",
+      "Status: ok",
+      "LaunchState: COLD",
+      "Activity: io.disbit.app/.MainActivity",
+      "TotalTime: 1013",
+      "WaitTime: 1018",
+      "Complete"
+    ],
+    "run": 2
+  },
+  {
+    "output": [
+      "Starting: Intent { cmp=io.disbit.app/.MainActivity }",
+      "Status: ok",
+      "LaunchState: COLD",
+      "Activity: io.disbit.app/.MainActivity",
+      "TotalTime: 967",
+      "WaitTime: 970",
+      "Complete"
+    ],
+    "run": 3
+  }
+]

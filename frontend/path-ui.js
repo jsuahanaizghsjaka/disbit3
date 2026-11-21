@@ -172,8 +172,7 @@ function syncPathNavigation(name) {
     if (walker.nextElementSibling !== anchor) anchor.before(walker);
   }
   renderWalker();
-  const scene = walker.querySelector('.w-scene');
-  if (scene) {
+  for (const scene of walker.querySelectorAll(':scope > :not([hidden]) .w-scene')) {
     scene.setAttribute('viewBox', name === 'marathon' ? '0 -48 320 180' : '0 0 320 132');
     const sky = scene.querySelector(':scope > rect');
     sky?.setAttribute('y', '-48'); sky?.setAttribute('height', '180');

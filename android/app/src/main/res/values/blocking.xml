@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="disbit_blocking_name">Disbit: ограничения приложений</string>
+    <string name="disbit_blocking_disclosure">Disbit узнаёт имя открытого приложения и показывает ограничение только для выбранных вами приложений. Содержимое экрана, сообщения и ввод не читаются. Данные остаются на устройстве. Вы можете отключить службу в настройках Android.</string>
+</resources>
