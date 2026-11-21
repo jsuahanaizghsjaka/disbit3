@@ -38,6 +38,16 @@ async page => {
   await page.waitForFunction(() => !document.getElementById('join-overlay').hidden, null, { timeout: 8000 });
   result.joinSheet = (await page.textContent('#join-who')).includes('beta_tester');
 
+  // 2b) accepting links both promises; a stale owner save must not unlink them
+  const accepted = await api(2, 'POST', '/invites/' + invite.code + '/accept');
+  const ownerHabit = () => api(1, 'GET', '/habits').then(list => list.find(h => h.id === 'beta-check'));
+  result.linked = accepted.ok === true && (await ownerHabit()).buddy === 'beta_friend';
+  const stale = { ...(await ownerHabit()), buddy: '', pinned: true };
+  await api(1, 'PUT', '/habits/beta-check', stale);
+  result.staleSaveKeepsBuddy = (await ownerHabit()).buddy === 'beta_friend';
+  await api(1, 'PUT', '/habits/beta-check', { ...stale, buddyChange: true });
+  result.explicitUnlink = (await ownerHabit()).buddy === '';
+
   // 3) personal link with the inviter's token: friendship without a request
   const owner = await api(1, 'GET', '/friends');
   if (!owner.inviteToken) throw Error('no invite token');
@@ -53,6 +63,12 @@ async page => {
   await page.waitForTimeout(800);
   result.tokenFriends = (await api(1, 'GET', '/friends')).friends.some(f => f.login === 'skip_buyer');
   result.linkFormat = await page.evaluate(() => { return inviteLink().startsWith('https://disbit.ru/invite?add=skip_buyer&t='); });
+
+  // 3b) link preview for messengers: personal title, escaped, image
+  const preview = await page.evaluate(async () => (await fetch('/invite?add=beta_tester&t=x')).text());
+  result.previewTitle = preview.includes('<meta property="og:title" content="@beta_tester зовёт тебя в Disbit">') && preview.includes('/og.png');
+  const hostile = await page.evaluate(async () => (await fetch('/invite?add=%22%3E%3Cscript%3E')).text());
+  result.previewEscaped = !hostile.includes('"><script>');
 
   // 4) App Links file
   const links = await page.evaluate(async () => (await fetch('/.well-known/assetlinks.json')).json());

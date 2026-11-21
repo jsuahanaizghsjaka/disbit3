@@ -27,6 +27,7 @@
     "@capacitor/ios": "8.5.3",
     "@capacitor/keyboard": "^8.0.5",
     "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/share": "^8.0.3",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "animejs": "^4.5.0"

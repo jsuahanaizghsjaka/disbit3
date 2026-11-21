@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0B1324" />
   <title>disbit — обещания себе</title>
+  <meta name="description" content="Обещания с ценой пропуска, которую ты назначаешь сам. Каждый день видно, кто уже сделал свою часть.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Disbit">
+  <meta property="og:title" content="Disbit — сказал, сделал">
+  <meta property="og:description" content="Обещания с ценой пропуска, которую ты назначаешь сам. Вместе с другом — надёжнее.">
+  <meta property="og:url" content="https://disbit.ru/">
+  <meta property="og:image" content="https://disbit.ru/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
@@ -870,6 +880,9 @@
       <div class="sheet-handle"></div>
 
       <div class="hstat-head">
+        <button class="icon-btn hstat-back" data-close-sheet="hstat-overlay" aria-label="Назад">
+          <svg class="ic" aria-hidden="true"><use href="#i-chev-l"/></svg>
+        </button>
         <div class="hstat-menu-wrap">
           <button class="icon-btn" id="hstat-menu-btn" aria-label="Меню обещания"
             aria-haspopup="true" aria-expanded="false">
@@ -880,9 +893,6 @@
           <div class="hstat-menu" id="hstat-menu" hidden role="menu">
             <button class="hstat-mi" id="hstat-edit" role="menuitem">
               <svg class="ic ic-s"><use href="#i-pencil"/></svg><span>Редактировать</span>
-        <button class="icon-btn hstat-back" data-close-sheet="hstat-overlay" aria-label="Назад">
-          <svg class="ic" aria-hidden="true"><use href="#i-chev-l"/></svg>
-        </button>
             </button>
             <button class="hstat-mi" id="hstat-minimum" role="menuitem">
               <svg class="ic ic-s"><use href="#i-check"/></svg><span>Отметить минимум</span>

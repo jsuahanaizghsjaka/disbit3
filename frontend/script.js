@@ -5465,6 +5465,23 @@ function nativePlugin(name) {
   return isNativeApp ? (window.Capacitor?.Plugins?.[name] || null) : null;
 }
 
+/* Приглашение: системное меню «Поделиться». В приложении — плагин Share
+   (в Android WebView нет navigator.share), в браузере — Web Share API,
+   иначе копируем текст вместе со ссылкой, чтобы сообщение не было голой ссылкой. */
+async function shareInvite(data) {
+  const Share = nativePlugin('Share');
+  try {
+    if (Share) { await Share.share({ title: data.title, text: data.text, url: data.url, dialogTitle: 'Позвать друга' }); return; }
+    if (navigator.share) { await navigator.share(data); return; }
+  } catch (error) {
+    if (error?.name === 'AbortError' || /cancel/i.test(String(error?.message || error))) return;
+  }
+  const message = `${data.text}
+${data.url}`;
+  try { await navigator.clipboard.writeText(message); toast('Текст приглашения скопирован — отправь его другу'); }
+  catch { prompt('Скопируй приглашение:', message); }
+}
+
 /* Статус-бар красим в фон текущей темы. Цвет берём из вычисленного --bg, а не
    из таблицы в коде: тем восемь, и любая новая подхватится сама. */
 function isLightBg(hex) {
@@ -5528,9 +5545,30 @@ function onBackButton() {
    по старой дате: TODAY вычисляется один раз при загрузке, и на нём висят
    отметки, автоитог и штрафы. Латать по кусочкам ненадёжно — перезагружаем
    страницу, и день пересчитывается с нуля вместе с settlePastDays(). */
+/* Друг мог принять наше приглашение, пока приложение было свёрнуто: сервер
+   уже связал обещания, а локальная копия об этом не знает. Подтягиваем только
+   поле buddy — остальное локальное состояние не трогаем. */
+let buddySyncAt = 0;
+async function syncBuddiesFromServer() {
+  if (!API || !authToken || Date.now() - buddySyncAt < 20000) return;
+  buddySyncAt = Date.now();
+  const owner = authToken;
+  const remote = await apiCall('GET', '/habits?includeArchived=1');
+  if (owner !== authToken || !Array.isArray(remote)) return;
+  let changed = false;
+  for (const r of remote) {
+    const h = habits.find(x => x.id === r.id);
+    if (h && (h.buddy || '') !== (r.buddy || '')) { h.buddy = r.buddy || ''; changed = true; }
+  }
+  if (!changed) return;
+  save(); render();
+  if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
+  loadFriends(true);
+}
 function onAppResume() {
   refreshClientTimeZone();
   if (dateKey() !== TODAY) { location.reload(); return; }
+  syncBuddiesFromServer();
   checkNotifPermission();
   scheduleNotifSync();          // расписание тоже могло протухнуть
   // вернулись со страницы оплаты ЮKassa (она открывается в браузере) — спросим сервер
@@ -5874,10 +5912,9 @@ function init() {
   });
   document.getElementById('invite-share').addEventListener('click', async () => {
     if (!inviteUrl) { toast('Код ещё готовится'); return; }
-    const data = { title: 'disbit', text: 'Погнали держать это обещание вместе', url: inviteUrl };
-    if (navigator.share) { try { await navigator.share(data); return; } catch {} }
-    try { await navigator.clipboard.writeText(inviteUrl); toast('Ссылка скопирована 🔗'); }
-    catch { prompt('Скопируй ссылку:', inviteUrl); }
+    const name = document.getElementById('invite-habit').textContent;
+    const data = { title: 'Disbit', text: `Предлагаю делать «${name}» вместе. Каждый день будет видно, кто уже сделал свою часть — так проще не съезжать.`, url: inviteUrl };
+    await shareInvite(data);
   });
   [['btn-open-stats','stats'],['btn-open-calendar','calendar'],['ach-card','medals']].forEach(([id,screen])=>{
     document.getElementById(id).addEventListener('click',e=>{
@@ -6086,12 +6123,8 @@ function init() {
   });
   document.getElementById('btn-share-invite').addEventListener('click', async () => {
     if (!myLogin) { toast('Сначала войди в аккаунт'); return; }
-    const data = { title: 'disbit', text: `Погнали держать обещания вместе — мой логин ${myLogin}`, url: inviteLink() };
-    if (navigator.share) { try { await navigator.share(data); } catch {} }
-    else {
-      try { await navigator.clipboard.writeText(inviteLink()); toast('Ссылка скопирована 🔗'); }
-      catch { prompt('Скопируй ссылку:', inviteLink()); }
-    }
+    const data = { title: 'Disbit', text: 'Держу обещания в Disbit — с ценой за пропуск, чтобы не съезжать. Давай вместе: будем видеть прогресс друг друга.', url: inviteLink() };
+    await shareInvite(data);
   });
 
   document.getElementById('btn-backlog-add').addEventListener('click', () => {

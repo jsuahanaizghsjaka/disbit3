@@ -96,11 +96,46 @@ app.get('/.well-known/assetlinks.json', (_req, res) => {
     target: { namespace: 'android_app', package_name: 'io.disbit.app', sha256_cert_fingerprints: [...new Set(ANDROID_CERTS)] }
   }]);
 });
-// ссылка-приглашение: без приложения — в веб-версию с теми же параметрами
+/* Ссылка-приглашение. Мессенджеры строят превью по мета-тегам этой страницы
+   (картинка og.png и персональный текст), а человека она сразу переводит в
+   веб-версию с теми же параметрами. Если стоит приложение, Android открывает
+   ссылку в нём и эта страница не нужна. */
+const SITE = 'https://disbit.ru';
+const escapeHtml = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+function invitePreview(query) {
+  if (query.join) {
+    const inv = db.prepare(`SELECT i.payload, u.login FROM habit_invites i JOIN users u ON u.id=i.owner_id
+      WHERE i.code=? AND i.created_at>datetime('now','-7 days')`).get(query.join);
+    let name = '';
+    try { name = JSON.parse(inv?.payload || '{}').name || ''; } catch {}
+    if (inv && name) return {
+      title: `@${inv.login} зовёт делать «${name}» вместе`,
+      text: 'Одно обещание на двоих: каждый день видно, кто уже сделал свою часть. Присоединяйся — начнём с сегодняшнего дня.'
+    };
+  }
+  if (query.add && db.prepare('SELECT 1 FROM users WHERE login=?').get(String(query.add).toLowerCase())) return {
+    title: `@${String(query.add).toLowerCase()} зовёт тебя в Disbit`,
+    text: 'Ставим цели с ценой пропуска и видим прогресс друг друга. Прими приглашение — и держим слово вместе.'
+  };
+  return { title: 'Disbit — обещания с ценой пропуска', text: 'Сказал — сделал. Цена пропуска, которую ты назначаешь сам, помогает не съезжать.' };
+}
 app.get('/invite', (req, res) => {
   const q = new URLSearchParams();
   for (const k of ['add', 't', 'join']) if (typeof req.query[k] === 'string' && req.query[k].length <= 64) q.set(k, req.query[k]);
-  res.redirect(302, '/' + (q.size ? '?' + q : ''));
+  const target = '/' + (q.size ? '?' + q : '');
+  const { title, text } = invitePreview(Object.fromEntries(q));
+  const t = escapeHtml(title), d = escapeHtml(text), u = escapeHtml(target);
+  res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${t}</title><meta name="description" content="${d}">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Disbit">
+<meta property="og:title" content="${t}"><meta property="og:description" content="${d}">
+<meta property="og:url" content="${SITE}/invite${u.slice(1)}">
+<meta property="og:image" content="${SITE}/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Disbit: сказал — сделал. Вместе — надёжнее.">
+<meta name="twitter:card" content="summary_large_image">
+<meta http-equiv="refresh" content="0;url=${u}">
+</head><body><p><a href="${u}">Открыть Disbit</a></p></body></html>`);
 });
 
 // чистый URL для политики конфиденциальности (нужен сторам): /privacy
