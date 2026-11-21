@@ -9,6 +9,7 @@
    ============================================================ */
 
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { db } from '../db/db.js';
 import { blocked } from '../lib/moderation.js';
 import { requestLimit } from '../lib/request-limits.js';
@@ -25,6 +26,26 @@ db.exec(`CREATE TABLE IF NOT EXISTS friend_requests (
  recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(sender_id,recipient_id));`);
 router.post('/',requestLimit('friend-request',20,3600000,req=>req.userId));
+/* Личная ссылка-приглашение: /invite?add=<логин>&t=<токен>. Токен знает только
+   владелец и те, кому он сам переслал ссылку, поэтому переход по ней — его
+   согласие, и дружба оформляется сразу, без заявки. Один логин (без токена)
+   по-прежнему создаёт только заявку: логин виден всем. */
+db.exec(`CREATE TABLE IF NOT EXISTS friend_links (
+ user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+ token TEXT NOT NULL UNIQUE,
+ created_at TEXT NOT NULL DEFAULT (datetime('now')));`);
+function friendLinkToken(userId) {
+  const row = db.prepare('SELECT token FROM friend_links WHERE user_id=?').get(userId);
+  if (row) return row.token;
+  const token = crypto.randomBytes(9).toString('base64url');   // 12 символов
+  db.prepare('INSERT INTO friend_links(user_id,token) VALUES(?,?)').run(userId, token);
+  return token;
+}
+function validFriendLink(userId, token) {
+  const row = db.prepare('SELECT token FROM friend_links WHERE user_id=?').get(userId);
+  if (!row || typeof token !== 'string' || token.length !== row.token.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(row.token));
+}
 // Legacy rows cannot prove either party initiated the relationship.
 // Do not turn them into requests: that would let one party confirm for both.
 db.exec('DELETE FROM friendships WHERE confirmed=0');
@@ -67,6 +88,7 @@ router.get('/', (req, res) => {
   res.json({
     incoming: db.prepare('SELECT u.login FROM friend_requests f JOIN users u ON u.id=f.sender_id WHERE f.recipient_id=?').all(req.userId).filter(r=>{const u=db.prepare('SELECT id FROM users WHERE login=?').get(r.login);return !blocked(req.userId,u.id);}),
     me: me?.login || null,
+    inviteToken: friendLinkToken(req.userId),
     friends: rows.filter(r=>!blocked(req.userId,r.id)).map(r => ({ id: r.id, login: r.login, ...publicCard(r.id) }))
   });
 });
@@ -86,7 +108,8 @@ router.post('/', (req, res) => {
   ).get(req.userId, friend.id);
   if (exists) return res.status(409).json({ error: 'Вы уже друзья' });
 
-  const requested = db.prepare('SELECT 1 FROM friend_requests WHERE sender_id=? AND recipient_id=?').get(friend.id,req.userId);
+  const requested = db.prepare('SELECT 1 FROM friend_requests WHERE sender_id=? AND recipient_id=?').get(friend.id,req.userId)
+    || validFriendLink(friend.id, req.body?.token);
   if(!requested){db.prepare('INSERT OR IGNORE INTO friend_requests(sender_id,recipient_id) VALUES(?,?)').run(req.userId,friend.id);return res.status(202).json({ok:true,pending:true});}
   const add = db.prepare('INSERT OR IGNORE INTO friendships (user_id, friend_id) VALUES (?, ?)');
   add.run(req.userId, friend.id);

@@ -61,7 +61,7 @@ function setAuth(token, user) {
     clearTimeout(statePushTimer);
     stateRemoteVersion = undefined; stateSyncConflict = false;
     ++friendsRequest;
-    serverFriends = []; myLogin = null; friendsLoading = false; friendsError = '';
+    serverFriends = []; myLogin = null; myInviteToken = ''; friendsLoading = false; friendsError = '';
     friendsCacheOwner = null; friendsLoadedAt = 0;
   }
   authToken = token;
@@ -498,15 +498,9 @@ async function bootstrapData() {
   renderFriends();
   renderFriendsBoard();
   renderWallet();
-  handleInviteLink();        // пришёл по ссылке-приглашению — добавим друга
-
-  // приглашение «делать вместе»: из адреса или отложенное (пришёл без входа)
-  const pending = localStorage.getItem(PENDING_JOIN_KEY);
-  if (pending && authToken) {
-    localStorage.removeItem(PENDING_JOIN_KEY);
-    history.replaceState(null, '', location.pathname + '?join=' + pending + location.hash);
-  }
-  handleJoinLink();
+  // приглашения из ссылки/QR, запомненные при загрузке (captureInviteParams)
+  handleInviteLink();        // ?add=<логин> — добавим друга
+  handleJoinLink();          // ?join=<код> — «делать вместе»
 }
 
 /* ---------- ДАТЫ ---------- */
@@ -2940,6 +2934,7 @@ function saveReward() {
 let serverFriends = [];
 let incomingFriends = [];
 let myLogin = null;
+let myInviteToken = '';   // секрет личной ссылки: по ней дружба без заявки
 let friendsLoading = false, friendsError = '', friendsRequest = 0;
 let friendsCacheOwner = null, friendsLoadedAt = 0;
 
@@ -2947,7 +2942,7 @@ async function loadFriends(force = false) {
   if (!force && authToken && friendsCacheOwner === authToken && !friendsError &&
       Date.now() - friendsLoadedAt < 15000) return;
   const request = ++friendsRequest;
-  if (!API || !authToken) { serverFriends = []; myLogin = null; friendsLoading = false; friendsError = ''; friendsCacheOwner = null; friendsLoadedAt = 0; return; }
+  if (!API || !authToken) { serverFriends = []; myLogin = null; myInviteToken = ''; friendsLoading = false; friendsError = ''; friendsCacheOwner = null; friendsLoadedAt = 0; return; }
   const token = authToken;
   if (force) readCoordinator.cancelResource(API + '/friends');
   friendsLoading = true; friendsError = ''; renderFriends();
@@ -2955,12 +2950,16 @@ async function loadFriends(force = false) {
   if (request !== friendsRequest || token !== authToken) return;
   friendsLoading = false;
   if (r.error || !Array.isArray(r.friends)) friendsError = r.error || 'Не удалось загрузить друзей';
-  else { serverFriends = r.friends; incomingFriends = r.incoming || []; myLogin = r.me || null; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
+  else { serverFriends = r.friends; incomingFriends = r.incoming || []; myLogin = r.me || null; myInviteToken = r.inviteToken || ''; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
   renderFriends(); renderFriendsBoard();
 }
 
+// /invite открывает приложение (Android App Links), без него — веб-версию
 function inviteLink() {
-  return myLogin ? `${BACKEND}/?add=${encodeURIComponent(myLogin)}` : BACKEND;
+  if (!myLogin) return BACKEND;
+  const q = new URLSearchParams({ add: myLogin });
+  if (myInviteToken) q.set('t', myInviteToken);
+  return `${BACKEND}/invite?${q}`;
 }
 
 function renderFriends() {
@@ -3096,7 +3095,7 @@ async function openInviteSheet(habitId) {
     box.innerHTML = `<span class="qr-wait">${escapeHtml(r?.error || 'Не удалось получить код')}</span>`;
     return;
   }
-  inviteUrl = `${BACKEND}/?join=${encodeURIComponent(r.code)}`;
+  inviteUrl = `${BACKEND}/invite?join=${encodeURIComponent(r.code)}`;
   drawInviteQr(box, inviteUrl);
 }
 
@@ -3121,18 +3120,12 @@ function drawInviteQr(box, url) {
 let joinCode = null;
 
 async function handleJoinLink() {
-  const code = new URLSearchParams(location.search).get('join');
+  if (!API || !authToken) return;
+  const code = takePendingInvite('join');
   if (!code) return;
-  history.replaceState(null, '', location.pathname + location.hash);
-  if (!API) return;
 
   const info = await apiCall('GET', '/invites/' + encodeURIComponent(code));
   if (!info?.code) { toast('Приглашение не найдено или устарело'); return; }
-  if (!authToken) {
-    localStorage.setItem(PENDING_JOIN_KEY, code);   // примем сразу после входа
-    toast(`@${info.owner} зовёт делать «${info.name}» вместе — войди в аккаунт`);
-    return;
-  }
   joinCode = code;
   document.getElementById('join-icon').innerHTML = info.icon ? iconOf(info.icon) : '🤝';
   document.getElementById('join-who').textContent = `@${info.owner} — «${info.name}»`;
@@ -3173,11 +3166,12 @@ function openBuddySheet(habitId) {
     hint.textContent = 'Совместные обещания работают с аккаунтом — войди сначала.';
     box.innerHTML = '';
   } else if (!serverFriends.length) {
-    hint.textContent = 'Сначала добавь друга на вкладке «Друзья» — по логину или ссылке.';
+    hint.textContent = 'Друзей в аккаунте пока нет. Проще всего — «Позвать по QR / ссылке»: у друга само появится это обещание. ' +
+      'Или добавь его на вкладке «Друзья» — после того как заявку примут, друг появится здесь.';
     box.innerHTML = '';
   } else {
     hint.textContent = 'Выбери друга — вы увидите, кто уже выполнил обещание сегодня. ' +
-      'Важно: у друга обещание должна называться так же.';
+      'Важно: у друга обещание должно называться так же.';
     box.innerHTML = serverFriends.map(f => `
       <button class="row-btn buddy-pick${h.buddy === f.login ? ' on' : ''}" data-buddy="${escapeHtml(f.login)}">
         <span class="friend-ava" style="background:${safeColor(f.color)}">${
@@ -3203,7 +3197,7 @@ function setHabitBuddy(h, login) {
 }
 
 /* добавление друга по логину — через сервер, дружба взаимная */
-async function addFriendByLogin(login, silent = false) {
+async function addFriendByLogin(login, silent = false, token = '') {
   const button = document.getElementById('fr-save');
   if (button.disabled) return;
   const err = document.getElementById('fr-error');
@@ -3222,7 +3216,7 @@ async function addFriendByLogin(login, silent = false) {
 
   button.disabled = true;
   const owner = authToken;
-  const r = await apiCallStrict('POST', '/friends', { login });
+  const r = await apiCallStrict('POST', '/friends', token ? { login, token } : { login });
   button.disabled = false;
   if (owner !== authToken) return;
   if (r?.error) return show(r.error);
@@ -3234,13 +3228,59 @@ async function addFriendByLogin(login, silent = false) {
   toast(r.pending ? 'Заявка отправлена. Данные друга появятся после принятия.' : 'Теперь вы друзья 👥');
 }
 
+// Приглашение из адреса (?add=<логин>, ?join=<код>) запоминаем сразу при
+// загрузке, ещё до входа: гость сначала регистрируется или входит (часто через
+// Google-редирект, который адрес теряет), а bootstrapData для гостя не идёт.
+// Раньше параметры читались только в bootstrapData — у гостя ссылка молча терялась.
+const PENDING_ADD_KEY = 'disbit_pending_add_v1';
+const pendingInvite = { add: null, join: null };   // запас, если хранилище недоступно
+function pendingInviteKey(kind) { return kind === 'add' ? PENDING_ADD_KEY : PENDING_JOIN_KEY; }
+function takePendingInvite(kind) {
+  let value = pendingInvite[kind];
+  try { value = localStorage.getItem(pendingInviteKey(kind)) || value; localStorage.removeItem(pendingInviteKey(kind)); } catch {}
+  pendingInvite[kind] = null;
+  return value;
+}
+// params — из адреса страницы или из ссылки, которой открыли приложение
+function captureInviteParams(params = new URLSearchParams(location.search), fromAddress = true) {
+  const add = params.get('add')?.trim(), join = params.get('join')?.trim();
+  if (!add && !join) return false;
+  // для add храним и токен ссылки: с ним дружба оформляется без заявки
+  const values = { add: add && JSON.stringify({ login: add, token: params.get('t')?.trim() || '' }), join };
+  for (const kind of ['add', 'join']) {
+    if (!values[kind]) continue;
+    pendingInvite[kind] = values[kind];
+    try { localStorage.setItem(pendingInviteKey(kind), values[kind]); } catch {}
+  }
+  if (fromAddress) {
+    params.delete('add'); params.delete('join'); params.delete('t');
+    const rest = params.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);   // чистим адрес
+  }
+  if (!authToken) toast(join
+    ? 'Тебя зовут делать обещание вместе — войди или зарегистрируйся, и приглашение откроется'
+    : `@${add} зовёт в друзья — войди или зарегистрируйся, и вы станете друзьями`);
+  return true;
+}
+// приложение открыли ссылкой https://disbit.ru/invite?… (App Links)
+async function openInviteUrl(url) {
+  let address;
+  try { address = new URL(url); } catch { return; }
+  if (address.hostname !== 'disbit.ru' || address.pathname !== '/invite') return;
+  if (!captureInviteParams(address.searchParams, false) || !authToken) return;
+  await handleInviteLink();
+  await handleJoinLink();
+}
+
 // перешёл по ссылке-приглашению (?add=login) — добавляем сразу после входа
 async function handleInviteLink() {
-  const add = new URLSearchParams(location.search).get('add');
-  if (!add) return;
-  history.replaceState(null, '', location.pathname + location.hash);   // чистим адрес
-  if (!authToken) { toast('Войди в аккаунт — и друг добавится'); return; }
-  await addFriendByLogin(add, true);
+  if (!API || !authToken) return;
+  const raw = takePendingInvite('add');
+  if (!raw) return;
+  let add = { login: raw, token: '' };              // старый формат — просто логин
+  try { const v = JSON.parse(raw); if (v && typeof v.login === 'string') add = v; } catch {}
+  if (!add.login) return;
+  await addFriendByLogin(add.login, true, typeof add.token === 'string' ? add.token : '');
   switchScreen('friends');
 }
 
@@ -5558,6 +5598,9 @@ function wireNativeShell() {
   if (App) {
     App.addListener('backButton', onBackButton);
     App.addListener('resume', onAppResume);
+    // ссылки-приглашения: приложение уже запущено / запущено самой ссылкой
+    App.addListener('appUrlOpen', e => { openInviteUrl(e?.url); });
+    App.getLaunchUrl?.()?.then?.(r => { if (r?.url) openInviteUrl(r.url); })?.catch?.(() => {});
   }
   // Сплэш держится до этого момента (launchAutoHide выключен в конфиге):
   // прячем его, только когда экран уже отрисован, иначе видна белая вспышка.
@@ -6098,6 +6141,7 @@ function init() {
   };
   // «Начало» — интро-воронка при первом входе. Экран плюсов внутри заменяет
   // старый 3-экранный онбординг, поэтому дальше сразу гейт/итог дня.
+  captureInviteParams();   // ?add= / ?join= — запомнить до входа
   if (new URLSearchParams(location.search).get('oauth') === 'google' && !isNativeApp && sameOrigin) finishGoogleSignIn();
   else if (!authToken && !localStorage.getItem(INTRO_KEY)
     && !sessionStorage.getItem('disbit-password-reset-complete')) openIntro(afterOnboard);

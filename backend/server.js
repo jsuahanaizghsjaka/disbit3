@@ -81,6 +81,28 @@ app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Неизвестный эндпоинт: ' + req.method + ' /api' + req.path });
 });
 
+/* Android App Links: приложение (io.disbit.app) перехватывает только ссылки
+   /invite — оплата, Google-вход и остальные страницы сайта открываются в браузере.
+   Отпечаток — сертификат подписи релизных APK (ops/VERSIONS.md). Если сборки
+   переподписывает Google Play, его отпечаток добавляется через
+   ANDROID_CERT_SHA256 (через запятую). */
+const ANDROID_CERTS = ['7e95ad23adccf196a54aa73ab1a192f97a1f54c699d6932802945e544befd701',
+  ...String(process.env.ANDROID_CERT_SHA256 || '').split(',')]
+  .map(v => v.replace(/[^0-9a-f]/gi, '').toUpperCase()).filter(v => v.length === 64)
+  .map(v => v.match(/../g).join(':'));
+app.get('/.well-known/assetlinks.json', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600').json([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: { namespace: 'android_app', package_name: 'io.disbit.app', sha256_cert_fingerprints: [...new Set(ANDROID_CERTS)] }
+  }]);
+});
+// ссылка-приглашение: без приложения — в веб-версию с теми же параметрами
+app.get('/invite', (req, res) => {
+  const q = new URLSearchParams();
+  for (const k of ['add', 't', 'join']) if (typeof req.query[k] === 'string' && req.query[k].length <= 64) q.set(k, req.query[k]);
+  res.redirect(302, '/' + (q.size ? '?' + q : ''));
+});
+
 // чистый URL для политики конфиденциальности (нужен сторам): /privacy
 app.get('/support', (_req, res) => res.sendFile(path.join(__dirname, '..', 'frontend', 'support.html')));
 app.get('/safety', (_req, res) => res.sendFile(path.join(__dirname, '..', 'frontend', 'safety.html')));

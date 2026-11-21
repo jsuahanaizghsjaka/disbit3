@@ -25,6 +25,7 @@ export function eraseAccount(db,user,{preserveFinancial=false}={}) {
  try {
   for(const row of db.prepare('SELECT file FROM proofs WHERE user_id=?').all(id)) db.prepare('INSERT OR IGNORE INTO account_media_cleanup VALUES (?)').run(row.file);
   db.prepare('DELETE FROM friendships WHERE user_id=? OR friend_id=?').run(id,id);
+  if(db.prepare("SELECT 1 FROM sqlite_master WHERE name='friend_links'").get())db.prepare('DELETE FROM friend_links WHERE user_id=?').run(id);
   if(db.prepare("SELECT 1 FROM sqlite_master WHERE name='content_reports'").get())db.prepare('DELETE FROM content_reports WHERE reporter_id=? OR target_id=?').run(id,id);
   if(db.prepare("SELECT 1 FROM sqlite_master WHERE name='user_blocks'").get())db.prepare('DELETE FROM user_blocks WHERE user_id=? OR target_id=?').run(id,id);
   db.prepare('UPDATE habits SET buddy=? WHERE buddy=?').run('',user.login);
