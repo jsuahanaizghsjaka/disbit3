@@ -1797,6 +1797,7 @@ function openHabitStats(id) {
   closeHabitMenu();
   renderHabitStats();
   openSheet('hstat-overlay');
+  syncBuddiesFromServer();   // друг мог уже принять приглашение
 }
 
 // сколько раз выполнена за последние N дней и сколько из них было обязательных
@@ -3188,7 +3189,7 @@ function openBuddySheet(habitId) {
 function setHabitBuddy(h, login) {
   h.buddy = login || '';
   save();
-  apiCall('PUT', `/habits/${h.id}`, h);
+  apiCall('PUT', `/habits/${h.id}`, { ...h, buddyChange: true });
   touchStateTs(); scheduleStatePush();      // друг должен увидеть наш статус
   closeSheet('buddy-overlay');
   render();
@@ -5544,9 +5545,30 @@ function reloadIfDayChanged() {
   if (dateKey() === TODAY) return false;
   if (document.hidden || document.querySelector('.sheet-overlay:not([hidden]), dialog[open]')) return false;
   location.reload();
+/* Друг мог принять наше приглашение, пока приложение было свёрнуто: сервер
+   уже связал обещания, а локальная копия об этом не знает. Подтягиваем только
+   поле buddy — остальное локальное состояние не трогаем. */
+let buddySyncAt = 0;
+async function syncBuddiesFromServer() {
+  if (!API || !authToken || Date.now() - buddySyncAt < 20000) return;
+  buddySyncAt = Date.now();
+  const owner = authToken;
+  const remote = await apiCall('GET', '/habits?includeArchived=1');
+  if (owner !== authToken || !Array.isArray(remote)) return;
+  let changed = false;
+  for (const r of remote) {
+    const h = habits.find(x => x.id === r.id);
+    if (h && (h.buddy || '') !== (r.buddy || '')) { h.buddy = r.buddy || ''; changed = true; }
+  }
+  if (!changed) return;
+  save(); render();
+  if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
+  loadFriends(true);
+}
   return true;
 }
 function msToNextDay() {
+  syncBuddiesFromServer();
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5) - now;
 }
@@ -5556,7 +5578,7 @@ function scheduleDayCheck(delay = msToNextDay()) {
     else if (!reloadIfDayChanged()) scheduleDayCheck(30000);
   }, Math.min(delay, 2147483647));
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadIfDayChanged(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !reloadIfDayChanged()) syncBuddiesFromServer(); });
 scheduleDayCheck();
 
 /* Клавиатура.

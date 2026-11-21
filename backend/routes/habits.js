@@ -147,6 +147,10 @@ router.put('/:id', (req, res) => {
   }
 
   const p = habitToParams({ ...req.body, id: req.params.id });
+  // Связку «делать вместе» ставит сервер при принятии приглашения, а клиент
+  // владельца узнаёт о ней только после обновления. Поэтому обычное сохранение
+  // обещания связку не трогает — менять её можно лишь явно (buddyChange).
+  if (req.body?.buddyChange !== true) p.buddy = exists.buddy || '';
   if (db.prepare('SELECT 1 FROM money_terms WHERE user_id=? AND habit_id=? LIMIT 1').get(uid(req),req.params.id)) {
     const fixed=['schedule','week_target','goal_type','goal_target','stake_mode','stake_amount','stake_recipient','minimum_action','created_day'];
     if (fixed.some(key=>String(p[key])!==String(exists[key]))) {

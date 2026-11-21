@@ -13,6 +13,7 @@ import { db, habitToParams, rowToHabit } from '../db/db.js';
 import { blocked } from '../lib/moderation.js';
 import {requestLimit} from '../lib/request-limits.js';
 import {transaction} from '../lib/promise-skips.js';
+import { accountDay } from '../proof-policy.js';
 
 const router = Router();
 router.use(requestLimit('invite-ip',60,60000));
@@ -105,7 +106,7 @@ router.post('/:code/accept', (req, res) => transaction(db, () => {
       stake: p.stake_mode === 'lock'
         ? { mode: 'lock', apps: p.stake_apps ? JSON.parse(p.stake_apps) : [], minutes: p.stake_minutes }
         : { mode: 'money', amount: p.stake_amount, recipient: p.stake_recipient },
-      createdAt: new Date().toISOString().slice(0, 10)
+      createdAt: accountDay(req)   // «сегодня» в часовом поясе аккаунта, не UTC
     });
     db.prepare(`
       INSERT INTO habits
