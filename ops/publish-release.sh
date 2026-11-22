@@ -19,7 +19,8 @@ backup=$root/backups/pre-release-$sha-$stamp
 envfile=$root/security-audit-release.env
 dropin=/etc/systemd/system/$service.service.d/zzzzzzzzzz-security-audit.conf
 test -f /tmp/disbit-$sha.tar
-test "$release" != "$previous"
+# the same commit again: nothing to switch, and not a failure
+if [ "$release" = "$previous" ]; then echo "$sha is already published on $mode"; exit 0; fi
 mkdir -p "$release" "$root/backups" "$(dirname "$dropin")"
 tar -xf /tmp/disbit-$sha.tar -C "$release"
 if [ ! -d "$release/backend/node_modules" ]; then cp -a "$previous/backend/node_modules" "$release/backend/node_modules"; fi
