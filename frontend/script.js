@@ -4307,6 +4307,13 @@ function openSheet(id) {
   el.inert = false;
   pathSheetFocus.delete(id); pathSheetFocus.set(id, document.activeElement);
   el.hidden = false;
+  // Все шторки на z-index 100, и при равенстве побеждает порядок в разметке:
+  // приглашение и выбор друга стоят раньше карточки обещания и открывались под ней.
+  // Шторка, открытая поверх другой, встаёт выше самой верхней (до 149 — тосты выше).
+  const under = [...document.querySelectorAll('.sheet-overlay:not([hidden])')].filter(o => o !== el);
+  el.style.zIndex = under.length
+    ? String(Math.min(149, 1 + Math.max(...under.map(o => Number(getComputedStyle(o).zIndex) || 100))))
+    : '';
   if (id === 'add-overlay') { document.getElementById('habit-form-error').hidden = true; updateHabitForm(); }
   queueMicrotask(() => {
     if (!el.isConnected || el.hidden || el.inert || el.contains(document.activeElement)) return;
