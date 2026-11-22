@@ -60,7 +60,7 @@ systemctl daemon-reload
 systemctl start "$service"
 ready=0
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
- if curl -fsS "http://127.0.0.1:$port/api/ready" | grep -q "$sha"; then ready=1; break; fi
+ if curl -fsS "http://127.0.0.1:$port/api/ready" 2>/dev/null | grep -q "$sha"; then ready=1; break; fi
  sleep 2
 done
 test "$ready" = 1
@@ -70,4 +70,6 @@ for page in terms.html privacy.html consent.html review.html; do
 done
 curl -fsS "http://127.0.0.1:$port/terms.html" | grep -q '781636212757'
 trap - EXIT
-echo "Published $sha on $mode; backup verified: $backup-restored"
+# the restored copy only proves the backup works; keeping every one filled the disk
+rm -rf "$backup-restored"
+echo "Published $sha on $mode; backup verified and kept: $backup"

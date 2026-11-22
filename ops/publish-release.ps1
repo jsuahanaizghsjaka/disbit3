@@ -12,4 +12,6 @@ foreach ($mode in 'staging', 'production') {
   ssh -t -i $key $server "tar -xOf /tmp/disbit-$sha.tar ops/publish-release.sh | sudo sh -s $mode $sha"
   if ($LASTEXITCODE -ne 0) { throw "Публикация на $mode не прошла, предыдущая версия восстановлена" }
 }
+ssh -i $key $server "rm -f /tmp/disbit-$sha.tar"   # архив больше не нужен
+Remove-Item $tar -ErrorAction SilentlyContinue
 Write-Host "Опубликовано: $sha. Проверка: https://disbit.ru/terms.html"
