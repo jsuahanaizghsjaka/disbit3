@@ -2,7 +2,7 @@
 
 Одна строка на каждый выкатанный билд. Правило: перед выкаткой ставим git-тег
 на коммит и добавляем строку сюда. Данные ниже взяты из отчётов в `ops/` и
-`RELEASE-FOUNDATION-REPORT.md`; пустая ячейка значит, что значение нигде не записано.
+`RELEASE-FOUNDATION-REPORT.md`; «—» в ячейке значит, что значение нигде не записано.
 
 | Дата | Что | Версия / versionCode | Коммит | Тег | Источник |
 |---|---|---|---|---|---|
@@ -12,10 +12,21 @@
 | 2026-11-07 | Сервер production + staging | — | `2c975b7` | `server-2026-11-07` | ops/INTRO-SKIP-GOOGLE-2026-11-07.md |
 | 2026-11-16 | Сервер production + staging | — | `8fb575c` | — | SECURITY-PUBLICATION-2026-11-16.md |
 | 2026-11-16 | Android release APK, локально | 1.0.8 / 9 | `fc813a6` | `android-1.0.8-9` | ANDROID-1.0.8-BUILD-2026-11-16.md |
+| 2026-11-18 | Сервер production + staging | — | `e9bb23f` | — | ops/RELEASE-1.1.1-2026-11-18.md |
+| 2026-11-18 | Android release APK, локально | 1.1.1 / 11 | — | — | ops/RELEASE-1.1.1-2026-11-18.md (APK SHA-256 `58b0cacf…1ffd5c`) |
+| 2026-11-18 | Живые платежи ЮKassa включены (магазин 1527679) | — | `cf1e490` (скрипт) | — | ops/YOOKASSA-LIVE-2026-11-18.md |
+| 2026-11-19…21 | Сервер production + staging | — | `ae1b402` | — | CLAUDE.md (состояние на 21.11; точная дата не записана) |
+| 2026-11-22 | Сервер production + staging | — | `4ac7646` | — | `/api/ready` на production, проверено 23.11; отчёта нет |
+| 2026-11-22 | Android release APK, локально | 1.1.2 / 12 | — | — | `release-artifacts/disbit-1.1.2-release.apk`, собран 22.11 02:31; отчёта и проверки подписи в записях нет |
 
 ## Как ставить тег
 
-### Сверка production 13 ноября 2026
+- Сервер: `git tag server-ГГГГ-ММ-ДД <коммит>`
+- Android: `git tag android-<versionName>-<versionCode> <коммит>`
+- iOS: `git tag ios-<version>-<build> <коммит>`
+- После: `git push origin --tags`
+
+## Сверка production 13 ноября 2026
 
 `/srv/disbit/current` и `/api/ready` сообщают прежний идентификатор
 `777ff1012f6b98e7897edde2c5b364d5b69124ce`. Этого объекта в текущей истории Git нет.
@@ -24,8 +35,3 @@
 `server-2026-11-07` (`2c975b7d4651f53a9634900a7973ae8308e56270`): различий нет.
 Это подтверждение совпадения перечисленных файлов, а не наличия старого коммита
 в текущем репозитории. Тег не перемещался; production не переустанавливался.
-
-- Сервер: `git tag server-ГГГГ-ММ-ДД <коммит>`
-- Android: `git tag android-<versionName>-<versionCode> <коммит>`
-- iOS: `git tag ios-<version>-<build> <коммит>`
-- После: `git push origin --tags`
