@@ -859,10 +859,11 @@ async function deleteHabit(id) {
 /* ---------- ТОСТ ПОХВАЛЫ ---------- */
 let toastTimer = null;
 let toastRemovalTimer = null;
-function toast(msg) {
+function toast(msg, placement = 'top') {
   clearTimeout(toastRemovalTimer);
   const el = document.querySelector('.toast') || document.createElement('div');
   el.className = 'toast';
+  el.dataset.placement = placement;
   el.setAttribute('role', 'status');
   el.setAttribute('aria-live', 'polite');
   el.textContent = msg;
@@ -1482,7 +1483,13 @@ function showCompletion(h, progressBefore, resolve, quota) {
   const hint = document.getElementById('completion-proof-hint');
   skip.textContent = `Пропустить · осталось ${quota.remaining} из ${quota.limit}`;
   skip.disabled = quota.remaining === 0;
-  hint.textContent = quota.remaining ? 'Шаг сохранится после фото/видео или пропуска пруфа. Лимит общий для всех обещаний за месяц.' : 'Пять пропусков использованы. Для этого шага нужно фото или видео.';
+  skip.hidden = skip.disabled;
+  const share = dialog.querySelector('button[value="share"]');
+  share.classList.toggle('btn-primary', skip.disabled);
+  share.classList.toggle('btn-ghost', !skip.disabled);
+  share.autofocus = skip.disabled;
+  skip.autofocus = !skip.disabled;
+  hint.textContent = quota.remaining ? 'Шаг сохранится после фото/видео или пропуска пруфа. Лимит общий для всех обещаний за месяц.' : `Осталось 0 из ${quota.limit} пропусков. Для этого шага отправь фото или видео.`;
   let resolving = false;
   const protect = event => { if (resolving) event.preventDefault(); };
   dialog.addEventListener('cancel', protect);
@@ -2891,7 +2898,7 @@ function saveGoal() {
   closeSheet('goal-overlay');
   render();
   if (steps > 0 && !wasEditing) {
-    toast(`Марафон запущен: ${name}. Выполняй выбранные обещания 🏃`);
+    toast('Марафон создан', 'above-nav');
   }
 }
 
@@ -4439,7 +4446,7 @@ function openSheet(id) {
     if (!el.isConnected || el.hidden || el.inert || el.contains(document.activeElement)) return;
     const touch = matchMedia('(pointer: coarse)').matches && document.documentElement.dataset.input !== 'keyboard';
     const target = (touch || id === 'auth-overlay') ? (el.querySelector('.sheet-title, .sheet h2, .sheet h3') || el.querySelector('.sheet'))
-      : el.querySelector('input:not([disabled]), button:not([disabled])');
+      : (el.querySelector('.topup-chip.on') || (id === 'topup-overlay' && el.querySelector('#topup-custom')) || el.querySelector('input:not([disabled]), button:not([disabled])'));
     if (touch && target && !target.hasAttribute('tabindex')) target.tabIndex = -1;
     target?.focus({preventScroll: true});
   });

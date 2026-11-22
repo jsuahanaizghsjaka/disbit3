@@ -25,9 +25,14 @@ async page => {
 
   // Top-up: fee on top, then the payment page.
   await page.locator('#btn-topup').click();
+  assert(await page.locator('.topup-chip.on').evaluate(el=>el===document.activeElement),'focus must match selected amount');
+  await page.locator('#topup-custom').fill('1');
+  assert((await page.locator('#topup-go').textContent()).includes('1,04 ₽'),'custom total');
+  await page.locator('#topup-custom').fill('');
+  assert(await page.locator('.topup-chip.on').getAttribute('data-sum')==='30000','restore default amount');
   await page.locator('#topup-amounts [data-sum="50000"]').click();
   assert(await page.locator('#topup-fee').count()===0,'fee breakdown must not be printed in the sheet');
-  assert(!(await page.locator('#topup-overlay').textContent()).includes('К оплате'),'no fee line in the sheet');
+  assert((await page.locator('#topup-go').textContent()).includes('519 ₽'),'500 ₽ plus fee must show 519 ₽');
   assert(!(await page.locator('#topup-overlay').textContent()).match(/черновик|демо|тестов/i),'top-up sheet must not mention a draft or test mode');
   await shot('2-topup-sheet');
   await Promise.all([page.waitForURL(/yoomoney\.ru/),page.locator('#topup-go').click()]);

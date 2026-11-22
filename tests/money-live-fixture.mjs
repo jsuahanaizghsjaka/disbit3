@@ -30,12 +30,12 @@ db.prepare(`INSERT INTO habits(id,user_id,name,icon,color,schedule,stake_mode,st
 await import('../backend/server.js');
 
 // POST /pay — every open payment succeeds; POST /cancel — every open payment is canceled.
-const control = Number(process.env.PORT) + 1;
-createServer((req, res) => {
+const control = process.env.PORT === '0' ? 0 : Number(process.env.PORT) + 1;
+const controlServer = createServer((req, res) => {
   const state = JSON.parse(readFileSync(process.env.FAKE_YOOKASSA_STATE, 'utf8'));
   for (const payment of Object.values(state.payments)) if (payment.status === 'pending')
     Object.assign(payment, req.url === '/pay' ? { status: 'succeeded', paid: true } : { status: 'canceled' });
   writeFileSync(process.env.FAKE_YOOKASSA_STATE, JSON.stringify(state));
   res.end('ok');
-}).listen(control, '127.0.0.1');
+}).listen(control, '127.0.0.1', () => console.log('Control port:', controlServer.address().port));
 console.log('LIVE MONEY FIXTURE READY');

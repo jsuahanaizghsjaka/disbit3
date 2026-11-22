@@ -308,7 +308,9 @@ function updateTopupFee(){
     chip.classList.toggle('on',chip===selected);
     chip.setAttribute('aria-pressed',String(chip===selected));
   }
-  button.textContent=liveMoney()?'Перейти к оплате':wallet?.sandbox?.available?'Перейти к тестовой оплате':wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';
+  const amount=selectedTopupKop();
+  const valid=amount>=TOPUP_MIN_KOP && amount<=TOPUP_MAX_KOP && !custom.validity.badInput;
+  button.textContent=liveMoney() && valid ? `К оплате · ${rub(topupQuote(amount).total)}` : liveMoney()?'Перейти к оплате':wallet?.sandbox?.available?'Перейти к тестовой оплате':wallet?.payments?.simulated?'Зачислить тестовые ₽':'Перейти к оплате';
 }
 async function doTopup() {
   if(liveMoney()) return doLiveTopup();

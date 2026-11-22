@@ -348,6 +348,11 @@ button:disabled { cursor: default; }
   animation: toastIn var(--t-med) var(--ease);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
+.toast[data-placement="above-nav"] {
+  top: auto;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
 @keyframes toastIn {
   from { opacity: 0; transform: translate(-50%, -12px); }
   to   { opacity: 1; transform: translate(-50%, 0); }

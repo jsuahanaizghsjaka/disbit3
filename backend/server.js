@@ -174,7 +174,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
-  console.log(`disbit backend запущен: http://localhost:${PORT}`);
+  console.log(`disbit backend запущен: http://localhost:${server.address().port}`);
 });
 /* Live deposit jobs: penalties for closed days of accepted money conditions,
    then a retry of open payments/refunds with the same idempotency keys. */

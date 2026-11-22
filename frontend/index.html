@@ -1304,7 +1304,8 @@
           <label class="ff-label" for="reset-email">Почта</label>
         </div>
         <div id="reset-confirm-fields" hidden>
-          <div class="ff"><input class="ff-input" id="reset-token" name="recovery-code" type="text" placeholder=" " autocomplete="one-time-code" autocapitalize="none" spellcheck="false" maxlength="64" /><label class="ff-label" for="reset-token">Код из письма</label></div>
+          <p class="hint" id="reset-code-help">Вставьте код целиком из письма — все 64 символа.</p>
+          <div class="ff"><input class="ff-input" id="reset-token" aria-describedby="reset-code-help" name="recovery-code" type="text" placeholder=" " autocomplete="one-time-code" autocapitalize="none" spellcheck="false" maxlength="64" /><label class="ff-label" for="reset-token">Код из письма</label></div>
           <div class="ff"><input class="ff-input" id="reset-password" name="new-password" type="password" placeholder=" " autocomplete="new-password" minlength="6" maxlength="1024" /><label class="ff-label" for="reset-password">Новый пароль</label></div>
           <div class="ff"><input class="ff-input" id="reset-password-repeat" name="repeat-password" type="password" placeholder=" " autocomplete="new-password" maxlength="1024" /><label class="ff-label" for="reset-password-repeat">Повторите пароль</label></div>
         </div>

@@ -1,8 +1,6 @@
-// Run through playwright-cli after requesting a code in the local recovery fixture.
-// The local runner replaces __CODE__ with its synthetic outbox token only.
-async page => {
+async (page, code) => {
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.locator('#reset-token').fill('__CODE__');
+  await page.locator('#reset-token').fill(code);
   await page.locator('#reset-password').fill('Profile-browser-pass-44');
   await page.locator('#reset-password-repeat').fill('Profile-browser-pass-44');
   await page.evaluate(()=>sessionStorage.setItem('disbit-path-draft:recovery-test','preserve-me'));

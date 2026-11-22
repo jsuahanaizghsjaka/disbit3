@@ -132,6 +132,22 @@ test('accepted terms start tomorrow; server settles closed days only, once, from
   } finally { db.close(); }
 });
 
+test('one-ruble top-up and a missed one-ruble promise leave the original balance intact after retries', async () => {
+  const db = await fixture();
+  try {
+    fund(db, 10000, 'payment-original-123456789');
+    fund(db, 100, 'payment-one-ruble-123456789');
+    assert.equal(core.moneyBalance(db, 1).balance, 10100);
+    db.prepare('UPDATE habits SET stake_amount = 1 WHERE id = ?').run('habit-1');
+    settlement.acceptMoneyTerms(db, {userId:1, habitId:'habit-1', ...agreement, now:new Date('2026-11-23T09:00:00Z')});
+    const close = () => settlement.settleClosedMoneyDays(db, {now:new Date('2026-11-25T00:05:00Z')});
+    assert.equal(close()[0].amount, 100);
+    assert.equal(core.moneyBalance(db, 1).balance, 10000);
+    assert.deepEqual(close(), []);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM money_ledger WHERE type='penalty'").get().n, 1);
+  } finally { db.close(); }
+});
+
 test('pending proof defers settlement; reserved refunds cannot finance penalties', async () => {
   const db=await fixture();
   try {
