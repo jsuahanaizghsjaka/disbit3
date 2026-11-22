@@ -6,7 +6,7 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {db} from '../db/db.js';
 
-export const BLOCKING_CONSENT_VERSION = 1;   // bump when the in-app disclosure text changes
+export const BLOCKING_CONSENT_VERSION = 2;   // bump when the in-app disclosure text changes (2: phone receives the plan from the server)
 export const MAX_DEVICES = 5;
 export const PLAN_LEASE_MS = 2 * 60 * 60 * 1000;      // a phone that cannot reach the server stops restricting after this
 export const PLAN_REFRESH_MS = 15 * 60 * 1000;

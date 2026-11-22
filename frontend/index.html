@@ -575,7 +575,7 @@
           <p class="hint" id="notif-status" role="status"></p>
           <details id="notif-help" hidden><summary>Как разрешить уведомления</summary><p>В настройках телефона открой «Приложения» → disbit → «Уведомления» и разреши показ. Затем вернись сюда и включи напоминания.</p><button class="btn-secondary" id="notif-check" type="button">Проверить разрешение</button></details>
         </div>
-        <div class="capability-note"><b>Блокировка приложений</b><span>Пока недоступна на Android и iOS. Старые обещания сохранены без активного ограничения.</span><button class="row-btn" type="button" id="capability-open">Что будет доступно</button></div>
+        <div class="capability-note"><b>Блокировка приложений</b><span>Доступность зависит от устройства и разрешения на ограничение приложений.</span><button class="row-btn" type="button" id="capability-open">Настройки блокировки</button></div>
       </section>
 
       <!-- данные -->
@@ -736,7 +736,8 @@
           <span class="suffix" id="f-lock-suffix">минут за пропуск</span>
         </div>
         <input class="field-input" id="f-apps" type="text" placeholder="Приложения" aria-label="Приложения для ограничения" disabled />
-        <p class="hint">Ограничение приложений пока не действует: настройки сохранены, но ничего не блокируют. Денежный штраф можно выбрать отдельно.</p>
+        <div id="lock-app-list" hidden></div>
+        <p class="hint" id="lock-note">Ограничение приложений пока не действует: настройки сохранены, но ничего не блокируют. Денежный штраф можно выбрать отдельно.</p>
       </div>
 
       <p class="form-summary" id="habit-summary"></p>
@@ -1404,8 +1405,9 @@
   <div class="sheet-overlay" id="capability-overlay" hidden>
     <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="capability-title">
       <h2 id="capability-title" class="sheet-title">Блокировка приложений</h2>
+      <div id="blocking-link" hidden><p id="blocking-link-status" role="status"></p><button type="button" class="row-btn" id="blocking-link-connect">Подключить телефон</button><button type="button" class="row-btn" id="blocking-link-disconnect" hidden>Отключить телефон</button></div>
       <div id="blocking-native-controls" hidden>
-        <p class="hint">Нативная проверка: выбери приложения, предоставь разрешение и проверь временное ограничение. Автоматическая связь с обещаниями пока выключена.</p>
+        <p class="hint">Нативная проверка: выбери приложения, предоставь разрешение и проверь временное ограничение. Для автоматических ограничений подключи телефон к аккаунту.</p>
         <button type="button" class="btn-primary full" id="blocking-native-open">Настроить на этом устройстве</button>
         <p id="blocking-native-status" role="status" aria-live="polite"></p>
       </div>
@@ -1448,6 +1450,7 @@
   <script src="path-faces.js"></script>
   <script src="path-archive.js"></script>
   <script src="path-performance.js"></script>
+  <script src="blocking-client.js"></script>
   <script src="script.js"></script>
   <script type="module" src="path-welcome.js"></script>
   <script type="module" src="path-intro.js"></script>

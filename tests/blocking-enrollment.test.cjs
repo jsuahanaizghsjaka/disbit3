@@ -20,7 +20,7 @@ const call=async(base,method,route,body,token=one,headers={})=>{
  const response=await fetch(base+route,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json','X-Time-Zone':'Europe/Moscow',...headers},body:body===undefined?undefined:JSON.stringify(body)});
  return {status:response.status,body:await response.json().catch(()=>null),headers:response.headers};
 };
-const enroll=(n,token=one,more={})=>call(on,'POST','/api/blocking/devices',{platform:'android',installationId:install(n),consentVersion:1,label:'Galaxy A22',appVersion:'1.0.8',...more},token);
+const enroll=(n,token=one,more={})=>call(on,'POST','/api/blocking/devices',{platform:'android',installationId:install(n),consentVersion:2,label:'Galaxy A22',appVersion:'1.0.8',...more},token);
 before(async()=>{
  const dir=await start(3511,{BLOCKING_ENFORCEMENT:'1'});await start(3512,{BLOCKING_ENFORCEMENT:''});
  db=new DatabaseSync(path.join(dir,'test.db'));db.exec('PRAGMA busy_timeout=5000');
@@ -28,7 +28,7 @@ before(async()=>{
 after(()=>{db?.close();for(const child of servers)child.kill();});
 
 test('without the server switch everything stays a preview and lock promises are refused',async()=>{
- const enrolled=await call(off,'POST','/api/blocking/devices',{platform:'android',installationId:install('off'),consentVersion:1});
+ const enrolled=await call(off,'POST','/api/blocking/devices',{platform:'android',installationId:install('off'),consentVersion:2});
  assert.equal(enrolled.status,201);assert.equal(enrolled.body.enforcement,false);
  const plan=await call(off,'GET','/api/blocking/plan?deviceId='+enrolled.body.device.id);
  assert.equal(plan.body.enabled,false);assert.equal(plan.body.enrollment,'disabled');assert.deepEqual(plan.body.windows,[]);
@@ -37,13 +37,13 @@ test('without the server switch everything stays a preview and lock promises are
 });
 
 test('enrolment needs a session, a valid installation id and the current consent',async()=>{
- assert.equal((await call(on,'POST','/api/blocking/devices',{platform:'android',installationId:install('a'),consentVersion:1},'')).status,401);
+ assert.equal((await call(on,'POST','/api/blocking/devices',{platform:'android',installationId:install('a'),consentVersion:2},'')).status,401);
  assert.equal((await enroll('a',one,{platform:'ios'})).body.code,'platform_unsupported');
  assert.equal((await enroll('a',one,{installationId:'short'})).status,400);
  assert.equal((await enroll('a',one,{installationId:{toString:1}})).status,400);
  const outdated=await enroll('a',one,{consentVersion:0});
- assert.equal(outdated.status,409);assert.equal(outdated.body.requiredConsentVersion,1);
- assert.equal((await enroll('a',one,{consentVersion:'1'})).status,409);
+ assert.equal(outdated.status,409);assert.equal(outdated.body.requiredConsentVersion,2);
+ assert.equal((await enroll('a',one,{consentVersion:'2'})).status,409);
  assert.equal(db.prepare('SELECT count(*) n FROM blocking_devices').get().n,0);
  const before=await call(on,'GET','/api/blocking/plan');
  assert.equal(before.body.enabled,false);assert.equal(before.body.enrollment,'enrollment_required');assert.equal(before.headers.get('cache-control'),'no-store');
@@ -52,7 +52,7 @@ test('enrolment needs a session, a valid installation id and the current consent
  const first=await enroll('a');assert.equal(first.status,201);assert.equal(first.body.enforcement,true);assert.equal(first.body.device.current,true);
  const again=await enroll('a',one,{label:'Renamed\u0000 phone'});assert.equal(again.status,200);assert.equal(again.body.device.id,first.body.device.id);assert.equal(again.body.device.label,'Renamed phone');
  const stored=db.prepare('SELECT * FROM blocking_devices').get();
- assert.match(stored.session_hash,/^sha256:/);assert.equal(stored.consent_version,1);assert.ok(stored.consent_at>0);
+ assert.match(stored.session_hash,/^sha256:/);assert.equal(stored.consent_version,2);assert.ok(stored.consent_at>0);
 });
 
 test('a lock promise needs a restrictable app; the plan is per promise, bounded and account-isolated',async()=>{
@@ -113,7 +113,7 @@ test('logout, a newer consent text, an account change on the phone and removal a
  assert.equal((await call(on,'GET','/api/blocking/plan?deviceId='+second)).body.enrollment,'session_changed');
  assert.equal((await call(on,'POST','/api/auth/logout',{},session)).status,200);
  const devices=(await call(on,'GET','/api/blocking/devices')).body;
- assert.deepEqual(devices.devices.map(d=>d.id).includes(second),false);assert.equal(devices.consentVersion,1);
+ assert.deepEqual(devices.devices.map(d=>d.id).includes(second),false);assert.equal(devices.consentVersion,2);
  // stored consent older than the current text
  const first=(await enroll('a')).body.device.id;
  db.prepare('UPDATE blocking_devices SET consent_version=0 WHERE id=?').run(first);

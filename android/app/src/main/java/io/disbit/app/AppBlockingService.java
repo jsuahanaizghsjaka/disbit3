@@ -40,18 +40,25 @@ public class AppBlockingService extends AccessibilityService implements SharedPr
     }
     private void reconcile() {
         handler.removeCallbacks(refresh);
-        if (BlockingStore.active(this) && BlockingStore.selected(this).contains(foreground)
-                && BlockingStore.selectable(this, foreground)) {
-            showShield();
+        boolean manual = BlockingStore.active(this) && BlockingStore.selected(this).contains(foreground);
+        BlockingPlan.Window window = BlockingStore.restricting(this, foreground);
+        if ((manual || window != null) && BlockingStore.selectable(this, foreground)) {
+            showShield(window == null ? null : window.name);
         } else hideShield();
         long now = System.currentTimeMillis();
         long start = BlockingStore.prefs(this).getLong("start", 0);
         long end = BlockingStore.prefs(this).getLong("end", 0);
-        long next = start > now ? start : end;
-        if (next > now) handler.postDelayed(refresh, Math.min(next - now, 60000));
+        long next = start > now ? start - now : end > now ? end - now : 0;
+        long plan = BlockingStore.nextPlanChange(this);
+        if (plan > 0 && (next == 0 || plan < next)) next = plan;
+        if (next > 0) handler.postDelayed(refresh, Math.min(next, 60000));
     }
-    private void showShield() {
-        if (shield != null) return;
+    private String shieldPromise = "";
+    private void showShield(String promise) {
+        String key = promise == null ? "" : promise;
+        if (shield != null && key.equals(shieldPromise)) return;
+        hideShield();
+        shieldPromise = key;
         shield = new LinearLayout(this);
         shield.setOrientation(LinearLayout.VERTICAL);
         shield.setGravity(Gravity.CENTER);
@@ -62,7 +69,9 @@ public class AppBlockingService extends AccessibilityService implements SharedPr
         title.setText("Время для обещания"); title.setTextSize(28); title.setTextColor(0xfff4f7ff);
         shield.addView(title);
         TextView detail = new TextView(this);
-        detail.setText("Это приложение временно ограничено в Disbit. Телефон и системные настройки доступны.");
+        detail.setText(key.isEmpty()
+            ? "Это приложение временно ограничено в Disbit. Телефон и системные настройки доступны."
+            : "Обещание «" + key + "» не выполнено вовремя. Выполни его сегодня в Disbit — и приложение откроется. Телефон и системные настройки доступны.");
         detail.setTextSize(18); detail.setTextColor(0xffaebbd1); detail.setPadding(0, padding, 0, padding);
         shield.addView(detail);
         Button open = new Button(this); open.setText("Открыть Disbit");

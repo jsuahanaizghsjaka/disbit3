@@ -17,7 +17,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
 
-/** Native QA control. Automatic promise penalties remain explicitly disabled. */
+/** Native permission, consent and manual check. Automatic windows come from the server plan. */
 public class BlockingSettingsActivity extends Activity {
     private TextView status;
     private Button start;
@@ -33,7 +33,7 @@ public class BlockingSettingsActivity extends Activity {
         content.setPadding(p, p, p, p); content.setBackgroundColor(0xff0b1324);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(content); setContentView(scroll);
         TextView heading = label("Ограничения приложений", 26); content.addView(heading);
-        content.addView(label("Проверка нативной блокировки. Автоматические ограничения за обещания ещё не включены.", 16));
+        content.addView(label("Здесь выдаётся доступ и проверяется блокировка. Ограничения за обещания включаются, когда телефон подключён в Disbit: Профиль → Настройки → Блокировка приложений.", 16));
         status = label("", 17); content.addView(status);
         Button permission = button("Разрешить ограничение приложений"); content.addView(permission);
         permission.setOnClickListener(v -> new AlertDialog.Builder(this)
@@ -41,7 +41,7 @@ public class BlockingSettingsActivity extends Activity {
             .setMessage(getString(R.string.disbit_blocking_disclosure))
             .setNegativeButton("Отмена", null)
             .setPositiveButton("Согласен — открыть настройки", (d, w) -> {
-                BlockingStore.prefs(this).edit().putInt("disclosureVersion", 1).commit();
+                BlockingStore.prefs(this).edit().putInt("disclosureVersion", BlockingStore.CONSENT_VERSION).commit();
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
             })
             .show());
@@ -49,7 +49,7 @@ public class BlockingSettingsActivity extends Activity {
         start = button("Проверить блокировку на 15 минут"); content.addView(start);
         start.setOnClickListener(v -> {
             if (!AppBlockingPlugin.authorized(this) || !AppBlockingService.connected
-                || BlockingStore.prefs(this).getInt("disclosureVersion", 0) != 1
+                || BlockingStore.prefs(this).getInt("disclosureVersion", 0) != BlockingStore.CONSENT_VERSION
                 || BlockingStore.selected(this).isEmpty()) { updateStatus(); return; }
             new AlertDialog.Builder(this).setTitle("Включить на 15 минут?")
                 .setMessage("Выбранные приложения будут недоступны. Ограничение можно снять здесь в любой момент.")
@@ -81,9 +81,15 @@ public class BlockingSettingsActivity extends Activity {
             + (granted && !AppBlockingService.connected ? "\nСлужба не подключена. Выключите и включите доступ в настройках Android." : "")
             + "\nВыбрано приложений: " + count + "\n" + (active ? "Ограничение активно" : "Ограничение не активно") + end
             + (power.isPowerSaveMode() ? "\nЭнергосбережение включено" : ""));
-        boolean consent = BlockingStore.prefs(this).getInt("disclosureVersion", 0) == 1;
+        boolean consent = BlockingStore.prefs(this).getInt("disclosureVersion", 0) == BlockingStore.CONSENT_VERSION;
         if (!consent) status.append("\nПрочитайте описание доступа и подтвердите согласие кнопкой «Разрешить ограничение приложений».");
         start.setEnabled(consent && granted && AppBlockingService.connected && count > 0 && !active);
+    }
+    private String planStatus() {
+        if (BlockingStore.deviceId(this) == null) return "\nТелефон не подключён к обещаниям.";
+        BlockingPlan plan = BlockingStore.plan(this);
+        int n = plan == null ? 0 : plan.activeAt(BlockingStore.serverNow(this)).size();
+        return n > 0 ? "\nОграничений за обещания сейчас: " + n : "\nТелефон подключён. Ограничений за обещания сейчас нет.";
     }
     private void chooseApps() {
         if (BlockingStore.active(this)) {

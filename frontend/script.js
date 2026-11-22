@@ -56,7 +56,11 @@ let authUser = null;
 try { authUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { authUser = null; }
 let authMode = 'login';   // 'login' | 'register'
 
+window.DisbitBlocking?.configure({api:()=>API, token:()=>authToken, owner:()=>authUser?.login});
+document.addEventListener('DOMContentLoaded',()=>window.DisbitBlocking?.start());
 function setAuth(token, user) {
+  const changed = authToken !== token;
+  if (changed) window.DisbitBlocking?.forget();
   if (authToken !== token) {
     clearTimeout(statePushTimer);
     stateRemoteVersion = undefined; stateSyncConflict = false;
@@ -67,6 +71,7 @@ function setAuth(token, user) {
   authToken = token;
   readCoordinator.cancelExcept(token || null);
   authUser = user;
+  if (changed && token) void window.DisbitBlocking?.start();
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
@@ -420,6 +425,7 @@ async function apiCallStrict(method, path, body) {
       signal: controller.signal
     });
     const data = await r.json().catch(() => ({}));
+    if (r.ok && method !== 'GET' && /^\/(habits|proofs|state)(\/|$)/.test(path)) void window.DisbitBlocking?.sync(true);
     if (!r.ok) return { code: data.code, id: data.id, left: data.left, error: data.error || ('Ошибка ' + r.status), status: r.status };
     return data;
   } catch (e) {
@@ -5216,6 +5222,7 @@ function openAddSheet() {
   restoreHabitDraft('new');
   document.getElementById('f-money-accept').checked = false;
   updateMoneyTerms();
+  window.DisbitBlocking?.syncLockForm();
   openSheet('add-overlay');
   document.getElementById('f-name').focus();
 }
@@ -5256,6 +5263,7 @@ function openEditSheet(id) {
   restoreHabitDraft(id);
   document.getElementById('f-money-accept').checked = false;
   updateMoneyTerms();
+  window.DisbitBlocking?.syncLockForm();
   openSheet('add-overlay');
 }
 
@@ -5308,7 +5316,7 @@ async function submitHabit() {
 
   const goalType = segValue('goal-type', 'goal');
   const stakeMode = segValue('stake-mode', 'stake');
-  if (stakeMode === 'lock' && !habits.some(h => h.id === editingId && h.stake.mode === 'lock')) {
+  if (stakeMode === 'lock' && !window.DisbitBlocking?.ready() && !habits.some(h => h.id === editingId && h.stake.mode === 'lock')) {
     toast('Блокировка приложений пока недоступна'); return;
   }
 

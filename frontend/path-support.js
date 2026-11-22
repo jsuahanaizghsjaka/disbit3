@@ -214,7 +214,7 @@ function wireSupportUI() {
       if (!cap?.isNativePlatform?.() || !cap?.isPluginAvailable?.('AppBlocking')) throw Error('unavailable');
       const plugin=cap.registerPlugin('AppBlocking');
       await plugin.openSettings();
-      status.textContent='Открыт нативный экран. Автоматические ограничения за обещания пока выключены.';
+      status.textContent='Открыты настройки ограничений Android.';
     } catch (_) { status.textContent='Не удалось открыть настройки ограничений. Нужна новая нативная сборка приложения.'; }
     finally { button.disabled=false; }
   };
