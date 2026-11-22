@@ -18,6 +18,9 @@
 | 2026-11-19…21 | Сервер production + staging | — | `ae1b402` | — | CLAUDE.md (состояние на 21.11; точная дата не записана) |
 | 2026-11-22 | Сервер production + staging | — | `4ac7646` | — | `/api/ready` на production, проверено 23.11; отчёта нет |
 | 2026-11-22 | Android release APK, локально | 1.1.2 / 12 | — | — | `release-artifacts/disbit-1.1.2-release.apk`, собран 22.11 02:31; отчёта и проверки подписи в записях нет |
+| 2026-11-23 | Сервер production + staging | — | `2204593` | — | ops/VISUAL-QA-2026-11-23.md |
+| 2026-11-23 | Сервер production + staging | — | `2071f42` | — | ops/CARD-MENU-SHEETS-2026-11-23.md |
+| 2026-11-23 | Android release APK, локально | 1.1.3 / 13 | `2071f42` | — | ops/CARD-MENU-SHEETS-2026-11-23.md (APK SHA-256 `2ae8ff5d…2a80ce`) |
 
 ## Как ставить тег
 
