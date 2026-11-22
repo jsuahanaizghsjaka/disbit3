@@ -2955,11 +2955,16 @@ async function loadFriends(force = false) {
   renderFriends(); renderFriendsBoard();
 }
 
-// /invite открывает приложение (Android App Links), без него — веб-версию
+// /invite открывает приложение (Android App Links), без него — веб-версию.
+// v — версия превью: Telegram и другие мессенджеры кэшируют карточку ссылки по
+// точному адресу, и ссылка, отправленная до появления превью, оставалась голой.
+// Меняя v при смене превью, получаем новый адрес и свежую карточку.
+const INVITE_LINK_VERSION = '2';
 function inviteLink() {
   if (!myLogin) return BACKEND;
   const q = new URLSearchParams({ add: myLogin });
   if (myInviteToken) q.set('t', myInviteToken);
+  q.set('v', INVITE_LINK_VERSION);
   return `${BACKEND}/invite?${q}`;
 }
 
@@ -3096,7 +3101,7 @@ async function openInviteSheet(habitId) {
     box.innerHTML = `<span class="qr-wait">${escapeHtml(r?.error || 'Не удалось получить код')}</span>`;
     return;
   }
-  inviteUrl = `${BACKEND}/invite?join=${encodeURIComponent(r.code)}`;
+  inviteUrl = `${BACKEND}/invite?join=${encodeURIComponent(r.code)}&v=${INVITE_LINK_VERSION}`;
   drawInviteQr(box, inviteUrl);
 }
 
