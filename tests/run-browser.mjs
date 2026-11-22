@@ -18,6 +18,7 @@ const special = {
   'browser-audit-remediation.js': { fixture: 'recovery-fixture.mjs', login: [2, 'recovery_two'] },
   'browser-swimming.js': { login: [1, 'beta_tester'] },
   'browser-money-live.js': { fixture: 'money-live-fixture.mjs' },
+  'browser-money-terms-card.js': { fixture: 'money-live-fixture.mjs' },
   'browser-wallet-history.js': { env: { DISBIT_HISTORY_FIXTURE: '1' } },
   'browser-account-safety.cjs': { fixture: 'recovery-fixture.mjs', env: { ADMIN_KEY: 'local-review-fixture-12345678901234567890' } },
   'browser-moderation-appeal.cjs': { fixture: 'recovery-fixture.mjs', env: { ADMIN_KEY: 'local-review-fixture-12345678901234567890' } }

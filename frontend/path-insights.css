@@ -152,6 +152,9 @@
 .wallet-legal .auth-consent a { color:var(--primary); }
 .refund-go { width:100%; margin-top:12px; }
 .money-terms { margin-top:12px; }
+.money-off { margin-top:8px; padding:12px; border:1px solid var(--line); border-radius:14px; }
+.money-off p { margin:0 0 10px; }
+.money-off .btn-ghost { width:100%; }
 .money-terms .auth-consent { font-size:14px; line-height:1.45; color:var(--text); }
 .money-terms .auth-consent input:disabled + span { color:var(--text-2); }
 .money-terms .hint { margin:0 0 4px; }

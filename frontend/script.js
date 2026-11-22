@@ -1863,7 +1863,7 @@ function renderHabitStats() {
     : (h.schedule.length === 7 ? 'каждый день' : h.schedule.map(i => DAY_NAMES[i]).join(' · '));
 
   const stakeText = h.stake.mode === 'money'
-    ? `${h.stake.amount}₽ за пропуск`
+    ? `${h.stake.amount}₽ за пропуск${wallet?.payments?.live && !acceptedMoneyTerms(h.id) ? ' · не удерживается' : ''}`
     : 'Блокировка недоступна — старый тестовый режим';
 
   body.innerHTML = `
