@@ -242,6 +242,10 @@ function stateBlob() {
       shared: Object.fromEntries(
         habits.filter(h => h.buddy)
               .map(h => [h.name.trim().toLowerCase(), doneOn(h, TODAY)])
+      ),
+      // прогресс тех же совместных обещаний: неделя, серия, 30 дней, последние 7 дней
+      sharedStats: Object.fromEntries(
+        habits.filter(h => h.buddy && !h.archived).map(h => [sharedKey(h), sharedStatsOf(h)])
       )
     },
     settled: localStorage.getItem(SETTLED_KEY)
@@ -1738,20 +1742,21 @@ function habitCard(h, off) {
     ? 'каждый день'
     : h.schedule.map(i => DAY_NAMES[i]).join(' · ');
 
-  // совместное обещание: две аватарки — моя и друга. Кто сделал сегодня —
-  // та горит цветом, кто нет — серая. Видно с одного взгляда, кто тянет.
+  // совместное обещание: две настоящие аватарки — моя и друга. Кто сделал
+  // сегодня — зелёное кольцо и галочка, кто нет — приглушённая. Видно, кто тянет.
   let buddyHtml = '';
   if (h.buddy) {
     const f = friendByLogin(h.buddy);
     const bDone = buddyDoneToday(h);
-    const myAva = `<span class="pair-ava${done ? ' lit' : ''}" style="${
-      done ? `background:${safeColor(profile.color)}` : ''}" title="Ты${done ? ' — сделано' : ' — ещё нет'}">${
-      profile.emoji ? escapeHtml(profile.emoji) : escapeHtml((profile.name || 'Я')[0])}</span>`;
-    const fAva = `<span class="pair-ava${bDone === true ? ' lit' : ''}" style="${
-      bDone === true ? `background:${safeColor(f?.color)}` : ''}" title="${
-      escapeHtml(f?.name || h.buddy)}${bDone === true ? ' — сделал' : bDone === false ? ' — ещё нет' : ' — нет данных'}">${
-      escapeHtml(f?.emoji || (f?.name || h.buddy)[0])}</span>`;
-    buddyHtml = `<span class="buddy-pair" title="Вместе с ${escapeHtml(f?.name || h.buddy)}">${myAva}${fAva}</span>`;
+    const fp = friendProfile(f, h.buddy);
+    const me = { ...profile, name: profile.name || 'Я' };
+    const myInner = profile.photo || profile.mark || profile.emoji ? avatarHtml(me) : escapeHtml(me.name[0]);
+    const pairAva = (lit, bg, inner, label) =>
+      `<span class="pair-ava${lit ? ' lit' : ''}" style="background:${bg}" role="img" aria-label="${escapeHtml(label)}">${inner}</span>`;
+    buddyHtml = `<span class="buddy-pair" title="Вместе с ${escapeHtml(fp.name)}">${
+      pairAva(done, avaBg(me), myInner, 'Ты' + (done ? ' — сделано' : ' — ещё нет'))}${
+      pairAva(bDone === true, avaBg(fp), friendAvaHtml(f, h.buddy),
+        fp.name + (bDone === true ? ' — сделал' : bDone === false ? ' — ещё нет' : ' — нет данных'))}</span>`;
   }
 
   // кнопка/бейдж минимума — «нет сил на полное? сделай минимум» (козырь идеи)
@@ -1872,7 +1877,7 @@ function renderHabitStats() {
     ? `${h.stake.amount}₽ за пропуск${wallet?.payments?.live && !acceptedMoneyTerms(h.id) ? ' · не удерживается' : ''}`
     : 'Блокировка недоступна — старый тестовый режим';
 
-  body.innerHTML = `
+  body.innerHTML = duoHtml(h) + `
     <div class="hstat-grid">
       <div class="hstat-tile"><span class="ht-num">${streak}</span><span class="ht-lbl">серия сейчас</span></div>
       <div class="hstat-tile"><span class="ht-num">${best}</span><span class="ht-lbl">лучшая серия</span></div>
@@ -2018,7 +2023,11 @@ function renderHabits() {
   const pinnedBlock = document.getElementById('pinned-block');
   const empty = document.getElementById('empty-state');
   const existing = new Map([...document.querySelectorAll('#screen-today .habit[data-hid]')].map(node=>[node.dataset.hid,node]));
-  const shared = JSON.stringify([authToken,TODAY,clientTimeZone,profile.name,profile.color,profile.emoji,serverFriends,friends]);
+  // Аватар входит в подпись: без фото и знака смена аватара не перерисовывала
+  // карточку. От фото берём отпечаток, а не весь base64 — его сравнивать дорого.
+  const photoSig = p => p ? p.length + ':' + p.slice(-24) : '';
+  const shared = JSON.stringify([authToken,TODAY,clientTimeZone,profile.name,profile.color,profile.emoji,
+    photoSig(profile.photo),profile.mark,serverFriends.map(f => ({...f, photo: photoSig(f.photo)})),friends]);
   const reconcile = (container, items, off) => {
     const wanted = new Set(items.map(h=>h.id));
     [...container.children].forEach(node=>{if(!wanted.has(node.dataset.hid))node.remove();});
@@ -2959,6 +2968,11 @@ async function loadFriends(force = false) {
   if (r.error || !Array.isArray(r.friends)) friendsError = r.error || 'Не удалось загрузить друзей';
   else { serverFriends = r.friends; incomingFriends = r.incoming || []; myLogin = r.me || null; myInviteToken = r.inviteToken || ''; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
   renderFriends(); renderFriendsBoard();
+  // друг мог сменить аватар или отметить совместное обещание — карточки тоже
+  if (habits.some(h => h.buddy)) {
+    if (todayVisible()) renderHabits();
+    if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
+  }
 }
 
 // /invite открывает приложение (Android App Links), без него — веб-версию.
@@ -2989,18 +3003,39 @@ function renderFriends() {
   const status = friendsLoading ? '<p role="status" class="hint">Обновляем друзей…</p>'
     : friendsError ? `<div class="friends-state" role="status"><p>${escapeHtml(friendsError)}</p><button class="btn-ghost" id="friends-retry">Повторить</button></div>`
     : !serverFriends.length ? '<div class="friends-state"><h3>Вместе проще</h3><p>Добавь друга по логину или отправь приглашение. Здесь будут ваши серии и совместные обещания.</p></div>' : '';
-  box.innerHTML = status + serverFriends.map(f => `
+  box.innerHTML = status + serverFriends.map(f => {
+    const fp = friendProfile(f, f.login);
+    const together = habits.filter(h => h.buddy === f.login && !h.archived);
+    // общий прогресс пары за неделю: отметки обоих по всем совместным обещаниям
+    let doneSum = 0, goalSum = 0, known = true;
+    const rows = together.map(h => {
+      const mine = sharedStatsOf(h), theirs = buddyStats(h);
+      doneSum += mine.week + (theirs?.week || 0);
+      goalSum += mine.weekGoal * 2;
+      if (!theirs) known = false;
+      return `<button class="duo-row" data-shared-habit="${escapeHtml(h.id)}">
+        <span class="duo-row-name">${escapeHtml(h.name)}</span>
+        <small>Ты ${mine.week}/${mine.weekGoal}${mine.today ? ' ✓' : ''} · ${escapeHtml(fp.name)} ${
+          theirs ? `${theirs.week}/${theirs.weekGoal}${theirs.today ? ' ✓' : ''}` : 'нет данных'}</small>
+      </button>`;
+    }).join('');
+    const pairPct = goalSum ? Math.round((doneSum / goalSum) * 100) : null;
+    return `
     <article class="friend-row friend-card">
-      <span class="friend-ava" style="background:${safeColor(f.color)}">${
-        escapeHtml(f.emoji || (f.name || f.login || '?')[0])}</span>
-      <span class="friend-name">${escapeHtml(f.name || f.login)}
+      <span class="friend-ava" style="background:${avaBg(fp)}">${friendAvaHtml(f, f.login)}</span>
+      <span class="friend-name">${escapeHtml(fp.name || f.login)}
         <small class="friend-login">@${escapeHtml(f.login)}</small></span>
-      <button class="mini-btn danger" data-fdel="${escapeHtml(f.login)}" aria-label="Удалить друга ${escapeHtml(f.name || f.login)}">✕</button>
+      <button class="mini-btn danger" data-fdel="${escapeHtml(f.login)}" aria-label="Удалить друга ${escapeHtml(fp.name || f.login)}">✕</button>
       <span class="friend-metrics">Серия ${friendMetric(f.streak, ' дн.')} · Неделя ${friendMetric(f.weekPct, '%')}</span>
-      <details class="friend-shared"><summary>Совместных обещаний: ${habits.filter(h => h.buddy === f.login).length}</summary>
-        ${habits.filter(h => h.buddy === f.login).map(h => `<button data-shared-habit="${escapeHtml(h.id)}">${escapeHtml(h.name)}<small>${isDoneToday(h) ? 'Ты выполнил' : 'У тебя не выполнено'}</small></button>`).join('') || '<p class="hint">Открой детали обещания и выбери «Делать вместе», чтобы связать его с другом.</p>'}
+      ${together.length ? `<div class="duo-total">
+        <span>Вместе на этой неделе: ${doneSum} из ${goalSum} отметок${known ? '' : ' (у друга нет данных)'}</span>
+        <span class="duo-bar" aria-hidden="true"><i style="width:${pairPct ?? 0}%"></i></span>
+      </div>` : ''}
+      <details class="friend-shared"${together.length ? ' open' : ''}><summary>Совместных обещаний: ${together.length}</summary>
+        ${rows || '<p class="hint">Открой детали обещания и выбери «Делать с другом», чтобы связать его с другом.</p>'}
       </details>
-    </article>`).join('');
+    </article>`;
+  }).join('');
   box.querySelector('#friends-retry')?.addEventListener('click', () => loadFriends(true));
   if(friendsCacheOwner===authToken)for(const request of incomingFriends){
     const row=document.createElement('article');row.className='friend-row friend-request';
@@ -3044,17 +3079,17 @@ function renderFriendsBoard() {
   }
   // общий зачёт: я и друзья, сортировка по серии — видно, кто впереди
   const rows = [
-    { me: true, name: profile.name || 'Ты', streak: myStreak, weekPct: pct, ava: avatarHtml(profile), color: profile.color },
+    { me: true, name: profile.name || 'Ты', streak: myStreak, weekPct: pct, ava: avatarHtml(profile), bg: avaBg(profile) },
     ...serverFriends.map(f => ({
       me: false, name: f.name || f.login, streak: f.streak ?? null, weekPct: f.weekPct,
-      ava: escapeHtml(f.emoji || (f.name || f.login || '?')[0]), color: f.color
+      ava: friendAvaHtml(f, f.login), bg: avaBg(friendProfile(f, f.login))
     }))
   ].sort((a, b) => (b.streak ?? -1) - (a.streak ?? -1));
 
   box.innerHTML = rows.map((r, i) => `
     <div class="friend-row${r.me ? ' me' : ''}">
       <span class="board-place">${r.streak == null ? '·' : i + 1}</span>
-      <span class="friend-ava" style="background:${safeColor(r.color)}">${r.ava}</span>
+      <span class="friend-ava" style="background:${r.bg}">${r.ava}</span>
       <span class="friend-name">${escapeHtml(r.name)}${r.me ? ' <small class="friend-login">это ты</small>' : ''}</span>
       <span class="goal-text">Серия ${friendMetric(r.streak)} · Неделя ${friendMetric(r.weekPct, '%')}</span>
     </div>`).join('');
@@ -3082,6 +3117,85 @@ function buddyDoneToday(h) {
   if (!f || !f.shared) return null;
   const key = (h.name || '').trim().toLowerCase();
   return key in f.shared ? !!f.shared[key] : null;
+}
+// ключ совместного обещания в визитке — название, как и в shared
+function sharedKey(h) { return (h.name || '').trim().toLowerCase(); }
+// мой прогресс по одному обещанию — то же, что публикуем друзьям в sharedStats
+function sharedStatsOf(h) {
+  const now = new Date(), monday = weekStartOf(now);
+  const last7 = [];
+  for (let i = 6; i >= 0; i--) {
+    const key = dateKey(addDays(now, -i));
+    last7.push(key < h.createdAt ? null : doneOn(h, key));
+  }
+  let week = 0, scheduled = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(monday, i), key = dateKey(d);
+    if (key <= TODAY && key >= h.createdAt && doneOn(h, key)) week++;
+    if (h.schedule.includes(dayIdx(d))) scheduled++;
+  }
+  const s30 = habitStatsFor(h, 30);
+  return {
+    today: doneOn(h, TODAY), week, weekGoal: isFlexible(h) ? Number(h.weekTarget) : scheduled,
+    streak: computeStreak(h),
+    pct30: s30.required ? Math.round(((s30.required - s30.missed) / s30.required) * 100) : 100,
+    last7
+  };
+}
+// прогресс друга по этому обещанию (null — друг ещё не обновил приложение)
+function buddyStats(h) {
+  return friendByLogin(h.buddy)?.sharedStats?.[sharedKey(h)] || null;
+}
+// профиль друга в форме, которую понимает avatarHtml(): фото, знак, эмодзи, буква
+function friendProfile(f, login) {
+  const mark = f?.mark && (f.mark.startsWith('face:') || f.mark === 'traveler' || MARKS.some(m => m.id === f.mark)) ? f.mark : null;
+  return { photo: f?.photo || null, mark, emoji: f?.emoji || null, color: f?.color || null, name: f?.name || login || '?' };
+}
+function friendAvaHtml(f, login) {
+  const p = friendProfile(f, login);
+  return p.photo || p.mark || p.emoji ? avatarHtml(p) : escapeHtml(p.name[0]);
+}
+// фон кружка: у фото и знака свой, под эмодзи и буквой — выбранный цвет
+function avaBg(p) { return p.photo || p.mark ? 'transparent' : safeColor(p.color || COLORS[0]); }
+/* Блок «Вместе» в карточке совместного обещания.
+   Общий прогресс — серия и неделя по всем обещаниям каждого (как в доске друзей).
+   По этому обещанию — неделя, серия и последние 7 дней у каждого, плюс сколько
+   из этих дней вы оба выполнили. */
+function duoHtml(h) {
+  if (!h.buddy) return '';
+  const f = friendByLogin(h.buddy);
+  const fp = friendProfile(f, h.buddy);
+  const me = { ...profile, name: profile.name || 'Ты' };
+  const mine = sharedStatsOf(h), theirs = buddyStats(h);
+  const myWeekPct = weekCompletion(weekStartOf(new Date()));
+  const both = theirs ? mine.last7.filter((v, i) => v === true && theirs.last7?.[i] === true).length : null;
+  const person = (p, inner, label, s, overallStreak, overallWeek) => `
+    <div class="duo-person">
+      <span class="duo-ava${s?.today ? ' lit' : ''}" style="background:${avaBg(p)}">${inner}</span>
+      <div class="duo-main">
+        <div class="duo-name">${escapeHtml(label)}${s ? (s.today ? ' · сегодня ✓' : ' · сегодня ещё нет') : ''}</div>
+        ${s ? `<div class="duo-line">Неделя ${s.week} из ${s.weekGoal} · серия ${s.streak} ${plural(s.streak, 'день', 'дня', 'дней')}</div>
+          ${weekDots(s.last7)}`
+          : '<div class="duo-line">Нет данных по этому обещанию — у друга старая версия приложения или обещание названо иначе</div>'}
+        <div class="duo-overall">В целом: серия ${friendMetric(overallStreak, ' дн.')} · неделя ${friendMetric(overallWeek, '%')}</div>
+      </div>
+    </div>`;
+  return `
+    <section class="duo" aria-label="Совместный прогресс">
+      <div class="duo-head">
+        <span class="field-label">Вместе: ты и ${escapeHtml(fp.name)}</span>
+        <span class="duo-both">${both == null ? 'Общий прогресс появится, когда друг обновит приложение'
+          : `Оба выполнили ${both} из 7 последних дней`}</span>
+      </div>
+      ${person(me, profile.photo || profile.mark || profile.emoji ? avatarHtml(me) : escapeHtml(me.name[0]),
+        'Ты', mine, bestCurrentStreak(), myWeekPct)}
+      ${person(fp, friendAvaHtml(f, h.buddy), fp.name, theirs, f?.streak ?? null, f?.weekPct ?? null)}
+    </section>`;
+}
+// полоска последних 7 дней: ● сделано, ○ пропуск, · обещания ещё не было
+function weekDots(last7) {
+  return `<span class="duo-dots" aria-hidden="true">${(last7 || []).map(v =>
+    `<i class="${v === true ? 'on' : v === false ? 'off' : 'none'}"></i>`).join('')}</span>`;
 }
 
 /* ---------- ПРИГЛАШЕНИЕ ДЕЛАТЬ ВМЕСТЕ (QR + ссылка) ----------
@@ -4156,7 +4270,13 @@ function saveProfile() {
   }
   closeSheet('profile-overlay');
   renderProfile();
+  // мой аватар есть и на карточках совместных обещаний, и в доске друзей
+  if (todayVisible()) renderHabits();
+  renderFriends(); renderFriendsBoard();
+  if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
 }
+// «Сегодня» на экране; скрытый экран обновится сам при переходе (render())
+function todayVisible() { return !!document.getElementById('screen-today')?.classList.contains('active'); }
 
 /* мотивация: записал один раз — дальше она «зафиксирована», менять через «Изменить».
    Так текст не теряется и воспринимается как обещание себе, а не черновик. */

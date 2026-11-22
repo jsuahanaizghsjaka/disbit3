@@ -56,6 +56,30 @@ db.exec('DELETE FROM friendships WHERE confirmed=0');
    такое на проде не выловишь. */
 db.exec('DELETE FROM friendships WHERE user_id = friend_id');
 
+/* Аватар друга: фото (JPEG 256px из профиля, ~20–40 КБ в base64) или знак.
+   Берём только картинку data:image и только знакомые идентификаторы знаков —
+   визитка уходит другим людям и вставляется в их интерфейс. */
+const AVATAR_PHOTO = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const AVATAR_MARK = /^(?:face:[A-Za-z0-9_-]{1,40}|[a-z0-9_-]{1,40})$/;
+function avatarPhoto(v) { return typeof v === 'string' && v.length <= 200000 && AVATAR_PHOTO.test(v) ? v : null; }
+function avatarMark(v) { return typeof v === 'string' && AVATAR_MARK.test(v) ? v : null; }
+const int = (v, max) => Number.isFinite(Number(v)) ? Math.max(0, Math.min(max, Math.round(Number(v)))) : 0;
+// прогресс совместных обещаний: { "название": { today, week, weekGoal, streak, pct30, last7 } }
+function sharedStats(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out = {};
+  for (const [key, s] of Object.entries(v).slice(0, 50)) {
+    if (typeof key !== 'string' || key.length > 120 || !s || typeof s !== 'object') continue;
+    out[key] = {
+      today: s.today === true,
+      week: int(s.week, 7), weekGoal: int(s.weekGoal, 7),
+      streak: int(s.streak, 100000), pct30: int(s.pct30, 100),
+      last7: Array.isArray(s.last7) ? s.last7.slice(-7).map(x => x === true ? true : x === false ? false : null) : []
+    };
+  }
+  return out;
+}
+
 // публичная часть чужого профиля: только то, что человек сам опубликовал
 function publicCard(userId) {
   const row = db.prepare('SELECT data FROM user_state WHERE user_id = ?').get(userId);
@@ -66,12 +90,15 @@ function publicCard(userId) {
       name: d.profile?.name || null,
       emoji: d.profile?.emoji || null,
       color: d.profile?.color || null,
+      photo: avatarPhoto(d.profile?.photo),
+      mark: avatarMark(d.profile?.mark),
       streak: d.card?.streak == null ? null : Number(d.card.streak),
       weekPct: d.card?.weekPct ?? null,
       habits: Number(d.card?.habits) || 0,
       // статусы совместных обещаний: { "название": true/false } — только те,
       // что человек сам пометил как общие с другом
-      shared: (d.card?.shared && typeof d.card.shared === 'object') ? d.card.shared : {}
+      shared: (d.card?.shared && typeof d.card.shared === 'object') ? d.card.shared : {},
+      sharedStats: sharedStats(d.card?.sharedStats)
     };
   } catch { return {}; }
 }
