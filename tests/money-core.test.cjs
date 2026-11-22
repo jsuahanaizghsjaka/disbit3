@@ -9,7 +9,7 @@ const { randomUUID } = require('node:crypto');
 let core, settlement;
 const agreement={agreementVersion:'draft-qa',agreementHash:'a'.repeat(64)};
 
-test('unknown provider outcomes past retry window never repeat POST or release refund reserve', async () => {
+test('unknown provider outcomes past retry window never repeat POST or release refund reserve; unsent payments expire', async () => {
   const db=await fixture();
   try {
     const {createMoneyService}=await import('../backend/lib/money-service.js');
@@ -18,15 +18,22 @@ test('unknown provider outcomes past retry window never repeat POST or release r
     const service=createMoneyService(db,provider,{now:()=>Date.parse('2026-11-05T12:00:00Z')});
     const intent=core.openMoneyPayment(db,{userId:1,amount:10000});
     db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-04 13:00:00',intent.id);
-    await assert.rejects(service.resumePayment(intent.id,'https://disbit.ru/'),/Manual reconciliation/);
+    // never sent to the provider and past the window: nobody had a payment page,
+    // so it is canceled locally without any POST and without touching the balance
+    const before=core.moneyBalance(db,1);
+    assert.equal((await service.resumePayment(intent.id,'https://disbit.ru/')).status,'canceled');
+    assert.equal(db.prepare('SELECT status FROM money_payment_intents WHERE id=?').get(intent.id).status,'canceled');
+    assert.deepEqual(core.moneyBalance(db,1),before);
+    assert.equal((await service.reconcile('https://disbit.ru/')).filter(r=>r.id===intent.id&&r.pending).length,0);
     fund(db,10000,'payment-98765432109876543210');
     const refund=core.reserveMoneyRefund(db,{userId:1,amount:3000});
     db.prepare('UPDATE money_refund_requests SET created_at=? WHERE id=?').run('2026-11-04 13:00:00',refund.id);
     await assert.rejects(service.resumeRefundPart(refund.parts[0].id),/Manual reconciliation/);
     assert.equal(posts,0);
     assert.equal(core.moneyBalance(db,1).reserved,3000);
-    db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-05 11:00:00',intent.id);
-    await assert.rejects(service.resumePayment(intent.id,'https://disbit.ru/'),/timeout/);
+    const fresh=core.openMoneyPayment(db,{userId:1,amount:10000});
+    db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-05 11:00:00',fresh.id);
+    await assert.rejects(service.resumePayment(fresh.id,'https://disbit.ru/'),/timeout/);
     assert.equal(posts,1);
   } finally {db.close();}
 });

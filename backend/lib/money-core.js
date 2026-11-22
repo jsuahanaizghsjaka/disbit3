@@ -46,6 +46,16 @@ export function openMoneyPayment(db, { userId, amount, id = randomUUID() }) {
     VALUES (?, ?, ?, ?, 'yookassa', ?)`).run(id, userId, amount, fee, key);
   return { id, userId, amount, fee, idempotencyKey: key };
 }
+// A top-up that never got a provider payment (no id, no payment page) and is past
+// the provider's idempotency window can no longer be paid by anyone: the person
+// never received a confirmation URL. It is closed locally; no balance changes.
+export function expireUnsentPayment(db, intentId) {
+  return tx(db, () => {
+    const changed = db.prepare(`UPDATE money_payment_intents SET status='canceled'
+      WHERE id=? AND status='created' AND provider_payment_id IS NULL AND confirmation_url IS NULL`).run(intentId).changes;
+    return { id:intentId, status:changed ? 'canceled' : db.prepare('SELECT status FROM money_payment_intents WHERE id=?').get(intentId)?.status, expired:changed === 1 };
+  });
+}
 export function attachProviderPayment(db, intentId, payment) {
   return tx(db, () => {
     const intent = db.prepare('SELECT * FROM money_payment_intents WHERE id=?').get(intentId);

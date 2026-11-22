@@ -1,6 +1,6 @@
 import {
   openMoneyPayment, attachProviderPayment, confirmProviderPayment,
-  reserveMoneyRefund, attachProviderRefund, confirmProviderRefund
+  reserveMoneyRefund, attachProviderRefund, confirmProviderRefund, expireUnsentPayment
 } from './money-core.js';
 
 // The public webhook must only pass an object ID. Every monetary decision is
@@ -9,10 +9,13 @@ export function createMoneyService(db, provider, { now = () => Date.now() } = {}
   // Count from local creation, conservatively before the first provider POST.
   // YooKassa only guarantees idempotency for 24h. An unknown result outside
   // this window needs operator reconciliation, never another automatic POST.
+  function retryWindowState(createdAt) {
+    const age = now() - Date.parse(createdAt.replace(' ', 'T') + 'Z');
+    if (!Number.isFinite(age) || age < 0) return 'unknown';
+    return age >= 23 * 60 * 60 * 1000 ? 'expired' : 'open';
+  }
   function requireRetryWindow(createdAt) {
-    const started = Date.parse(createdAt.replace(' ', 'T') + 'Z');
-    const age = now() - started;
-    if (!Number.isFinite(age) || age < 0 || age >= 23 * 60 * 60 * 1000) {
+    if (retryWindowState(createdAt) !== 'open') {
       throw Error('Manual reconciliation required: provider retry window expired');
     }
   }
@@ -25,6 +28,8 @@ export function createMoneyService(db, provider, { now = () => Date.now() } = {}
       const result=confirmProviderPayment(db,remote);
       return { id:intent.id, providerId:intent.provider_payment_id, url:intent.confirmation_url, result };
     }
+    // never reached the provider and too old to retry: nobody could pay it
+    if (intent.status==='created' && retryWindowState(intent.created_at)==='expired') return expireUnsentPayment(db,intent.id);
     requireRetryWindow(intent.created_at);
     const remote=await provider.createPayment({id:intent.id,amount:intent.amount+(intent.fee||0),idempotencyKey:intent.idempotency_key},returnUrl);
     return attachProviderPayment(db,intent.id,remote);
