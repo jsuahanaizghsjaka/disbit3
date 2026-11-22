@@ -3247,6 +3247,15 @@ function takePendingInvite(kind) {
   pendingInvite[kind] = null;
   return value;
 }
+let inviteAuthNote = '';
+// Подзаголовок экрана входа виден во всех режимах (подсказка auth-note на
+// экране регистрации скрыта), поэтому объяснение ставим туда.
+function showInviteAuthNote() {
+  const subtitle = document.getElementById('auth-subtitle');
+  if (!subtitle || !inviteAuthNote || authToken) return;
+  subtitle.textContent = inviteAuthNote;
+  subtitle.hidden = false;
+}
 // params — из адреса страницы или из ссылки, которой открыли приложение
 function captureInviteParams(params = new URLSearchParams(location.search), fromAddress = true) {
   const add = params.get('add')?.trim(), join = params.get('join')?.trim();
@@ -3263,9 +3272,15 @@ function captureInviteParams(params = new URLSearchParams(location.search), from
     const rest = params.toString();
     history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);   // чистим адрес
   }
-  if (!authToken) toast(join
-    ? 'Тебя зовут делать обещание вместе — войди или зарегистрируйся, и приглашение откроется'
-    : `@${add} зовёт в друзья — войди или зарегистрируйся, и вы станете друзьями`);
+  if (!authToken) {
+    // Ссылка из мессенджера часто открывается в браузере, где человек не вошёл
+    // (в приложении он вошёл). Говорим это прямо на экране входа, а не только
+    // всплывашкой, которую экран входа тут же закрывает.
+    inviteAuthNote = join
+      ? 'Тебя зовут делать обещание вместе. Войди в тот же аккаунт, что в приложении, — приглашение откроется сразу после входа.'
+      : `@${add} зовёт тебя в друзья. Войди в свой аккаунт или создай новый — и вы станете друзьями.`;
+    showInviteAuthNote();
+  }
   return true;
 }
 // приложение открыли ссылкой https://disbit.ru/invite?… (App Links)
@@ -3433,6 +3448,7 @@ function setAuthMode(mode, email = false, updateURL = true) {
   switchLink.textContent = mode === 'login' ? 'Зарегистрироваться' : 'Войти';
   document.getElementById('auth-error').hidden = true;
   document.getElementById('auth-note').hidden = true;
+  showInviteAuthNote();   // пришли по приглашению — объяснение остаётся на экране входа
   if (updateURL && location.hash !== '#' + view) {
     if (!['#login','#register','#register-email'].includes(location.hash)) {
       authReturnHash = location.hash || '#today';

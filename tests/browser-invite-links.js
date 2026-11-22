@@ -32,6 +32,8 @@ async page => {
   await page.goto(base + '/?join=' + invite.code);
   await page.waitForTimeout(800);
   result.joinCleaned = !new URL(page.url()).searchParams.has('join');
+  result.joinNoteOnAuth = await page.evaluate(() => { const n = document.getElementById('auth-subtitle');
+    return !n.hidden && n.textContent.includes('тот же аккаунт'); });
   result.joinRemembered = await page.evaluate(code => localStorage.getItem('disbit_pending_join_v1') === code, invite.code);
   await signIn(2, 'beta_friend');
   await page.goto(base + '/');
@@ -47,6 +49,9 @@ async page => {
   result.staleSaveKeepsBuddy = (await ownerHabit()).buddy === 'beta_friend';
   await api(1, 'PUT', '/habits/beta-check', { ...stale, buddyChange: true });
   result.explicitUnlink = (await ownerHabit()).buddy === '';
+  // an old app (1.1.1) picks a friend with a plain save, without buddyChange
+  await api(1, 'PUT', '/habits/beta-check', { ...stale, buddy: 'beta_friend' });
+  result.oldAppCanPickFriend = (await ownerHabit()).buddy === 'beta_friend';
 
   // 3) personal link with the inviter's token: friendship without a request
   const owner = await api(1, 'GET', '/friends');
