@@ -22,6 +22,8 @@
 | 2026-11-23 | Сервер production + staging | — | `2071f42` | — | ops/CARD-MENU-SHEETS-2026-11-23.md |
 | 2026-11-23 | Android release APK, локально | 1.1.3 / 13 | `2071f42` | — | ops/CARD-MENU-SHEETS-2026-11-23.md (APK SHA-256 `2ae8ff5d…2a80ce`) |
 | 2026-11-23 | Сервер production + staging | — | `8ca21e5` | — | аватары и прогресс пары (`9a6f8e6`) + незаконченный `wip(qa)` Codex; `/api/ready` проверен |
+| 2026-11-23 | Сервер production + staging | — | `954e2d7` | `server-2026-11-23` | ops/VISUAL-QA-2026-11-23.md |
+| 2026-11-23 | Android release APK | 1.1.4 / 14 | `954e2d7` | `android-1.1.4-14` | SHA-256 `6e434d827f0f80dee7058af84ab50324ba7e8aeb85becf03686fe8e984259d53` |
 
 ## Как ставить тег
 
