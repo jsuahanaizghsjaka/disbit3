@@ -23,7 +23,8 @@ async page => {
   await page.locator('#btn-save').click();assert(await page.locator('#add-overlay').isVisible(),'Short click submitted');
   await page.locator('#btn-save').focus();await page.keyboard.press('Enter');
   await page.waitForFunction(()=>habits.some(h=>h.name==='Тихая прогулка'));
-  for(const [name,id] of [['Пустынный путь','beta-check'],['Водный маршрут','beta-count']]) {
+  for(const [name,id] of [['Пустынный путь с очень длинным названием марафона','beta-check'],['Водный маршрут','beta-count']]) {
+    await page.setViewportSize({width:id==='beta-check'?320:390,height:844});
     await page.locator('#dock [data-screen="marathon"]').click();
     await page.locator('#btn-goal-add').click();await page.locator('#g-name').fill(name);
     assert(!(await page.locator('#g-deadline').isVisible())&&!(await page.locator('#g-steps').isVisible()),'Regular inputs visible');
@@ -38,6 +39,13 @@ async page => {
     assert(await page.locator('#g-deadline').inputValue()==='','Clear deadline');
     await page.locator(`.mh-check[value="${id}"]`).check();await page.locator('#g-save').click();
     await page.locator('#goal-overlay').waitFor({state:'hidden'});
+    const notice = page.locator('.toast');
+    assert(await notice.innerText()==='Марафон создан','toast title');
+    assert(await notice.evaluate(el=>{
+      const toast=el.getBoundingClientRect();
+      return toast.top>document.querySelector('header').getBoundingClientRect().bottom && toast.bottom<=document.querySelector('#dock').getBoundingClientRect().top;
+    }),'toast overlaps header or dock');
+
   }
   await page.locator('#dock [data-screen="today"]').click();
   assert(await page.locator('#walker .walker-card').count()===2,'Second marathon missing from Today');
@@ -80,6 +88,10 @@ async page => {
   await page.locator('[data-check="beta-count"]').click();
   await page.locator('#completion-dialog').waitFor({state:'visible'});
   assert(await page.locator('#completion-skip').isDisabled(),'Exhausted quota enabled');
+  await page.addStyleTag({content:'#completion-dialog button, #completion-proof-hint {font-size: 150%}'});
+  const share=page.locator('#completion-dialog button[value="share"]');
+  assert(await page.locator('#completion-skip').isHidden() && await share.isVisible(),'proof must be the available action');
+  assert(await share.evaluate(el => el.classList.contains('btn-primary') && el.getBoundingClientRect().right<=innerWidth), 'proof not primary or overflows');
   await page.screenshot({path:'test-results/beta-proof-mobile.png',fullPage:true});
   await page.locator('#completion-dialog [value="share"]').click();
   // The capture screen is prepared in the dialog's asynchronous close event.

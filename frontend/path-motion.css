@@ -26,7 +26,7 @@
 .sheet-actions > button { min-width:0; overflow-wrap:anywhere; }
 #g-deadline-wheel, #g-steps-wheel { width:100%; min-height:48px; padding:14px 16px; background:var(--surface-2); border:1px solid var(--line); border-radius:16px; text-align:left; }
 #extra-conditions > .field-label { margin-top:0; }
-#walker { display:grid; gap:16px; }
+#walker { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; }
 #walker[hidden] { display:none; }
 .wheel-open { font-size:13px; min-height:44px; color:var(--text-2); }
 .motion-wheel-dialog { box-sizing:border-box; width:min(400px, calc(100vw - 24px)); max-height:calc(100dvh - 32px); margin:auto; padding:20px; border:1px solid var(--line); border-radius:24px; background:var(--sheet-bg); color:var(--text); overflow:auto; overscroll-behavior:contain; }
