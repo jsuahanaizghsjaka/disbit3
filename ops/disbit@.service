@@ -9,6 +9,7 @@ User=disbit-%i
 Group=disbit-%i
 WorkingDirectory=/opt/disbit/%i/current
 EnvironmentFile=/etc/disbit/%i.env
+EnvironmentFile=-/etc/disbit/%i-telegram.env
 ExecStart=/usr/bin/node backend/server.js
 Restart=on-failure
 RestartSec=5
