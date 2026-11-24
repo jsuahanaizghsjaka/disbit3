@@ -1,0 +1,29 @@
+/* Мини-приложение Telegram: экран входа, настройки, отступы под кнопки Telegram (ТЗ, разделы 5 и 9). */
+html.tg { overscroll-behavior: none; }
+.tg .app { padding-top: var(--tg-content-top, 0px); }
+.tg .dock { bottom: calc(10px + var(--tg-safe-bottom, 0px) + env(safe-area-inset-bottom)); }
+/* Нижняя навигация поднимается над MainButton: кнопка Telegram занимает около 64 px. */
+.tg.tg-main-button .dock, .tg .tg-main-button .dock { bottom: calc(74px + var(--tg-safe-bottom, 0px) + env(safe-area-inset-bottom)); }
+
+#tg-gate { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center;
+  padding: calc(var(--sp-3) + var(--tg-safe-top, 0px)) var(--sp-3) calc(var(--sp-3) + var(--tg-safe-bottom, 0px));
+  background: var(--bg); color: var(--text); overflow-y: auto; }
+#tg-gate.on { display: flex; }
+#tg-gate[hidden] { display: none; }
+.tg-card { width: min(420px, 100%); display: flex; flex-direction: column; gap: var(--sp-3); }
+.tg-title { margin: 0; font-size: 1.5rem; line-height: 1.2; }
+.tg-note { margin: 0; color: var(--text-2); line-height: 1.45; }
+.tg-error { margin: 0; color: var(--bad); }
+.tg-check { display: flex; gap: var(--sp-2); align-items: flex-start; color: var(--text-2); line-height: 1.4; }
+.tg-check input { margin-top: 3px; flex: none; }
+.tg-check a { color: var(--primary); }
+.tg-field { display: flex; flex-direction: column; gap: var(--sp-1); color: var(--text-2); font-size: 0.9rem; }
+.tg-card .btn-primary, .tg-card .btn-ghost, .tg-sheet .btn-primary, .tg-sheet .btn-ghost { width: 100%; }
+
+.tg-sheet-overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-end; background: rgba(0, 0, 0, 0.5); }
+.tg-sheet { width: 100%; max-height: 88vh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-3) calc(var(--sp-4) + var(--tg-safe-bottom, 0px)); background: var(--sheet-bg);
+  border-radius: var(--r-lg) var(--r-lg) 0 0; color: var(--text); }
+.tg-banner { position: fixed; left: var(--sp-3); right: var(--sp-3); top: calc(var(--sp-3) + var(--tg-content-top, 0px)); z-index: 250;
+  display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--r-md);
+  background: var(--sheet-bg); border: 1px solid var(--line); color: var(--text); box-shadow: var(--shadow-2); }

@@ -46,7 +46,10 @@ function refreshClientTimeZone() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshClientTimeZone(); });
 
 /* ---------- АККАУНТ (Bearer-токен) ---------- */
-let authToken = localStorage.getItem(TOKEN_KEY) || null;
+/* В Telegram токен живёт только в памяти (localStorage там чистится): платформенный
+   адаптер подставляет DisbitTokenStore до загрузки этого файла. В остальных случаях — localStorage. */
+const tokenStore = window.DisbitTokenStore || localStorage;
+let authToken = tokenStore.getItem(TOKEN_KEY) || null;
 const readCoordinator = createDisbitReadCoordinator({
   fetchImpl: (...args) => fetch(...args),
   getOwner: () => authToken,
@@ -73,10 +76,10 @@ function setAuth(token, user) {
   authUser = user;
   if (changed && token) void window.DisbitBlocking?.start();
   if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
+    tokenStore.setItem(TOKEN_KEY, token);
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   } else {
-    localStorage.removeItem(TOKEN_KEY);
+    tokenStore.removeItem(TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
   }
 }
@@ -3494,15 +3497,16 @@ function renderAccount() {
         <span class="ledger-icon">${icon('i-check', 'ic')}</span>
         <div class="ledger-main">
           <div class="ledger-name">@${escapeHtml(authUser.login)}</div>
-          <div class="ledger-day" style="text-transform:none">${escapeHtml(authUser.email)}</div>
+          <div class="ledger-day" style="text-transform:none">${authUser.telegramOnly ? 'Вход через Telegram' : escapeHtml(authUser.email)}</div>
         </div>
-        <span class="acc-badge">${authUser.emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'}</span>
+        <span class="acc-badge">${authUser.telegramOnly ? 'Только Telegram' : authUser.emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'}</span>
       </div>
       <button class="row-btn danger" id="btn-logout">
         ${icon('i-x')}<span>Выйти из аккаунта</span>
       </button>`;
     box.querySelector('#btn-logout').addEventListener('click', logout);
-    if (!authUser.emailVerified) { const b=document.createElement('button');b.className='row-btn';b.textContent='Подтвердить почту';b.onclick=()=>openVerifySheet(authUser.email);box.prepend(b); }
+    if (!authUser.emailVerified && !authUser.telegramOnly) { const b=document.createElement('button');b.className='row-btn';b.textContent='Подтвердить почту';b.onclick=()=>openVerifySheet(authUser.email);box.prepend(b); }
+    window.DisbitPlatform?.renderAccount?.(box, authUser);
   } else {
     box.innerHTML = `
       <p class="hint" style="margin:0 0 10px">Войди, чтобы обещания и штрафы
@@ -5634,6 +5638,7 @@ function nativePlugin(name) {
 async function shareInvite(data) {
   const Share = nativePlugin('Share');
   try {
+    if (window.DisbitPlatform?.share && await window.DisbitPlatform.share(data)) return;
     if (Share) { await Share.share({ title: data.title, text: data.text, url: data.url, dialogTitle: 'Позвать друга' }); return; }
     if (navigator.share) { await navigator.share(data); return; }
   } catch (error) {
