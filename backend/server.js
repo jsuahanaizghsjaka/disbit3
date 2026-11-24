@@ -12,6 +12,7 @@ import { db } from './db/db.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import habitsRouter from './routes/habits.js';
 import chargesRouter from './routes/charges.js';
@@ -26,6 +27,9 @@ import { settleClosedMoneyDays } from './lib/money-settlement.js';
 import accountRouter from './routes/account.js';
 import moderationRouter from './routes/moderation.js';
 import blockingRouter from './routes/blocking.js';
+import { telegramAuthRouter, telegramRouter } from './routes/telegram.js';
+import { telegramEnabled } from './lib/telegram.js';
+import { schedulerTick, flushOutbox, notifyPenalty } from './lib/telegram-bot.js';
 import {enforceModeration} from './lib/moderation.js';
 import {securityHeaders,corsOrigin} from './lib/http-security.js';
 
@@ -61,7 +65,9 @@ app.get('/api/ready', (req, res) => {
 });
 
 // эндпоинты
+app.use('/api/auth/telegram', telegramAuthRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/telegram', telegramRouter);
 app.use('/api/habits', habitsRouter);
 app.use('/api/charges', chargesRouter);
 app.use('/api/state', stateRouter);
@@ -150,6 +156,30 @@ app.get('/review', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'review.html'));
 });
 
+/* Мини-приложение Telegram: /tg/ — та же сборка, другой index.html (ТЗ Telegram, раздел 9).
+   Страницу собираем из frontend/index.html: SDK и адаптер подключаются только здесь, а скрипты
+   приложения откладываются до входа по initData (platform-telegram.js грузит их сам). */
+const frontendDir = path.join(__dirname, '..', 'frontend');
+let telegramPageCache = { mtime: 0, html: '' };
+function telegramPage() {
+  const file = path.join(frontendDir, 'index.html');
+  const mtime = statSync(file).mtimeMs;
+  if (telegramPageCache.mtime !== mtime) {
+    const html = readFileSync(file, 'utf8')
+      .replace(/<script\b([^>]*?)\bsrc="([^"]+)"([^>]*)><\/script>/g, (all, before, src, after) =>
+        `<script type="application/x-tg-deferred" data-tg-src="${src}"${/type="module"/.test(before + after) ? ' data-tg-type="module"' : ''}></script>`)
+      .replace('</head>', '  <link rel="stylesheet" href="tg.css" />\n  <script src="https://telegram.org/js/telegram-web-app.js"></script>\n  <script src="platform-telegram.js"></script>\n</head>');
+    telegramPageCache = { mtime, html };
+  }
+  return telegramPageCache.html;
+}
+app.get(['/tg', '/tg/', '/tg/index.html'], (req, res) => {
+  // Без косой черты относительные пути страницы (style.css, script.js) вели бы мимо /tg/.
+  if (req.originalUrl.split('?')[0] === '/tg') return res.redirect(301, '/tg/' + req.originalUrl.slice(3));
+  res.set('Cache-Control', 'no-store').type('html').send(telegramPage());
+});
+app.use('/tg', express.static(frontendDir, { index: false }));
+
 // раздаём фронтенд статикой (http://localhost:3000 → приложение)
 // Шрифты и иконки не меняются между релизами — не перепроверяем их на каждый запуск.
 // HTML/JS/CSS остаются с ETag-перепроверкой: имена файлов без хэшей.
@@ -186,12 +216,32 @@ if (moneyService) {
     try {
       const penalties = settleClosedMoneyDays(db).filter(r => r.status);
       if (penalties.length) console.log(`[money] penalties settled: ${penalties.length}`);
+      for (const r of penalties) {
+        try {
+          const row = db.prepare('SELECT p.id,p.amount,h.name FROM money_penalties p JOIN habits h ON h.id=p.habit_id WHERE p.user_id=? AND p.habit_id=? AND p.day=?').get(r.userId, r.habitId, r.day);
+          if (row) notifyPenalty(r.userId, { day: r.day, habitName: row.name, rubles: Math.round(row.amount) / 100, penaltyId: row.id });
+        } catch { console.error('[telegram] penalty notice failed'); }
+      }
       await moneyService.reconcile(moneyReturnUrl);
     } catch (error) { console.error('[money] jobs failed:', error.message); }
     finally { busy = false; }
   };
   setTimeout(moneyJobs, 30000).unref();
   setInterval(moneyJobs, 10 * 60000).unref();
+}
+
+/* Бот Telegram: раз в минуту — кому пора напоминание по его поясу, затем отправка очереди. */
+if (telegramEnabled()) {
+  let telegramBusy = false;
+  const telegramJobs = async () => {
+    if (telegramBusy) return;
+    telegramBusy = true;
+    try { schedulerTick(); await flushOutbox(); }
+    catch { console.error('[telegram] jobs failed'); }
+    finally { telegramBusy = false; }
+  };
+  setTimeout(telegramJobs, 15000).unref();
+  setInterval(telegramJobs, 60000).unref();
 }
 
 function shutdown() {

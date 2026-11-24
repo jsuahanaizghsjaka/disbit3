@@ -20,6 +20,7 @@ import { transaction, syncTrustedBitAward, trustedCompletionEligible } from '../
 import { validateVideo } from '../lib/proof-video.js';
 import {requestLimit} from '../lib/request-limits.js';
 import {pruneProofMedia} from '../lib/proof-retention.js';
+import { notifyProofDecision } from '../lib/telegram-bot.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -232,6 +233,7 @@ router.post('/:id/decision', express.json(), adminOnly, (req, res) => {
   });
   if (!updated) return res.status(404).json({ error: 'Пруф не найден' });
   if(updated==='resolved')return res.status(409).json({error:'Решение уже принято'});
+  try { notifyProofDecision(Number(req.params.id)); } catch { console.error('[telegram] proof notice failed'); }
   res.json({ ok: true, id: Number(req.params.id), status });
 });
 

@@ -66,16 +66,16 @@ for (const sql of [
   if (!exists) db.exec(sql); // Disk/permission/schema failures must abort startup.
 }
 
-// 'app' = a new edition accepted inside the app after registration. SQLite
+// 'app' = a new edition accepted inside the app after registration; 'telegram' = accepted in the Mini App. SQLite
 // cannot change a CHECK in place, so older databases rebuild the table once.
-if (!(db.prepare("SELECT sql FROM sqlite_master WHERE name='legal_acceptances'").get()?.sql || '').includes("'app'")) {
+if (!(db.prepare("SELECT sql FROM sqlite_master WHERE name='legal_acceptances'").get()?.sql || '').includes("'telegram'")) {
   db.exec(`BEGIN IMMEDIATE;
     CREATE TABLE legal_acceptances_next (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       document TEXT NOT NULL CHECK(document IN ('terms','personal_data')),
       version TEXT NOT NULL,
-      source TEXT NOT NULL CHECK(source IN ('email','google','app')),
+      source TEXT NOT NULL CHECK(source IN ('email','google','app','telegram')),
       accepted_at INTEGER NOT NULL
     );
     INSERT INTO legal_acceptances_next(id,user_id,document,version,source,accepted_at)

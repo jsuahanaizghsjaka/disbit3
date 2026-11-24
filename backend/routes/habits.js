@@ -178,48 +178,56 @@ router.put('/:id', (req, res) => {
   res.json(getHabit(req.params.id, uid(req)));
 });
 
-// PUT /api/habits/:id/day/:day — отметка за день { done, count }
-router.put('/:id/day/:day', (req, res) => {
+/* Отметка дня. Вынесена из маршрута, чтобы кнопки бота Telegram и приложение
+   проходили через одни и те же проверки и давали одинаковый результат.
+   today — «сегодня» по часовому поясу аккаунта (accountDay), решает сервер. */
+export function markDay(userId, habitId, day, body, today) {
   const exists = db.prepare(
     'SELECT id, archive_periods, goal_type, goal_target FROM habits WHERE id = ? AND user_id = ?'
-  ).get(req.params.id, uid(req));
-  if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
-  if (JSON.parse(exists.archive_periods || '[]').some(p => req.params.day >= p.from && (!p.to || req.params.day < p.to))) {
-    return res.status(409).json({ error: 'В этот день обещание было в архиве' });
+  ).get(habitId, userId);
+  if (!exists) return { status: 404, json: { error: 'Обещание не найдена' } };
+  if (JSON.parse(exists.archive_periods || '[]').some(p => day >= p.from && (!p.to || day < p.to))) {
+    return { status: 409, json: { error: 'В этот день обещание было в архиве' } };
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.day)) {
-    return res.status(400).json({ error: 'Неверный формат дня, нужен YYYY-MM-DD' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return { status: 400, json: { error: 'Неверный формат дня, нужен YYYY-MM-DD' } };
   }
-  if (req.params.day !== accountDay(req)) {
-    return res.status(403).json({ error: 'День закрыт: отмечать можно только сегодня' });
+  if (day !== today) {
+    return { status: 403, json: { error: 'День закрыт: отмечать можно только сегодня' } };
   }
 
-  const skip = req.body?.skip ? 1 : 0;
-  const done = (!skip && req.body?.done) ? 1 : 0;   // пропуск и «выполнено» взаимоисключаемы
-  const count = Math.max(0, Math.min(999, Math.trunc(Number(req.body?.count) || 0)));
+  const skip = body?.skip ? 1 : 0;
+  const done = (!skip && body?.done) ? 1 : 0;   // пропуск и «выполнено» взаимоисключаемы
+  const count = Math.max(0, Math.min(999, Math.trunc(Number(body?.count) || 0)));
   if ((done || (!skip && exists.goal_type === 'count' && count >= exists.goal_target)) &&
-      !proofSatisfied(uid(req), exists.id, req.params.day)) {
-    return res.status(409).json({ error: 'Нужно фото/видео или один из пяти пропусков пруфа за месяц' });
+      !proofSatisfied(userId, exists.id, day)) {
+    return { status: 409, json: { error: 'Нужно фото/видео или один из пяти пропусков пруфа за месяц' } };
   }
   try {
     const quota = transaction(db, () => {
       if (skip) {
-        recordFullDaySkip(db,uid(req),req.params.day);
-        applyFullDaySkip(uid(req),req.params.day);
-        return promiseSkipQuota(db,uid(req),req.params.day);
+        recordFullDaySkip(db,userId,day);
+        applyFullDaySkip(userId,day);
+        return promiseSkipQuota(db,userId,day);
       }
       db.prepare(`
         INSERT INTO completions (habit_id, day, count, done, skip, minimum) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done, skip = excluded.skip, minimum = excluded.minimum
-      `).run(req.params.id, req.params.day, count, done, skip, done && req.body.minimum ? 1 : 0);
-      syncTrustedBitAward(db,uid(req),req.params.id,req.params.day,
-        trustedCompletionEligible(db,uid(req),req.params.id,req.params.day));
-      return promiseSkipQuota(db,uid(req),req.params.day);
+      `).run(habitId, day, count, done, skip, done && body.minimum ? 1 : 0);
+      syncTrustedBitAward(db,userId,habitId,day,
+        trustedCompletionEligible(db,userId,habitId,day));
+      return promiseSkipQuota(db,userId,day);
     });
-    const habits = skip ? db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY created_at').all(uid(req))
+    const habits = skip ? db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY created_at').all(userId)
       .map(row=>rowToHabit(row,db.prepare('SELECT * FROM completions WHERE habit_id=?').all(row.id))) : undefined;
-    res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count, quota, ...(skip ? {habits} : {}) });
-  } catch (error) { res.status(409).json({ error: error.message }); }
+    return { status: 200, json: { ok: true, day, done: !!done, skip: !!skip, count, quota, ...(skip ? {habits} : {}) } };
+  } catch (error) { return { status: 409, json: { error: error.message } }; }
+}
+
+// PUT /api/habits/:id/day/:day — отметка за день { done, count }
+router.put('/:id/day/:day', (req, res) => {
+  const result = markDay(uid(req), req.params.id, req.params.day, req.body, accountDay(req));
+  res.status(result.status).json(result.json);
 });
 
 // DELETE /api/habits/:id — удалить обещание (отметки — каскадом)

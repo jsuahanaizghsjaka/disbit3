@@ -14,6 +14,7 @@ import { blocked } from '../lib/moderation.js';
 import {requestLimit} from '../lib/request-limits.js';
 import {transaction} from '../lib/promise-skips.js';
 import { accountDay } from '../proof-policy.js';
+import { notifyFriendAccepted } from '../lib/telegram-bot.js';
 
 const router = Router();
 router.use(requestLimit('invite-ip',60,60000));
@@ -123,6 +124,7 @@ router.post('/:code/accept', (req, res) => transaction(db, () => {
   // 3. у владельца обещание тоже становится совместной — со мной
   db.prepare('UPDATE habits SET buddy = ? WHERE id = ? AND user_id = ?')
     .run(me.login, inv.habit_id, owner.id);
+  try { notifyFriendAccepted(owner.id, me.login, me.id); } catch { console.error('[telegram] friend notice failed'); }
 
   const row = db.prepare('SELECT * FROM habits WHERE id = ?').get(myHabitId);
   db.prepare('DELETE FROM habit_invites WHERE code=?').run(inv.code);

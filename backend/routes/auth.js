@@ -84,16 +84,21 @@ for(const row of db.prepare("SELECT token FROM sessions WHERE token NOT LIKE 'sh
 }
 db.prepare('DELETE FROM email_codes WHERE length(code)<>64').run();
 
-function createSession(userId) {
+export function createSession(userId) {
   const token = randomBytes(32).toString('hex');
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
     .run(sessionDigest(token), userId, Date.now() + SESSION_TTL_MS);
   return token;
 }
-function publicUser(row) {
+/* Аккаунт, созданный в Telegram, не имеет почты: в таблице лежит служебный адрес,
+   наружу он не отдаётся. */
+export const isPlaceholderEmail = email => /^tg\d+@telegram\.invalid$/.test(String(email || ''));
+export function publicUser(row) {
+  const telegramOnly = isPlaceholderEmail(row.email);
   return {
-    id: row.id, login: row.login, email: row.email,
+    id: row.id, login: row.login, email: telegramOnly ? '' : row.email,
     emailVerified: !!row.email_verified,
+    ...(telegramOnly ? { telegramOnly: true } : {}),
     createdAt: row.created_at
   };
 }

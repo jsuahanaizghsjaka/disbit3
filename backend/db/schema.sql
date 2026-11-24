@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS legal_acceptances (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   document TEXT NOT NULL CHECK(document IN ('terms','personal_data')),
   version TEXT NOT NULL,
-  source TEXT NOT NULL CHECK(source IN ('email','google','app')),
+  source TEXT NOT NULL CHECK(source IN ('email','google','app','telegram')),
   accepted_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS legal_acceptances_user ON legal_acceptances(user_id);
@@ -371,4 +371,88 @@ CREATE TABLE IF NOT EXISTS habit_invites (
   payload    TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(owner_id, habit_id)
+);
+
+-- Telegram (ТЗ docs/TELEGRAM-TZ.md, раздел 9). Один Telegram — один аккаунт Disbit.
+CREATE TABLE IF NOT EXISTS telegram_links (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  telegram_id INTEGER NOT NULL UNIQUE,
+  chat_id INTEGER NOT NULL,
+  can_write INTEGER NOT NULL DEFAULT 0,
+  blocked_at INTEGER,
+  stopped INTEGER NOT NULL DEFAULT 0,          -- /stop: только сообщения о деньгах
+  remind_time TEXT NOT NULL DEFAULT '09:00',
+  quiet_from TEXT NOT NULL DEFAULT '23:00',
+  quiet_to TEXT NOT NULL DEFAULT '08:00',
+  notify_morning INTEGER NOT NULL DEFAULT 1,
+  notify_evening INTEGER NOT NULL DEFAULT 1,
+  notify_last_chance INTEGER NOT NULL DEFAULT 1,
+  notify_summary INTEGER NOT NULL DEFAULT 1,
+  notify_social INTEGER NOT NULL DEFAULT 1,
+  source TEXT NOT NULL DEFAULT '',             -- метка первого входа (раздел 3)
+  write_asked_at INTEGER,
+  first_name TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL
+);
+-- Одноразовые коды привязки с сайта: хранится только хеш, живёт 10 минут.
+CREATE TABLE IF NOT EXISTS telegram_link_codes (
+  code_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+-- Привязка со стороны Telegram: код из письма (5 попыток).
+CREATE TABLE IF NOT EXISTS telegram_email_codes (
+  telegram_id INTEGER PRIMARY KEY,
+  email TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+-- Очередь сообщений бота. idem_key = событие + аккаунт + дата: дубли не отправляются.
+CREATE TABLE IF NOT EXISTS telegram_outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chat_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  service INTEGER NOT NULL DEFAULT 0,          -- 1 = сервисное (не считается в лимит 4 в день, ночью не молчит)
+  idem_key TEXT NOT NULL UNIQUE,
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sent','failed','skipped')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  sent_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS telegram_outbox_due ON telegram_outbox(status, next_at);
+-- Кнопки под сообщениями бота: callback_data хранит только короткий id действия (лимит 64 байта),
+-- а владельца и обещание сервер берёт отсюда.
+CREATE TABLE IF NOT EXISTS telegram_actions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  habit_id TEXT NOT NULL,
+  day TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS telegram_actions_user ON telegram_actions(user_id, day);
+-- Добавление почты и пароля к аккаунту, созданному в Telegram (до подтверждения кодом).
+CREATE TABLE IF NOT EXISTS telegram_pending_email (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  pass_hash TEXT NOT NULL,
+  pass_salt TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+-- Журнал замен привязки (раздел 4: «запись в журнале»).
+CREATE TABLE IF NOT EXISTS telegram_link_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  old_telegram_id INTEGER,
+  new_telegram_id INTEGER,
+  event TEXT NOT NULL,
+  at INTEGER NOT NULL
 );

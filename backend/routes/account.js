@@ -8,6 +8,9 @@ import {ensureErasureTables,financialState,recordErasure,eraseAccount,replayEras
 import '../lib/moderation.js';
 import { hasConsent, recordConsent } from '../lib/legal.js';
 import { legalState } from '../lib/money-live.js';
+import { notifyAccountDeleted } from '../lib/telegram-bot.js';
+import { isTelegramOnly, telegramConfig, linkByTelegramId } from '../lib/telegram.js';
+import { verifyInitData } from '../lib/telegram-auth.js';
 
 const proofDir = process.env.PROOFS_DIR || path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(path.dirname(fileURLToPath(import.meta.url)), '../db'), 'proofs');
 db.exec(`CREATE TABLE IF NOT EXISTS account_media_cleanup (file TEXT PRIMARY KEY);
@@ -53,6 +56,13 @@ router.get('/export', (req, res) => {
   data.socialProviders = db.prepare('SELECT provider FROM social_identities WHERE user_id=?').all(id);
   res.json(data);
 });
+/* Полное удаление аккаунта с журналом (общий путь для удаления из профиля и слияния при привязке Telegram). */
+export function eraseAccountFully(user) {
+  const financial=financialState(db,user.id);
+  recordErasure(journal,user);
+  eraseAccount(db,user,{preserveFinancial:financial.history});
+  cleanupMedia();
+}
 router.delete('/', (req,res) => {
   const id=req.userId;
   const user=db.prepare('SELECT * FROM users WHERE id=?').get(id);
@@ -62,20 +72,30 @@ router.delete('/', (req,res) => {
   const limit=db.prepare('SELECT * FROM account_delete_limits WHERE user_id=?').get(id);
   if (limit && now-limit.window_start<3600000 && limit.attempts>=5) return res.status(429).json({error:'Слишком много попыток. Повтори через час.'});
   db.prepare('INSERT INTO account_delete_limits VALUES (?,1,?) ON CONFLICT(user_id) DO UPDATE SET attempts=CASE WHEN window_start<? THEN 1 ELSE attempts+1 END,window_start=CASE WHEN window_start<? THEN excluded.window_start ELSE window_start END').run(id,now,now-3600000,now-3600000);
+  if (isTelegramOnly(id)) {
+    // Аккаунт создан в Telegram и пароля не имеет: личность подтверждает свежая подпись initData того же Telegram.
+    let init;
+    try { init=verifyInitData(req.body?.initData,telegramConfig().token,{maxAgeSec:3600}); }
+    catch { return res.status(403).json({error:'Переоткройте Disbit из чата с ботом и повторите'}); }
+    if (linkByTelegramId(init.user.id)?.user_id!==id) return res.status(403).json({error:'Переоткройте Disbit из чата с ботом и повторите'});
+  } else {
   const password=String(req.body?.password || '');
   if (!password || password.length>256) return res.status(400).json({error:'Введи текущий пароль. Для входа через Google сначала задай пароль через восстановление.'});
   const expected=Buffer.from(user.pass_hash,'hex');
   const actual=scryptSync(password,user.pass_salt,64);
   if (expected.length!==actual.length || !timingSafeEqual(expected,actual)) return res.status(403).json({error:'Неверный пароль'});
+  }
   const financial=financialState(db,id);
   if (financial.pending) {
     db.prepare('INSERT OR IGNORE INTO account_deletion_requests(user_id) VALUES (?)').run(id);
     return res.status(409).json({error:'Запрос на удаление сохранён. Сначала необходимо завершить платежи и возврат остатка. Поддержка: disbitx1@gmail.com.',deletionRequested:true});
   }
   // Persist intent before changing the DB; a crash cannot resurrect this account.
+  const telegram=db.prepare('SELECT chat_id,can_write,blocked_at FROM telegram_links WHERE user_id=?').get(id);
   recordErasure(journal,user);
   eraseAccount(db,user,{preserveFinancial:financial.history});
   cleanupMedia();
+  if(telegram&&telegram.can_write&&!telegram.blocked_at)notifyAccountDeleted(telegram.chat_id).catch(()=>{});
   res.json({ok:true});
 });
 export default router;

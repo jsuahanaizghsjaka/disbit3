@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import { db } from '../db/db.js';
 import { blocked } from '../lib/moderation.js';
 import { requestLimit } from '../lib/request-limits.js';
+import { notifyFriendAccepted } from '../lib/telegram-bot.js';
 
 const router = Router();
 
@@ -144,6 +145,7 @@ router.post('/', (req, res) => {
   db.prepare('UPDATE friendships SET confirmed=1 WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)').run(req.userId,friend.id,friend.id,req.userId);
   db.prepare('DELETE FROM friend_requests WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)').run(req.userId,friend.id,friend.id,req.userId);
 
+  try { notifyFriendAccepted(friend.id, db.prepare('SELECT login FROM users WHERE id=?').get(req.userId)?.login || '', req.userId); } catch { console.error('[telegram] friend notice failed'); }
   res.status(201).json({ ok: true, friend: { id: friend.id, login: friend.login, ...publicCard(friend.id) } });
 });
 
