@@ -17,6 +17,7 @@ const special = {
   'browser-password-recovery.js': { fixture: 'recovery-fixture.mjs', login: [1, 'recovery_one'] },
   'browser-audit-remediation.js': { fixture: 'recovery-fixture.mjs', login: [2, 'recovery_two'] },
   'browser-swimming.js': { login: [1, 'beta_tester'] },
+  'browser-telegram.js': { fixture: 'telegram-fixture.mjs' },
   'browser-money-live.js': { fixture: 'money-live-fixture.mjs' },
   'browser-money-terms-card.js': { fixture: 'money-live-fixture.mjs' },
   'browser-wallet-history.js': { env: { DISBIT_HISTORY_FIXTURE: '1' } },
