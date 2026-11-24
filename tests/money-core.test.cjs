@@ -9,7 +9,7 @@ const { randomUUID } = require('node:crypto');
 let core, settlement;
 const agreement={agreementVersion:'draft-qa',agreementHash:'a'.repeat(64)};
 
-test('unknown provider outcomes past retry window never repeat POST or release refund reserve', async () => {
+test('unknown provider outcomes past retry window never repeat POST or release refund reserve; unsent payments expire', async () => {
   const db=await fixture();
   try {
     const {createMoneyService}=await import('../backend/lib/money-service.js');
@@ -18,15 +18,22 @@ test('unknown provider outcomes past retry window never repeat POST or release r
     const service=createMoneyService(db,provider,{now:()=>Date.parse('2026-11-05T12:00:00Z')});
     const intent=core.openMoneyPayment(db,{userId:1,amount:10000});
     db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-04 13:00:00',intent.id);
-    await assert.rejects(service.resumePayment(intent.id,'https://disbit.ru/'),/Manual reconciliation/);
+    // never sent to the provider and past the window: nobody had a payment page,
+    // so it is canceled locally without any POST and without touching the balance
+    const before=core.moneyBalance(db,1);
+    assert.equal((await service.resumePayment(intent.id,'https://disbit.ru/')).status,'canceled');
+    assert.equal(db.prepare('SELECT status FROM money_payment_intents WHERE id=?').get(intent.id).status,'canceled');
+    assert.deepEqual(core.moneyBalance(db,1),before);
+    assert.equal((await service.reconcile('https://disbit.ru/')).filter(r=>r.id===intent.id&&r.pending).length,0);
     fund(db,10000,'payment-98765432109876543210');
     const refund=core.reserveMoneyRefund(db,{userId:1,amount:3000});
     db.prepare('UPDATE money_refund_requests SET created_at=? WHERE id=?').run('2026-11-04 13:00:00',refund.id);
     await assert.rejects(service.resumeRefundPart(refund.parts[0].id),/Manual reconciliation/);
     assert.equal(posts,0);
     assert.equal(core.moneyBalance(db,1).reserved,3000);
-    db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-05 11:00:00',intent.id);
-    await assert.rejects(service.resumePayment(intent.id,'https://disbit.ru/'),/timeout/);
+    const fresh=core.openMoneyPayment(db,{userId:1,amount:10000});
+    db.prepare('UPDATE money_payment_intents SET created_at=? WHERE id=?').run('2026-11-05 11:00:00',fresh.id);
+    await assert.rejects(service.resumePayment(fresh.id,'https://disbit.ru/'),/timeout/);
     assert.equal(posts,1);
   } finally {db.close();}
 });
@@ -46,7 +53,7 @@ async function fixture() {
   return db;
 }
 function payment(intent, id='payment-12345678901234567890') {
-  return { id, amount:{value:(intent.amount/100).toFixed(2),currency:'RUB'},
+  return { id, amount:{value:((intent.amount+(intent.fee||0))/100).toFixed(2),currency:'RUB'},
     metadata:{disbit_intent:intent.id},status:'succeeded',paid:true,test:false,
     confirmation:{confirmation_url:'https://yookassa.ru/confirm/test'} };
 }
@@ -89,7 +96,7 @@ test('refund reserves only confirmed money, splits by original payment and relea
     assert.throws(()=>core.reserveMoneyRefund(db,{userId:1,amount:5000}),/Insufficient/);
     const one={id:'refund-11111111111111111111',payment_id:providerByIntent.get(reserved.parts[0].paymentIntentId),amount:{value:'70.00',currency:'RUB'},status:'succeeded'};
     core.attachProviderRefund(db,reserved.parts[0].id,one);
-    assert.equal(core.confirmProviderRefund(db,one).status,'partial');
+    assert.equal(core.confirmProviderRefund(db,one).status,'pending');
     assert.equal(core.confirmProviderRefund(db,one).duplicate,true);
     const two={id:'refund-22222222222222222222',payment_id:providerByIntent.get(reserved.parts[1].paymentIntentId),amount:{value:'30.00',currency:'RUB'},status:'canceled'};
     core.attachProviderRefund(db,reserved.parts[1].id,two);
@@ -116,6 +123,28 @@ test('accepted terms start tomorrow; server settles closed days only, once, from
     assert.equal(settlement.settleClosedMoneyDays(db,{now:new Date('2026-10-04T12:00:00Z')})[0].reason,'completed-or-skipped');
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM money_penalties').get().n,1);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM money_ledger WHERE type='penalty'").get().n,1);
+    // A mistaken penalty goes back as a separate correction, only once.
+    const penalty=db.prepare('SELECT id FROM money_penalties').get().id;
+    assert.equal(core.correctMoneyPenalty(db,penalty).balance,10000);
+    assert.equal(core.correctMoneyPenalty(db,penalty).duplicate,true);
+    assert.throws(()=>core.correctMoneyPenalty(db,'missing'),/paid penalty/);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM money_ledger WHERE type='correction'").get().n,1);
+  } finally { db.close(); }
+});
+
+test('one-ruble top-up and a missed one-ruble promise leave the original balance intact after retries', async () => {
+  const db = await fixture();
+  try {
+    fund(db, 10000, 'payment-original-123456789');
+    fund(db, 100, 'payment-one-ruble-123456789');
+    assert.equal(core.moneyBalance(db, 1).balance, 10100);
+    db.prepare('UPDATE habits SET stake_amount = 1 WHERE id = ?').run('habit-1');
+    settlement.acceptMoneyTerms(db, {userId:1, habitId:'habit-1', ...agreement, now:new Date('2026-11-23T09:00:00Z')});
+    const close = () => settlement.settleClosedMoneyDays(db, {now:new Date('2026-11-25T00:05:00Z')});
+    assert.equal(close()[0].amount, 100);
+    assert.equal(core.moneyBalance(db, 1).balance, 10000);
+    assert.deepEqual(close(), []);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM money_ledger WHERE type='penalty'").get().n, 1);
   } finally { db.close(); }
 });
 

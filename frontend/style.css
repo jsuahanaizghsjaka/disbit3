@@ -348,6 +348,11 @@ button:disabled { cursor: default; }
   animation: toastIn var(--t-med) var(--ease);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
+.toast[data-placement="above-nav"] {
+  top: auto;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
 @keyframes toastIn {
   from { opacity: 0; transform: translate(-50%, -12px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
@@ -1127,6 +1132,9 @@ input[type="range"].slider:disabled { opacity: 0.55; cursor: default; }
 /* друзья */
 .friend-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--neutral-line); }
 .friend-row:last-of-type { border-bottom: none; }
+.friend-request { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.friend-request > span { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.friend-request > button { min-width: 0; min-height: 44px; }
 .friend-ava {
   width: 40px; height: 40px;
   border-radius: var(--r-full);
@@ -2246,8 +2254,8 @@ dialog button:focus-visible { outline: 2px solid var(--primary); outline-offset:
 .sheet-overlay {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  /* No backdrop blur: under the dark scrim it is not visible, but a full-screen
+     blur is re-rasterised on every frame of the sheet transition on phones. */
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -2485,24 +2493,66 @@ dialog button:focus-visible { outline: 2px solid var(--primary); outline-offset:
 
 /* ---------- СОВМЕСТНОЕ ОБЕЩАНИЕ: пара аватарок ---------- */
 .buddy-pair { display: inline-flex; align-items: center; }
+/* 36px вместо 26: на карточке должно быть видно, кто это, а не только букву */
 .pair-ava {
-  width: 26px; height: 26px;
+  position: relative;
+  width: 36px; height: 36px;
   border-radius: var(--r-full);
   display: grid; place-items: center;
-  font-size: 13px; font-weight: 800;
-  background: var(--neutral);              /* не сделал — серая */
-  color: var(--text-3);
-  border: 2px solid var(--bg);             /* обводка «под фон», чтобы кружки не слипались */
-  filter: grayscale(1);
-  transition: filter var(--t-med), color var(--t-med), transform var(--t-med) var(--ease);
-}
-.pair-ava + .pair-ava { margin-left: -8px; }   /* лёгкий нахлёст, как в мессенджерах */
-.pair-ava.lit {                                /* сделал сегодня — загорается */
+  overflow: visible;
+  font-size: 16px; font-weight: 800;
   color: #fff;
-  filter: none;
-  transform: scale(1.06);
-  box-shadow: 0 0 10px rgba(var(--tint), 0.45);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--line);   /* не сделал — серое кольцо */
+  opacity: .72;
+  transition: opacity var(--t-med), box-shadow var(--t-med);
 }
+.pair-ava > img, .pair-ava > svg { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.pair-ava > img.mark { object-fit: contain; }
+.pair-ava + .pair-ava { margin-left: -6px; }   /* лёгкий нахлёст, как в мессенджерах */
+.pair-ava.lit {                                /* сделал сегодня — зелёное кольцо и галочка */
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--success, #34C77B);
+}
+.pair-ava.lit::after {
+  content: "✓";
+  position: absolute; right: -4px; bottom: -4px;
+  width: 16px; height: 16px; border-radius: var(--r-full);
+  display: grid; place-items: center;
+  font-size: 10px; line-height: 1; font-weight: 900; color: #fff;
+  background: var(--success, #34C77B);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* ---------- СОВМЕСТНОЕ ОБЕЩАНИЕ: блок «Вместе» в карточке ---------- */
+.duo { display: grid; gap: 12px; margin-bottom: 16px; padding: 14px; border-radius: var(--r-lg, 18px); background: var(--surface-2); border: 1px solid var(--line); }
+.duo-head { display: grid; gap: 2px; }
+.duo-head .field-label { margin: 0; }
+.duo-both { font-size: 14px; font-weight: 700; color: var(--text); }
+.duo-person { display: flex; gap: 12px; align-items: flex-start; }
+.duo-ava {
+  flex-shrink: 0; width: 48px; height: 48px; border-radius: var(--r-full);
+  display: grid; place-items: center; overflow: hidden;
+  font-size: 22px; font-weight: 800; color: #fff;
+  box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--line);
+}
+.duo-ava.lit { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--success, #34C77B); }
+.duo-ava > img, .duo-ava > svg { width: 100%; height: 100%; object-fit: cover; }
+.duo-ava > img.mark { object-fit: contain; }
+.duo-main { display: grid; gap: 4px; min-width: 0; }
+.duo-name { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.duo-line, .duo-overall { font-size: 13px; color: var(--text-2); }
+.duo-overall { color: var(--text-3); }
+.duo-dots { display: flex; gap: 4px; }
+.duo-dots i { width: 14px; height: 14px; border-radius: 4px; background: var(--line); }
+.duo-dots i.on { background: var(--success, #34C77B); }
+.duo-dots i.none { background: transparent; border: 1px dashed var(--line); }
+
+/* вкладка «Друзья»: общий прогресс пары и строки совместных обещаний */
+.duo-total { grid-column: 1 / -1; display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
+.duo-bar { display: block; height: 6px; border-radius: var(--r-full); background: var(--line); overflow: hidden; }
+.duo-bar i { display: block; height: 100%; border-radius: inherit; background: var(--success, #34C77B); }
+.friend-shared .duo-row { display: grid; gap: 2px; text-align: left; }
+.friend-shared .duo-row small { color: var(--text-2); }
 
 /* поле кода подтверждения — крупные цифры с разрядкой */
 .code-input {

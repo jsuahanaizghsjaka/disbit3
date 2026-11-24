@@ -97,6 +97,31 @@ function habitFormError(message, fieldId) {
   box.scrollIntoView({ block: 'nearest' });
 }
 
+/* Деньги удерживаются только по принятому денежному условию (раздел 6 соглашения):
+   отдельное согласие на каждое обещание. Без него штраф — запись в журнале,
+   и карточка должна говорить это прямо, а не «100 ₽ за невыполнение». */
+function moneyConditionHtml(h) {
+  if (h.stake.mode !== 'money') return '<p>Блокировка недоступна</p>';
+  const to = h.stake.recipient === 'charity' ? 'на благотворительность' : 'создателям';
+  const live = !!(API && authToken && wallet?.payments?.live);
+  if (!live) return `<p>${h.stake.amount} ₽ за невыполнение, ${to}</p>`;
+  const terms = acceptedMoneyTerms(h.id);
+  if (terms) return `<p>${rub(terms.amount)} из депозита за невыполненный день, создателям — с ${formatDayLong(terms.effectiveDay)}</p>`;
+  return `<div class="money-off"><p><b>Деньги не удерживаются.</b> Штраф ${h.stake.amount} ₽ пока только запись в журнале: ` +
+    `денежное условие по этому обещанию не включено${h.stake.recipient === 'charity' ? ', а получатель «благотворительность» для него недоступен' : ''}.</p>` +
+    `<button class="btn-ghost" type="button" data-money-on="${escapeHtml(h.id)}">Включить удержание</button></div>`;
+}
+function openMoneyTermsFor(id) {
+  closeHabitMenu();
+  closeSheet('hstat-overlay');
+  openEditSheet(id);
+  const box = document.getElementById('money-terms');
+  if (box && !box.hidden) {
+    box.scrollIntoView({ block: 'center' });
+    document.getElementById('f-money-accept')?.focus({ preventScroll: true });
+  }
+}
+
 function updatePathDetails(h) {
   document.getElementById('detail-archive').textContent = h.archived ? 'Восстановить из архива' : 'В архив';
   ['hstat-edit','hstat-minimum','detail-undo'].forEach(id => { document.getElementById(id).disabled = !!h.archived; });
@@ -108,11 +133,12 @@ function updatePathDetails(h) {
   const conditions = document.createElement('section');
   conditions.className = 'detail-conditions';
   conditions.innerHTML = `<p><b>${iconOf(h.icon)} ${status}</b></p><p>${escapeHtml(schedule)}</p>` +
-    `<p>${h.stake.mode === 'money' ? `${h.stake.amount} ₽ за невыполнение, ${h.stake.recipient === 'charity' ? 'на благотворительность' : 'создателям'}` : 'Блокировка недоступна'}</p>` +
+    moneyConditionHtml(h) +
     (h.min ? `<p>Минимум: ${escapeHtml(h.min)}</p>` : '') +
     (linked ? `<p>Марафон: ${escapeHtml(linked)}</p>` : '') +
     (h.buddy ? `<p>Вместе с @${escapeHtml(h.buddy)}</p>` : '');
   root.prepend(conditions);
+  conditions.querySelector('[data-money-on]')?.addEventListener('click', e => openMoneyTermsFor(e.currentTarget.dataset.moneyOn));
   document.getElementById('detail-undo').hidden = !isDoneToday(h);
   document.getElementById('detail-pin').textContent = h.pinned ? 'Открепить' : 'Закрепить';
   const minimum = document.getElementById('hstat-minimum');
@@ -172,8 +198,7 @@ function syncPathNavigation(name) {
     if (walker.nextElementSibling !== anchor) anchor.before(walker);
   }
   renderWalker();
-  const scene = walker.querySelector('.w-scene');
-  if (scene) {
+  for (const scene of walker.querySelectorAll(':scope > :not([hidden]) .w-scene')) {
     scene.setAttribute('viewBox', name === 'marathon' ? '0 -48 320 180' : '0 0 320 132');
     const sky = scene.querySelector(':scope > rect');
     sky?.setAttribute('y', '-48'); sky?.setAttribute('height', '180');

@@ -3,6 +3,7 @@
    к пользователю. Все маршруты требуют Bearer-токен: данные строго свои.
    ============================================================ */
 
+import {enforcementEnabled,hasUsableDevice,allowedPackages} from '../lib/blocking-devices.js';
 import { Router } from 'express';
 import { db, rowToHabit, habitToParams } from '../db/db.js';
 import { accountDay, proofSatisfied } from '../proof-policy.js';
@@ -66,12 +67,26 @@ router.get('/', (req, res) => {
   res.json(rows.map(r => rowToHabit(r, stmt.all(r.id))));
 });
 
+// A lock promise is accepted only when it can actually be enforced: the server
+// switch is on, a phone of this account is enrolled with the current consent,
+// and at least one restrictable app is chosen.
+function lockRefusal(req) {
+  if (!enforcementEnabled()) return { error: 'Блокировка приложений пока не поддерживается', code: 'blocking_disabled' };
+  if (!hasUsableDevice(uid(req))) return { error: 'Сначала подключите телефон в настройках блокировки', code: 'device_required' };
+  if (!allowedPackages(req.body?.stake?.apps).length) return { error: 'Выберите хотя бы одно приложение для ограничения', code: 'apps_required' };
+  return null;
+}
+
 // POST /api/habits — создать обещание (id может прислать фронтенд)
 router.post('/', (req, res) => {
   if (req.body?.stake?.mode === 'lock') {
-    return res.status(422).json({ error: 'Блокировка приложений пока не поддерживается' });
+    const refusal = lockRefusal(req);
+    if (refusal) return res.status(422).json(refusal);
   }
   const p = habitToParams({ id: 'h' + Date.now(), ...req.body });
+  // без даты от клиента — «сегодня» по часовому поясу аккаунта, а не по UTC:
+  // с 00:00 до 03:00 МСК UTC-дата — это вчера, и новое обещание считалось бы пропущенным
+  if (!req.body?.createdAt) p.created_day = accountDay(req);
   if (db.prepare('SELECT id FROM habits WHERE id=?').get(p.id)) {
     return res.status(409).json({ error: 'Обещание с этим id уже существует' });
   }
@@ -94,7 +109,7 @@ router.post('/', (req, res) => {
     }
     });
   } catch (e) {
-    return res.status(400).json({ error: e.message });
+    return res.status(400).json({ error: 'Не удалось сохранить обещание. Проверьте поля.' });
   }
 
   res.status(201).json(getHabit(p.id, uid(req)));
@@ -127,10 +142,17 @@ router.put('/:id', (req, res) => {
   ).get(req.params.id, uid(req));
   if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
   if (req.body?.stake?.mode === 'lock' && exists.stake_mode !== 'lock') {
-    return res.status(422).json({ error: 'Блокировка приложений пока не поддерживается' });
+    const refusal = lockRefusal(req);
+    if (refusal) return res.status(422).json(refusal);
   }
 
   const p = habitToParams({ ...req.body, id: req.params.id });
+  // Связку «делать вместе» ставит сервер при принятии приглашения, а клиент
+  // владельца узнаёт о ней только после обновления. Устаревшая копия присылает
+  // buddy: '' — такое сохранение связку не снимает. Снять её можно только явно
+  // (buddyChange). Выбрать друга можно и без флага: старые приложения (1.1.1)
+  // флаг не присылают, и «Делать с другом» в них иначе не работает.
+  if (!p.buddy && exists.buddy && req.body?.buddyChange !== true) p.buddy = exists.buddy;
   if (db.prepare('SELECT 1 FROM money_terms WHERE user_id=? AND habit_id=? LIMIT 1').get(uid(req),req.params.id)) {
     const fixed=['schedule','week_target','goal_type','goal_target','stake_mode','stake_amount','stake_recipient','minimum_action','created_day'];
     if (fixed.some(key=>String(p[key])!==String(exists[key]))) {
@@ -156,48 +178,56 @@ router.put('/:id', (req, res) => {
   res.json(getHabit(req.params.id, uid(req)));
 });
 
-// PUT /api/habits/:id/day/:day — отметка за день { done, count }
-router.put('/:id/day/:day', (req, res) => {
+/* Отметка дня. Вынесена из маршрута, чтобы кнопки бота Telegram и приложение
+   проходили через одни и те же проверки и давали одинаковый результат.
+   today — «сегодня» по часовому поясу аккаунта (accountDay), решает сервер. */
+export function markDay(userId, habitId, day, body, today) {
   const exists = db.prepare(
     'SELECT id, archive_periods, goal_type, goal_target FROM habits WHERE id = ? AND user_id = ?'
-  ).get(req.params.id, uid(req));
-  if (!exists) return res.status(404).json({ error: 'Обещание не найдена' });
-  if (JSON.parse(exists.archive_periods || '[]').some(p => req.params.day >= p.from && (!p.to || req.params.day < p.to))) {
-    return res.status(409).json({ error: 'В этот день обещание было в архиве' });
+  ).get(habitId, userId);
+  if (!exists) return { status: 404, json: { error: 'Обещание не найдена' } };
+  if (JSON.parse(exists.archive_periods || '[]').some(p => day >= p.from && (!p.to || day < p.to))) {
+    return { status: 409, json: { error: 'В этот день обещание было в архиве' } };
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.day)) {
-    return res.status(400).json({ error: 'Неверный формат дня, нужен YYYY-MM-DD' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return { status: 400, json: { error: 'Неверный формат дня, нужен YYYY-MM-DD' } };
   }
-  if (req.params.day !== accountDay(req)) {
-    return res.status(403).json({ error: 'День закрыт: отмечать можно только сегодня' });
+  if (day !== today) {
+    return { status: 403, json: { error: 'День закрыт: отмечать можно только сегодня' } };
   }
 
-  const skip = req.body?.skip ? 1 : 0;
-  const done = (!skip && req.body?.done) ? 1 : 0;   // пропуск и «выполнено» взаимоисключаемы
-  const count = Math.max(0, Math.min(999, Math.trunc(Number(req.body?.count) || 0)));
+  const skip = body?.skip ? 1 : 0;
+  const done = (!skip && body?.done) ? 1 : 0;   // пропуск и «выполнено» взаимоисключаемы
+  const count = Math.max(0, Math.min(999, Math.trunc(Number(body?.count) || 0)));
   if ((done || (!skip && exists.goal_type === 'count' && count >= exists.goal_target)) &&
-      !proofSatisfied(uid(req), exists.id, req.params.day)) {
-    return res.status(409).json({ error: 'Нужно фото/видео или один из пяти пропусков пруфа за месяц' });
+      !proofSatisfied(userId, exists.id, day)) {
+    return { status: 409, json: { error: 'Нужно фото/видео или один из пяти пропусков пруфа за месяц' } };
   }
   try {
     const quota = transaction(db, () => {
       if (skip) {
-        recordFullDaySkip(db,uid(req),req.params.day);
-        applyFullDaySkip(uid(req),req.params.day);
-        return promiseSkipQuota(db,uid(req),req.params.day);
+        recordFullDaySkip(db,userId,day);
+        applyFullDaySkip(userId,day);
+        return promiseSkipQuota(db,userId,day);
       }
       db.prepare(`
         INSERT INTO completions (habit_id, day, count, done, skip, minimum) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(habit_id, day) DO UPDATE SET count = excluded.count, done = excluded.done, skip = excluded.skip, minimum = excluded.minimum
-      `).run(req.params.id, req.params.day, count, done, skip, done && req.body.minimum ? 1 : 0);
-      syncTrustedBitAward(db,uid(req),req.params.id,req.params.day,
-        trustedCompletionEligible(db,uid(req),req.params.id,req.params.day));
-      return promiseSkipQuota(db,uid(req),req.params.day);
+      `).run(habitId, day, count, done, skip, done && body.minimum ? 1 : 0);
+      syncTrustedBitAward(db,userId,habitId,day,
+        trustedCompletionEligible(db,userId,habitId,day));
+      return promiseSkipQuota(db,userId,day);
     });
-    const habits = skip ? db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY created_at').all(uid(req))
+    const habits = skip ? db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY created_at').all(userId)
       .map(row=>rowToHabit(row,db.prepare('SELECT * FROM completions WHERE habit_id=?').all(row.id))) : undefined;
-    res.json({ ok: true, day: req.params.day, done: !!done, skip: !!skip, count, quota, ...(skip ? {habits} : {}) });
-  } catch (error) { res.status(409).json({ error: error.message }); }
+    return { status: 200, json: { ok: true, day, done: !!done, skip: !!skip, count, quota, ...(skip ? {habits} : {}) } };
+  } catch (error) { return { status: 409, json: { error: error.message } }; }
+}
+
+// PUT /api/habits/:id/day/:day — отметка за день { done, count }
+router.put('/:id/day/:day', (req, res) => {
+  const result = markDay(uid(req), req.params.id, req.params.day, req.body, accountDay(req));
+  res.status(result.status).json(result.json);
 });
 
 // DELETE /api/habits/:id — удалить обещание (отметки — каскадом)

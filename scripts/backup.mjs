@@ -3,6 +3,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
+import { replayErasures,cleanupErasedMedia } from '../backend/lib/account-erasure.js';
+import {pruneProofMedia} from '../backend/lib/proof-retention.js';
 
 function hash(file) {
   const digest = crypto.createHash('sha256');
@@ -30,7 +32,8 @@ function inspectDatabase(file, proofs) {
     const counts = {};
     for (const { name } of tables) counts[name] = db.prepare(`SELECT count(*) AS n FROM "${name.replaceAll('"','""')}"`).get().n;
     if (tables.some(t => t.name === 'proofs')) {
-      for (const row of db.prepare('SELECT file FROM proofs').all()) {
+      const hasRetention=db.prepare('PRAGMA table_info(proofs)').all().some(c=>c.name==='media_deleted');
+      for (const row of db.prepare('SELECT file FROM proofs'+(hasRetention?' WHERE media_deleted=0':'')).all()) {
         if (!row.file || row.file.includes('/') || row.file.includes('\\') || row.file === '..') throw Error('Unsafe media reference');
         if (!fs.statSync(path.join(proofs, row.file)).isFile()) throw Error('Missing proof file');
       }
@@ -78,7 +81,7 @@ export function createBackup({ database, proofs, destination, offline = false })
   fs.writeFileSync(path.join(target, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 });
   return verifyBackup(target);
 }
-export function restoreBackup(source, destination) {
+export function restoreBackup(source, destination, deletionJournal) {
   verifyBackup(source);
   const target = newDestination(destination, [source]);
   try {
@@ -92,7 +95,19 @@ export function restoreBackup(source, destination) {
     fs.rmSync(target, { recursive: true, force: true });
     throw error;
   }
-  return verifyBackup(target);
+  const verified=verifyBackup(target);
+  {
+    const restored=new DatabaseSync(path.join(target,'disbit.db'));
+    let erased=0;
+    try { if(deletionJournal){erased=replayErasures(restored,deletionJournal);cleanupErasedMedia(restored,path.join(target,'proofs'));}pruneProofMedia(restored,path.join(target,'proofs')); }
+    finally {restored.close();}
+    // The scrubbed restore is a new verified snapshot, not the original manifest.
+    const manifest={format:1,createdAt:new Date().toISOString(),rows:inspectDatabase(path.join(target,'disbit.db'),path.join(target,'proofs')),files:{}};
+    for(const file of files(target).filter(f=>f!=='manifest.json'))manifest.files[file]=hash(path.join(target,file));
+    fs.writeFileSync(path.join(target,'manifest.json'),JSON.stringify(manifest,null,2),{mode:0o600});
+    return {...verifyBackup(target),erased};
+  }
+  return verified;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   const [command, ...args] = process.argv.slice(2);
@@ -100,8 +115,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process
     let result;
     if (command === 'create' && args.length === 4 && args[3] === '--offline') result = createBackup({ database: args[0], proofs: args[1], destination: args[2], offline: true });
     else if (command === 'verify' && args.length === 1) result = verifyBackup(args[0]);
-    else if (command === 'restore' && args.length === 2) result = restoreBackup(args[0], args[1]);
-    else throw Error('Usage: backup.mjs create DB PROOFS NEW_DIR --offline | verify DIR | restore BACKUP NEW_DIR');
+    else if (command === 'restore' && args.length === 4 && args[2]==='--deletions') result = restoreBackup(args[0], args[1],args[3]);
+    else throw Error('Usage: backup.mjs create DB PROOFS NEW_DIR --offline | verify DIR | restore BACKUP NEW_DIR --deletions CURRENT_JOURNAL');
     console.log(JSON.stringify(result));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -93,8 +93,9 @@ async page => {
   await page.emulateMedia({reducedMotion:'reduce'});
   assert(await desert.evaluate(card => [...card.querySelectorAll('.traveler-art *')].every(el => getComputedStyle(el).animationName === 'none')), 'Reduced motion ignored');
   await page.emulateMedia({reducedMotion:'no-preference'});
-  await page.evaluate(() => document.documentElement.dataset.motion = 'reduce');
+  await page.evaluate(() => { settings.motion = 'reduce'; applyMotion(); });
   assert(await desert.evaluate(card => [...card.querySelectorAll('.traveler-art *')].every(el => getComputedStyle(el).animationName === 'none')), 'In-app reduced motion ignored');
+  await page.evaluate(() => { settings.motion = 'system'; applyMotion(); });
   assert(errors.length === 0, `Browser errors: ${errors.join(', ')}`);
   return {results, knees:'animated', reducedMotion:'passed', pageErrors:errors};
 }

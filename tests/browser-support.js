@@ -101,8 +101,9 @@ async page => {
   await page.locator('.toast').waitFor({state:'hidden'});
   await page.screenshot({path:'test-results/support-settings.png',fullPage:true});passed.push('responsive settings');
   await page.locator('a[href="privacy.html?from=profile"]').click();
-  assert(await page.locator('h1').textContent()==='Политика конфиденциальности','Document missing');
-  assert(await page.locator('p').first().evaluate(el=>getComputedStyle(el).fontSize)==='13px','Version label changed unexpectedly');
+  assert(await page.locator('h1').textContent()==='Политика обработки персональных данных','Document missing');
+  assert((await page.locator('p.edition').textContent()).includes('17 ноября 2026'),'Edition date missing');
+  assert(await page.locator('p.edition').evaluate(el=>getComputedStyle(el).fontSize)==='14px','Version label changed unexpectedly');
   assert(await page.locator('main > p').nth(1).evaluate(el=>getComputedStyle(el).lineHeight)==='24px','Policy text not 16/24');
   await page.setViewportSize({width:320,height:844});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Policy overflow');

@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync, chmodSync } from 'node:fs';
 import { runtime } from '../lib/runtime.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -23,6 +23,9 @@ if (runtime.hosted && process.env.INITIALIZE_DATABASE !== '1') {
 }
 mkdirSync(path.dirname(DB_FILE), { recursive: true });
 export const db = new DatabaseSync(DB_FILE);
+if(process.platform!=='win32')for(const file of [DB_FILE,DB_FILE+'-wal',DB_FILE+'-shm',DB_FILE+'-journal']){
+  if(existsSync(file))chmodSync(file,0o600);
+}
 
 // внешние ключи + схема
 db.exec('PRAGMA foreign_keys = ON;');
@@ -31,6 +34,10 @@ db.exec(readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 
 // мягкие миграции для баз, созданных до появления авторизации
 for (const sql of [
+  "ALTER TABLE proofs ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown'",
+  "ALTER TABLE proofs ADD COLUMN resolved_at TEXT",
+  "ALTER TABLE proofs ADD COLUMN media_deleted INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE friendships ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN week_target INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE habits ADD COLUMN minimum_action TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE completions ADD COLUMN minimum INTEGER NOT NULL DEFAULT 0",
@@ -45,12 +52,38 @@ for (const sql of [
   "ALTER TABLE users ADD COLUMN time_zone TEXT",
   "ALTER TABLE users ADD COLUMN pass_hash TEXT",
   "ALTER TABLE users ADD COLUMN pass_salt TEXT",
+  "ALTER TABLE oauth_flows ADD COLUMN consent INTEGER NOT NULL DEFAULT 0",
   // сессии без срока жизни: старые строки получат его в routes/auth.js
-  "ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0"
+  "ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE money_payment_intents ADD COLUMN fee INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sandbox_payment_intents ADD COLUMN fee INTEGER NOT NULL DEFAULT 0",
+  // when the operator registered the receipt in «Мой налог» (самозанятый, 422-ФЗ)
+  "ALTER TABLE money_payment_intents ADD COLUMN receipt_at TEXT",
+  "ALTER TABLE money_refund_parts ADD COLUMN receipt_at TEXT"
 ]) {
   const [, table, column] = sql.match(/^ALTER TABLE (\w+) ADD COLUMN (\w+)/);
   const exists = db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
   if (!exists) db.exec(sql); // Disk/permission/schema failures must abort startup.
+}
+
+// 'app' = a new edition accepted inside the app after registration; 'telegram' = accepted in the Mini App. SQLite
+// cannot change a CHECK in place, so older databases rebuild the table once.
+if (!(db.prepare("SELECT sql FROM sqlite_master WHERE name='legal_acceptances'").get()?.sql || '').includes("'telegram'")) {
+  db.exec(`BEGIN IMMEDIATE;
+    CREATE TABLE legal_acceptances_next (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document TEXT NOT NULL CHECK(document IN ('terms','personal_data')),
+      version TEXT NOT NULL,
+      source TEXT NOT NULL CHECK(source IN ('email','google','app','telegram')),
+      accepted_at INTEGER NOT NULL
+    );
+    INSERT INTO legal_acceptances_next(id,user_id,document,version,source,accepted_at)
+      SELECT id,user_id,document,version,source,accepted_at FROM legal_acceptances;
+    DROP TABLE legal_acceptances;
+    ALTER TABLE legal_acceptances_next RENAME TO legal_acceptances;
+    CREATE INDEX IF NOT EXISTS legal_acceptances_user ON legal_acceptances(user_id);
+    COMMIT;`);
 }
 
 // до авторизации гостевые данные писались под user_id=1; теперь гость = 0.
@@ -102,6 +135,16 @@ export function rowToHabit(row, completions = []) {
 
 // объект фронтенда → параметры для INSERT/UPDATE
 export function habitToParams(h) {
+  const invalid=()=>{throw Object.assign(new Error('Некорректные поля обещания'),{status:400});};
+  if(!h||typeof h!=='object'||Array.isArray(h))invalid();
+  for(const [key,max] of Object.entries({id:128,name:200,min:60,icon:64,color:32,buddy:24,createdAt:10})){
+    if(h[key]!=null && (typeof h[key]!=='string'||h[key].length>max))invalid();
+  }
+  for(const key of ['goal','stake'])if(h[key]!=null&&(typeof h[key]!=='object'||Array.isArray(h[key])))invalid();
+  for(const [value,max] of [[h.goal?.unit,80],[h.goal?.type,16],[h.stake?.mode,16],[h.stake?.recipient,32]])if(value!=null&&(typeof value!=='string'||value.length>max))invalid();
+  for(const value of [h.goal?.target,h.stake?.amount,h.stake?.minutes,h.weekTarget])if(value!=null&&(typeof value!=='number'||!Number.isFinite(value)||value<0))invalid();
+  if(h.schedule!=null&&(!Array.isArray(h.schedule)||h.schedule.length>7||h.schedule.some(d=>!Number.isInteger(d)||d<0||d>6)))invalid();
+  if(h.stake?.apps!=null&&(!Array.isArray(h.stake.apps)||h.stake.apps.length>100||h.stake.apps.some(a=>typeof a!=='string'||a.length>200)))invalid();
   return {
     id: String(h.id),
     name: String(h.name || ''),

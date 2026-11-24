@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Согласие на обработку персональных данных — disbit</title>
+  <meta name="theme-color" content="#0B1324" />
+  <link rel="icon" href="icons/app.ico" />
+  <link rel="stylesheet" href="fonts.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0B1324; --card: #14233B; --line: #2B3C56;
+      --text: #F4F7FF; --text-2: #AEBBD1; --primary: #9AB2FF;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: 'Onest', system-ui, sans-serif; line-height: 1.6;
+      padding: max(24px, env(safe-area-inset-top)) 20px calc(48px + env(safe-area-inset-bottom));
+    }
+    .wrap { max-width: 680px; margin: 0 auto; }
+    .logo { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+    .logo span { color: var(--primary); }
+    h1 { font-size: clamp(24px,6vw,32px); line-height: 1.2; margin: 20px 0 12px; overflow-wrap: anywhere; }
+    .upd { color: var(--text-2); font-size: 14px; margin: 0 0 28px; }
+    h2 { font-size: 17px; font-weight: 800; margin: 28px 0 10px; scroll-margin-top: 16px; }
+    h2.part { font-size: 22px; margin-top: 44px; }
+    p, li { color: var(--text-2); font-size: 16px; line-height: 24px; }
+    ul { padding-left: 20px; margin: 8px 0; }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); }
+    a { color: var(--primary); overflow-wrap: anywhere; text-underline-offset: 4px; }
+    a:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 4px; }
+    blockquote { margin: 12px 0; padding: 12px 16px; border-left: 3px solid var(--primary); background: var(--card); border-radius: 0 12px 12px 0; color: var(--text-2); }
+    .back { display: inline-flex; align-items: center; min-height: 44px; margin-block: 16px; font-weight: 700; }
+    .docs { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back" href="index.html#register">← В приложение</a>
+    <div class="logo">dis<span>bit</span></div>
+    <h1>Согласие на обработку персональных данных</h1>
+    <p class="upd edition">Редакция от 17 ноября 2026 года. Опубликована и действует с 17 ноября 2026 года.</p>
+    <p>Это согласие оформлено отдельно от других документов (ч. 1 ст. 9 Федерального закона № 152-ФЗ). Вы даёте его отдельной отметкой при регистрации.</p>
+    <blockquote>Я, пользователь сервиса Disbit, подтверждаю, что мне исполнилось 16 лет, и свободно, своей волей и в своём интересе даю Чиркешову Актану Асилбековичу (ИНН 781636212757, г. Санкт-Петербург, ул. Белградская, д. 26, кв. 44) согласие на обработку моих персональных данных: логина, адреса почты, данных профиля, обещаний и отметок, фото и видео пруфов, сведений о друзьях и приглашениях, истории денежных операций, технических данных устройства и сессий.<br><br>Цель — работа сервиса Disbit по Пользовательскому соглашению: регистрация и вход, синхронизация, проверка пруфов, совместные обещания, учёт обеспечительного платежа, возвраты и чеки.<br><br>Согласие даётся на сбор, запись, систематизацию, накопление, хранение, уточнение, извлечение, использование, передачу (предоставление, доступ) лицам, перечисленным в Политике обработки персональных данных, обезличивание, блокирование, удаление и уничтожение, с использованием средств автоматизации и без них.<br><br>Согласие действует до удаления аккаунта или до его отзыва.</blockquote>
+    <h2>Как отозвать</h2>
+    <p>Напишите на <a href="mailto:disbitx1@gmail.com">disbitx1@gmail.com</a> с адреса, привязанного к аккаунту. После отзыва оператор прекращает обработку и уничтожает данные в течение 10 дней. Сведения о денежных операциях и чеках хранятся столько, сколько требует закон. Без согласия пользоваться аккаунтом нельзя, но можно вернуть свободный остаток обеспечительного платежа.</p>
+    <p>Подробнее — в <a href="privacy.html">Политике обработки персональных данных</a>.</p>
+    <nav class="docs" aria-label="Документы"><a href="terms.html">Пользовательское соглашение</a><a href="terms.html#refunds">Правила возврата</a><a href="privacy.html">Политика обработки данных</a><a href="consent.html">Согласие на обработку данных</a></nav>
+    <a class="back" href="index.html#register">← Вернуться в приложение</a>
+  </main>
+</body>
+</html>

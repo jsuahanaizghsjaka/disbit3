@@ -48,7 +48,7 @@ async page => {
 
   await page.evaluate(()=>localStorage.setItem('disbit_token_v1','b'.repeat(64)));
   await page.reload();
-  await page.waitForFunction(()=>authUser?.login==='other' && wallet?.sandbox?.available);
+  await page.waitForFunction(()=>typeof authUser !== 'undefined' && authUser?.login==='other' && typeof wallet !== 'undefined' && wallet?.sandbox?.available);
   assert(await page.locator('#wallet-history .operation-row').count()===0,'Other account sees private operations');
   await page.locator('.history-link').click();
   await page.waitForFunction(()=>document.querySelector('#operations-state')?.textContent==='Операций пока нет.');

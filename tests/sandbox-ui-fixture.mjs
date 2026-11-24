@@ -13,7 +13,7 @@ process.env.YOOKASSA_TEST_ENABLED = '1';
 process.env.YOOKASSA_TEST_SHOP_ID = '1234567';
 process.env.YOOKASSA_TEST_SECRET_KEY = `test_${randomBytes(24).toString('hex')}`;
 process.env.PUBLIC_URL = 'https://disbit.ru';
-process.env.PORT = '3399';
+process.env.PORT ||= '3399';
 const db = new DatabaseSync(process.env.DB_PATH);
 db.exec(readFileSync(new URL('../backend/db/schema.sql', import.meta.url), 'utf8'));
 db.prepare('INSERT INTO users(id,login,email,pass_hash,pass_salt) VALUES (?,?,?,?,?)')

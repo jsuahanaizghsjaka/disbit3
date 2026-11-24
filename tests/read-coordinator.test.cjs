@@ -9,6 +9,20 @@ function deferred() {
 }
 const jsonResponse = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
 
+test('read queue admits four requests and cancels queued work on account change',async()=>{
+ let owner='a',active=0,peak=0,started=0;
+ const coordinator=createDisbitReadCoordinator({getOwner:()=>owner,getTimeZone:()=> 'UTC',fetchImpl:(_url,{signal})=>new Promise((resolve,reject)=>{
+  active++;started++;peak=Math.max(peak,active);
+  const timer=setTimeout(()=>{active--;resolve(jsonResponse({ok:true}));},20);
+  signal.addEventListener('abort',()=>{clearTimeout(timer);active--;reject(Error('aborted'));},{once:true});
+ })});
+ const reads=Array.from({length:9},(_,i)=>coordinator.read('/'+i));
+ await Promise.resolve();assert.equal(started,4);owner='b';coordinator.cancelExcept(owner);
+ assert.ok((await Promise.all(reads)).every(r=>r.kind==='stale'));assert.equal(started,4);
+ const next=await Promise.all(Array.from({length:9},(_,i)=>coordinator.read('/new-'+i)));
+ assert.ok(next.every(r=>r.kind==='ok'));assert.equal(peak,4);
+});
+
 test('same user and GET coalesce while different resources remain independent', async () => {
   let count = 0;
   const first = deferred();

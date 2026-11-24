@@ -1,3 +1,4 @@
+import { topupProblem, topupQuote } from './money-limits.js';
 import { randomUUID } from 'node:crypto';
 
 // All amounts are integer kopecks. These tables never read the old manual wallet.
@@ -36,17 +37,30 @@ function proofState(db,userId,habitId,day) {
 
 export function openMoneyPayment(db, { userId, amount, id = randomUUID() }) {
   positive(amount);
-  if (amount < 5000 || amount > 5000000) throw Error('Topup outside allowed range');
+  const pending = db.prepare("SELECT COALESCE(SUM(amount),0) AS n FROM money_payment_intents WHERE user_id=? AND status IN ('created','pending')").get(userId).n;
+  const problem = topupProblem(amount, account(db, userId).balance, pending);
+  if (problem) throw Object.assign(Error(problem.error), { code: problem.code });
+  const { fee } = topupQuote(amount);
   const key = `topup-${id}`;
-  db.prepare(`INSERT INTO money_payment_intents(id,user_id,amount,provider,idempotency_key)
-    VALUES (?, ?, ?, 'yookassa', ?)`).run(id, userId, amount, key);
-  return { id, userId, amount, idempotencyKey: key };
+  db.prepare(`INSERT INTO money_payment_intents(id,user_id,amount,fee,provider,idempotency_key)
+    VALUES (?, ?, ?, ?, 'yookassa', ?)`).run(id, userId, amount, fee, key);
+  return { id, userId, amount, fee, idempotencyKey: key };
+}
+// A top-up that never got a provider payment (no id, no payment page) and is past
+// the provider's idempotency window can no longer be paid by anyone: the person
+// never received a confirmation URL. It is closed locally; no balance changes.
+export function expireUnsentPayment(db, intentId) {
+  return tx(db, () => {
+    const changed = db.prepare(`UPDATE money_payment_intents SET status='canceled'
+      WHERE id=? AND status='created' AND provider_payment_id IS NULL AND confirmation_url IS NULL`).run(intentId).changes;
+    return { id:intentId, status:changed ? 'canceled' : db.prepare('SELECT status FROM money_payment_intents WHERE id=?').get(intentId)?.status, expired:changed === 1 };
+  });
 }
 export function attachProviderPayment(db, intentId, payment) {
   return tx(db, () => {
     const intent = db.prepare('SELECT * FROM money_payment_intents WHERE id=?').get(intentId);
     if (!intent) throw Error('Unknown payment intent');
-    if (!payment?.id || !providerAmountMatches(payment, intent.amount) ||
+    if (!payment?.id || !providerAmountMatches(payment, intent.amount + (intent.fee || 0)) ||
         payment.metadata?.disbit_intent !== intent.id || payment.test === true) throw Error('Provider payment does not match intent');
     if (intent.provider_payment_id && intent.provider_payment_id !== payment.id) throw Error('Payment intent already bound');
     if (intent.status === 'succeeded' || intent.status === 'canceled') return { id:intent.id, providerId:payment.id, duplicate:true };
@@ -61,7 +75,7 @@ export function confirmProviderPayment(db, payment) {
   return tx(db, () => {
     const intent = db.prepare('SELECT * FROM money_payment_intents WHERE provider_payment_id=?').get(payment?.id);
     if (!intent) return { ignored: true, reason: 'unknown-intent' };
-    if (!providerAmountMatches(payment, intent.amount) || payment.metadata?.disbit_intent !== intent.id ||
+    if (!providerAmountMatches(payment, intent.amount + (intent.fee || 0)) || payment.metadata?.disbit_intent !== intent.id ||
         payment.test === true) throw Error('Verified payment mismatch');
     if (payment.status === 'canceled') {
       if (intent.status !== 'succeeded') db.prepare("UPDATE money_payment_intents SET status='canceled' WHERE id=?").run(intent.id);
@@ -125,9 +139,10 @@ export function attachProviderRefund(db, partId, refund) {
 }
 function refreshRefundRequest(db, requestId) {
   const rows = db.prepare('SELECT status FROM money_refund_parts WHERE request_id=?').all(requestId);
-  const status = rows.every(p=>p.status==='succeeded') ? 'succeeded' :
-    rows.every(p=>p.status==='failed') ? 'failed' :
-    rows.some(p=>p.status==='failed'||p.status==='succeeded') ? 'partial' : 'pending';
+  // 'partial' is final: some parts came back, some were refused by the provider.
+  const status = rows.some(p=>p.status==='reserved'||p.status==='pending') ? 'pending' :
+    rows.every(p=>p.status==='succeeded') ? 'succeeded' :
+    rows.every(p=>p.status==='failed') ? 'failed' : 'partial';
   db.prepare('UPDATE money_refund_requests SET status=? WHERE id=?').run(status,requestId);
   return status;
 }
@@ -204,5 +219,22 @@ export function settleMoneyPenalty(db, { userId, habitId, day, today }) {
         .run(userId,`penalty:${userId}:${habitId}:${day}`,-terms.amount,next);
     }
     return { status, amount:terms.amount, balance:moneyBalance(db,userId) };
+  });
+}
+
+// Offer, appendix 3, 2.2: a penalty held by mistake goes back to the deposit as
+// a separate correction. The original record stays; a second call is a no-op.
+export function correctMoneyPenalty(db, penaltyId) {
+  return tx(db, () => {
+    const penalty = db.prepare('SELECT * FROM money_penalties WHERE id=?').get(penaltyId);
+    if (!penalty || penalty.status !== 'paid') throw Error('Only a paid penalty can be corrected');
+    const key = `correction:penalty:${penalty.id}`;
+    if (db.prepare('SELECT 1 FROM money_ledger WHERE source_key=?').get(key)) return { duplicate:true };
+    const before = account(db, penalty.user_id);
+    const next = before.balance + penalty.amount;
+    db.prepare('UPDATE money_accounts SET balance=? WHERE user_id=?').run(next, penalty.user_id);
+    db.prepare("INSERT INTO money_ledger(user_id,type,source_key,amount,balance_after) VALUES (?,'correction',?,?,?)")
+      .run(penalty.user_id, key, penalty.amount, next);
+    return { corrected:true, balance:next };
   });
 }

@@ -21,7 +21,7 @@ async function fixture() {
 }
 function payment(intent, shopId='1234567') {
   return { id:'23d93cac-000f-5000-8000-126628f15141', test:true,
-    status:'pending',paid:false,amount:{value:(intent.amount/100).toFixed(2),currency:'RUB'},
+    status:'pending',paid:false,amount:{value:((intent.amount+(intent.fee||0))/100).toFixed(2),currency:'RUB'},
     metadata:{disbit_intent:intent.id},recipient:{account_id:shopId},
     confirmation:{confirmation_url:'https://yoomoney.ru/test-payment'} };
 }

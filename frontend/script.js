@@ -46,7 +46,10 @@ function refreshClientTimeZone() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshClientTimeZone(); });
 
 /* ---------- АККАУНТ (Bearer-токен) ---------- */
-let authToken = localStorage.getItem(TOKEN_KEY) || null;
+/* В Telegram токен живёт только в памяти (localStorage там чистится): платформенный
+   адаптер подставляет DisbitTokenStore до загрузки этого файла. В остальных случаях — localStorage. */
+const tokenStore = window.DisbitTokenStore || localStorage;
+let authToken = tokenStore.getItem(TOKEN_KEY) || null;
 const readCoordinator = createDisbitReadCoordinator({
   fetchImpl: (...args) => fetch(...args),
   getOwner: () => authToken,
@@ -56,20 +59,27 @@ let authUser = null;
 try { authUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { authUser = null; }
 let authMode = 'login';   // 'login' | 'register'
 
+window.DisbitBlocking?.configure({api:()=>API, token:()=>authToken, owner:()=>authUser?.login});
+document.addEventListener('DOMContentLoaded',()=>window.DisbitBlocking?.start());
 function setAuth(token, user) {
+  const changed = authToken !== token;
+  if (changed) window.DisbitBlocking?.forget();
   if (authToken !== token) {
+    clearTimeout(statePushTimer);
+    stateRemoteVersion = undefined; stateSyncConflict = false;
     ++friendsRequest;
-    serverFriends = []; myLogin = null; friendsLoading = false; friendsError = '';
+    serverFriends = []; myLogin = null; myInviteToken = ''; friendsLoading = false; friendsError = '';
     friendsCacheOwner = null; friendsLoadedAt = 0;
   }
   authToken = token;
   readCoordinator.cancelExcept(token || null);
   authUser = user;
+  if (changed && token) void window.DisbitBlocking?.start();
   if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
+    tokenStore.setItem(TOKEN_KEY, token);
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   } else {
-    localStorage.removeItem(TOKEN_KEY);
+    tokenStore.removeItem(TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
   }
 }
@@ -219,6 +229,9 @@ const STATE_TS_KEY = 'disbit_state_ts_v1';
 const SYNC_KEYS = new Set([PROFILE_KEY, SETTINGS_KEY, GOALS_KEY, REWARDS_KEY, FRIENDS_KEY, BACKLOG_KEY]);
 let applyingRemote = false;   // применяем серверный стейт — не эхо-пушим
 let statePushTimer = null;
+let stateRemoteVersion;
+let stateSyncConflict = false;
+let statePushRunning = false;
 
 function stateBlob() {
   return {
@@ -232,6 +245,10 @@ function stateBlob() {
       shared: Object.fromEntries(
         habits.filter(h => h.buddy)
               .map(h => [h.name.trim().toLowerCase(), doneOn(h, TODAY)])
+      ),
+      // прогресс тех же совместных обещаний: неделя, серия, 30 дней, последние 7 дней
+      sharedStats: Object.fromEntries(
+        habits.filter(h => h.buddy && !h.archived).map(h => [sharedKey(h), sharedStatsOf(h)])
       )
     },
     settled: localStorage.getItem(SETTLED_KEY)
@@ -241,14 +258,27 @@ function touchStateTs() {
   localStorage.setItem(STATE_TS_KEY, String(Date.now()));
 }
 function scheduleStatePush() {
-  if (!API || !authToken || applyingRemote) return;
+  if (!API || !authToken || applyingRemote || stateSyncConflict) return;
+  const owner = authToken;
   clearTimeout(statePushTimer);
-  statePushTimer = setTimeout(() => {
-    if (!authToken) return;
-    apiCall('PUT', '/state', {
-      data: stateBlob(),
-      ts: Number(localStorage.getItem(STATE_TS_KEY)) || Date.now()
-    });
+  statePushTimer = setTimeout(async () => {
+    if (owner !== authToken || stateRemoteVersion === undefined || stateSyncConflict) return;
+    if (statePushRunning) { scheduleStatePush(); return; }
+    const ts = Math.max(Number(localStorage.getItem(STATE_TS_KEY)) || Date.now(), Number(stateRemoteVersion) + 1);
+    statePushRunning = true;
+    try {
+      const result = await apiCallStrict('PUT', '/state', {data:stateBlob(), ts, baseUpdatedAt:stateRemoteVersion});
+      if (result.error) throw result;
+      if (owner !== authToken) return;
+      stateRemoteVersion = result.updatedAt;
+      if (Number(localStorage.getItem(STATE_TS_KEY)) > ts) scheduleStatePush();
+    } catch (error) {
+      if (owner !== authToken) return;
+      if (error.status === 409) stateSyncConflict = true;
+      syncFailure(stateSyncConflict
+        ? 'Настройки изменились на другом устройстве. Локальная копия сохранена. Нажми «Повторить», чтобы выбрать загрузку серверной версии.'
+        : 'Не удалось сохранить настройки на сервере. Локальная копия сохранена; повтори синхронизацию.');
+    } finally { statePushRunning = false; }
   }, 800);
 }
 // применяем серверный блоб поверх локального
@@ -402,7 +432,8 @@ async function apiCallStrict(method, path, body) {
       signal: controller.signal
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) return { error: data.error || ('Ошибка ' + r.status), status: r.status };
+    if (r.ok && method !== 'GET' && /^\/(habits|proofs|state)(\/|$)/.test(path)) void window.DisbitBlocking?.sync(true);
+    if (!r.ok) return { code: data.code, id: data.id, left: data.left, error: data.error || ('Ошибка ' + r.status), status: r.status };
     return data;
   } catch (e) {
     // e.name различает: AbortError — не дождались ответа за 15с; TypeError —
@@ -464,6 +495,7 @@ async function bootstrapData() {
   if (authToken) {
     const st = await stateRead;
     if (bootstrapOwner !== authToken) return;
+    if (st) stateRemoteVersion = st.updatedAt ?? null;
     const localTs = Number(localStorage.getItem(STATE_TS_KEY)) || 0;
     if (st?.data && Number(st.updatedAt) > localTs) {
       applyRemoteState(st.data, st.updatedAt);
@@ -479,15 +511,9 @@ async function bootstrapData() {
   renderFriends();
   renderFriendsBoard();
   renderWallet();
-  handleInviteLink();        // пришёл по ссылке-приглашению — добавим друга
-
-  // приглашение «делать вместе»: из адреса или отложенное (пришёл без входа)
-  const pending = localStorage.getItem(PENDING_JOIN_KEY);
-  if (pending && authToken) {
-    localStorage.removeItem(PENDING_JOIN_KEY);
-    history.replaceState(null, '', location.pathname + '?join=' + pending + location.hash);
-  }
-  handleJoinLink();
+  // приглашения из ссылки/QR, запомненные при загрузке (captureInviteParams)
+  handleInviteLink();        // ?add=<логин> — добавим друга
+  handleJoinLink();          // ?join=<код> — «делать вместе»
 }
 
 /* ---------- ДАТЫ ---------- */
@@ -599,7 +625,23 @@ function isDoneToday(h) { return doneOn(h, TODAY); }
 
 // ТЕКУЩИЙ СТРИК с грейс-днём: один пропуск не рвёт серию,
 // два запланированных пропуска подряд — рвут.
-function computeStreak(h) {
+const habitDerivedCache = new WeakMap();
+function cachedHabitMetric(h, metric, calculate) {
+  // Mutations also arrive through import, sync and older UI handlers. Compare
+  // actual inputs rather than relying on every caller to bump a revision.
+  const signature = JSON.stringify([authToken, TODAY, clientTimeZone, h.createdAt,
+    h.archived, h.archivePeriods, h.schedule, h.weekTarget, h.goal, h.history, h.counts]);
+  let entry = habitDerivedCache.get(h);
+  if (!entry || entry.signature !== signature) {
+    entry = {signature, values:Object.create(null)};
+    habitDerivedCache.set(h, entry);
+  }
+  if (!(metric in entry.values)) entry.values[metric] = calculate(h);
+  return entry.values[metric];
+}
+function computeStreak(h) { return cachedHabitMetric(h, 'streak', calculateStreak); }
+function computeBestStreak(h) { return cachedHabitMetric(h, 'best', calculateBestStreak); }
+function calculateStreak(h) {
   let streak = 0, misses = 0;
   let d = new Date();
   if (isScheduledOn(h, d) && !doneOn(h, dateKey(d))) d = addDays(d, -1); // сегодня не судим
@@ -624,7 +666,7 @@ function computeStreak(h) {
 }
 
 // лучший стрик за всё время (с тем же грейс-правилом)
-function computeBestStreak(h) {
+function calculateBestStreak(h) {
   let best = 0, cur = 0, misses = 0;
   let d = keyToDate(h.createdAt);
   const end = new Date();
@@ -820,10 +862,11 @@ async function deleteHabit(id) {
 /* ---------- ТОСТ ПОХВАЛЫ ---------- */
 let toastTimer = null;
 let toastRemovalTimer = null;
-function toast(msg) {
+function toast(msg, placement = 'top') {
   clearTimeout(toastRemovalTimer);
   const el = document.querySelector('.toast') || document.createElement('div');
   el.className = 'toast';
+  el.dataset.placement = placement;
   el.setAttribute('role', 'status');
   el.setAttribute('aria-live', 'polite');
   el.textContent = msg;
@@ -904,6 +947,7 @@ function showSettleModal(entries) {
   if (money) {
     html += `<div class="summary-total"><div class="amount">−${money}₽</div>
       <div class="label">штрафов за пропуски</div></div>`;
+    if (wallet?.payments?.live) html += `<p class="hint">Из депозита удерживается только неустойка по обещаниям с денежным условием — сервер посчитает её после проверки пруфов. Итог смотри в истории депозита.</p>`;
   }
   if (apps.size) {
     const maxLock = Math.max(...entries.map(e => Number(e.minutes) || 0));
@@ -927,6 +971,7 @@ function showSettleModal(entries) {
 
 /* ---------- ОБЩИЙ РЕНДЕР ---------- */
 function render() {
+  window.DisbitPerf?.count('render');
   const screen = document.querySelector('.screen.active')?.id.slice(7) || 'today';
   // Hidden screens are refreshed when entered, so changes never require
   // rebuilding their calendars, charts or profile while the user is elsewhere.
@@ -1112,7 +1157,17 @@ function marathonStreak(g) {
 }
 
 // пройдено шагов = выполненные отметки обещаний ЭТОГО марафона с момента старта
+const marathonStepsCache = new WeakMap();
 function stepsDone(g) {
+  const linked = marathonHabits(g);
+  const signature = JSON.stringify([authToken, g.startedAt, linked.map(h => [h.id, h.goal, h.history, h.counts])]);
+  const cached = marathonStepsCache.get(g);
+  if (cached?.signature === signature) return cached.value;
+  const value = calculateStepsDone(g);
+  marathonStepsCache.set(g, {signature, value});
+  return value;
+}
+function calculateStepsDone(g) {
   const from = g.startedAt || '0000-00-00';
   let n = 0;
   for (const h of marathonHabits(g)) {
@@ -1325,7 +1380,7 @@ function walkerForeground(sc) {
 // будет телепортироваться вместо шага
 function walkerSceneHtml(g, sc) {
   return `
-    <section class="walker-card" data-goal="${g.id}" data-scene="${sc.id}" data-gear="${gearOf(sc)}" style="--w-ink:${sc.ink || '#F3EDE4'}">
+    <section class="walker-card" data-goal="${escapeHtml(g.id)}" data-scene="${sc.id}" data-gear="${gearOf(sc)}" style="--w-ink:${sc.ink || '#F3EDE4'}">
       <header class="w-head">
         <h3 class="w-goal"></h3>
         <span class="w-flame" title="Серия — не рви её"></span>
@@ -1431,7 +1486,13 @@ function showCompletion(h, progressBefore, resolve, quota) {
   const hint = document.getElementById('completion-proof-hint');
   skip.textContent = `Пропустить · осталось ${quota.remaining} из ${quota.limit}`;
   skip.disabled = quota.remaining === 0;
-  hint.textContent = quota.remaining ? 'Шаг сохранится после фото/видео или пропуска пруфа. Лимит общий для всех обещаний за месяц.' : 'Пять пропусков использованы. Для этого шага нужно фото или видео.';
+  skip.hidden = skip.disabled;
+  const share = dialog.querySelector('button[value="share"]');
+  share.classList.toggle('btn-primary', skip.disabled);
+  share.classList.toggle('btn-ghost', !skip.disabled);
+  share.autofocus = skip.disabled;
+  skip.autofocus = !skip.disabled;
+  hint.textContent = quota.remaining ? 'Шаг сохранится после фото/видео или пропуска пруфа. Лимит общий для всех обещаний за месяц.' : `Осталось 0 из ${quota.limit} пропусков. Для этого шага отправь фото или видео.`;
   let resolving = false;
   const protect = event => { if (resolving) event.preventDefault(); };
   dialog.addEventListener('cancel', protect);
@@ -1524,18 +1585,19 @@ function renderWalker() {
   const routes = document.getElementById('screen-marathon').classList.contains('active')
     ? [activeJourney()].filter(Boolean) : goals.filter(isMarathon);
   const ids = new Set(routes.map(g => g.id));
+  const allIds = new Set(goals.filter(isMarathon).map(g=>g.id));
   [...box.children].forEach(node => {
-    if (!ids.has(node.dataset.route)) {
+    if (!allIds.has(node.dataset.route)) {
       const card = node.querySelector('.walker-card');
       if(card) { walkerObserver?.unobserve(card); clearTimeout(walkerWalkTimers.get(card)); }
       node.remove();
-    }
+    } else node.hidden = !ids.has(node.dataset.route);
   });
   box.hidden = !routes.length;
   routes.forEach((g, index) => {
     let slot = [...box.children].find(node => node.dataset.route === g.id);
     if (!slot) { slot = document.createElement('div'); slot.dataset.route = g.id; box.append(slot); }
-    renderWalkerCard(g, slot, index);
+    renderWalkerCard(g, slot, goals.indexOf(g));
   });
 }
 
@@ -1674,43 +1736,44 @@ function habitCard(h, off) {
   const streak = computeStreak(h);
 
   let checkContent = icon('i-check');
-  if (!done && h.goal.type === 'count') checkContent = String(h.counts?.[TODAY] || 0);
+  if (!done && h.goal.type === 'count') checkContent = escapeHtml(String(h.counts?.[TODAY] || 0));
   else if (!done) checkContent = '';
 
   const goalText = h.goal.type === 'count'
-    ? `${h.counts?.[TODAY] || 0}/${h.goal.target} ${h.goal.unit || ''}`.trim()
+    ? escapeHtml(`${h.counts?.[TODAY] || 0}/${h.goal.target} ${h.goal.unit || ''}`.trim())
     : '';
   const weeklyText = h.weekTarget ? `${doneInWeekBefore(h, new Date()) + (done ? 1 : 0)} из ${h.weekTarget} на неделе` : '';
 
   const stake = h.stake.mode === 'money'
-    ? `<span class="stake-badge money">${icon('i-coins')}${h.stake.amount}₽</span>`
+    ? `<span class="stake-badge money">${icon('i-coins')}${escapeHtml(String(h.stake.amount))}₽</span>`
     : `<span class="stake-badge lock">${icon('i-lock')}Блокировка недоступна</span>`;
 
   const schedText = h.schedule.length === 7
     ? 'каждый день'
     : h.schedule.map(i => DAY_NAMES[i]).join(' · ');
 
-  // совместное обещание: две аватарки — моя и друга. Кто сделал сегодня —
-  // та горит цветом, кто нет — серая. Видно с одного взгляда, кто тянет.
+  // совместное обещание: две настоящие аватарки — моя и друга. Кто сделал
+  // сегодня — зелёное кольцо и галочка, кто нет — приглушённая. Видно, кто тянет.
   let buddyHtml = '';
   if (h.buddy) {
     const f = friendByLogin(h.buddy);
     const bDone = buddyDoneToday(h);
-    const myAva = `<span class="pair-ava${done ? ' lit' : ''}" style="${
-      done ? `background:${profile.color || COLORS[0]}` : ''}" title="Ты${done ? ' — сделано' : ' — ещё нет'}">${
-      profile.emoji ? escapeHtml(profile.emoji) : escapeHtml((profile.name || 'Я')[0])}</span>`;
-    const fAva = `<span class="pair-ava${bDone === true ? ' lit' : ''}" style="${
-      bDone === true ? `background:${f?.color || COLORS[2]}` : ''}" title="${
-      escapeHtml(f?.name || h.buddy)}${bDone === true ? ' — сделал' : bDone === false ? ' — ещё нет' : ' — нет данных'}">${
-      escapeHtml(f?.emoji || (f?.name || h.buddy)[0])}</span>`;
-    buddyHtml = `<span class="buddy-pair" title="Вместе с ${escapeHtml(f?.name || h.buddy)}">${myAva}${fAva}</span>`;
+    const fp = friendProfile(f, h.buddy);
+    const me = { ...profile, name: profile.name || 'Я' };
+    const myInner = profile.photo || profile.mark || profile.emoji ? avatarHtml(me) : escapeHtml(me.name[0]);
+    const pairAva = (lit, bg, inner, label) =>
+      `<span class="pair-ava${lit ? ' lit' : ''}" style="background:${bg}" role="img" aria-label="${escapeHtml(label)}">${inner}</span>`;
+    buddyHtml = `<span class="buddy-pair" title="Вместе с ${escapeHtml(fp.name)}">${
+      pairAva(done, avaBg(me), myInner, 'Ты' + (done ? ' — сделано' : ' — ещё нет'))}${
+      pairAva(bDone === true, avaBg(fp), friendAvaHtml(f, h.buddy),
+        fp.name + (bDone === true ? ' — сделал' : bDone === false ? ' — ещё нет' : ' — нет данных'))}</span>`;
   }
 
   // кнопка/бейдж минимума — «нет сил на полное? сделай минимум» (козырь идеи)
   let minHtml = '';
   if (!off && h.min) {
     if (min) minHtml = `<span class="min-badge">${icon('i-check', 'ic ic-s')} минимум зачтён</span>`;
-    else if (!done) minHtml = `<button class="min-btn" data-min="${h.id}" title="Нет сил на полное? Сделай минимум: ${escapeHtml(h.min)}">${icon('i-zap', 'ic ic-s')} Минимум</button>`;
+    else if (!done) minHtml = `<button class="min-btn" data-min="${escapeHtml(h.id)}" title="Нет сил на полное? Сделай минимум: ${escapeHtml(h.min)}">${icon('i-zap', 'ic ic-s')} Минимум</button>`;
   }
 
   const card = document.createElement('div');
@@ -1719,7 +1782,7 @@ function habitCard(h, off) {
   card.style.setProperty('--habit-color', safeColor(h.color));
   card.innerHTML = `
     <div class="habit-icon">${iconOf(h.icon)}</div>
-    <button type="button" class="habit-main" data-stats="${h.id}" aria-label="Детали: ${escapeHtml(h.name)}">
+    <button type="button" class="habit-main" data-stats="${escapeHtml(h.id)}" aria-label="Детали: ${escapeHtml(h.name)}">
       <div class="habit-name">${escapeHtml(h.name)}</div>
       <div class="habit-meta">
         <span class="habit-caption">${off ? 'Не сегодня' : isSkipOn(h, TODAY) ? 'Пропуск · серия сохранена' : min ? 'Минимум выполнен' : goalText || weeklyText || `Серия ${streak} ${plural(streak, 'день', 'дня', 'дней')}`}</span>
@@ -1727,7 +1790,7 @@ function habitCard(h, off) {
         ${buddyHtml}
       </div>
     </button>
-    <button class="habit-pin${h.pinned ? ' on' : ''}" data-pin="${h.id}"
+    <button class="habit-pin${h.pinned ? ' on' : ''}" data-pin="${escapeHtml(h.id)}"
       aria-pressed="${h.pinned ? 'true' : 'false'}"
       aria-label="${h.pinned ? 'Открепить' : 'Закрепить'}: ${escapeHtml(h.name)}">
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1736,7 +1799,7 @@ function habitCard(h, off) {
         <path d="M9 10.8V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5.8a2 2 0 0 0 .6 1.4l1.3 1.3A2 2 0 0 1 16.4 17H7.6a2 2 0 0 1-1.5-3.5l1.3-1.3A2 2 0 0 0 9 10.8Z"/>
       </svg>
     </button>
-    ${off ? '' : `<button class="habit-check" data-check="${h.id}" ${pendingHabitMarks.has(h.id) ? 'disabled aria-busy="true"' : ''} aria-pressed="${done}" aria-label="${done ? 'Отменить выполнение' : 'Отметить'}: ${escapeHtml(h.name)}">${pendingHabitMarks.has(h.id) ? '…' : isSkipOn(h, TODAY) ? 'Ⅱ' : checkContent}</button>`}
+    ${off ? '' : `<button class="habit-check" data-check="${escapeHtml(h.id)}" ${pendingHabitMarks.has(h.id) ? 'disabled aria-busy="true"' : ''} aria-pressed="${done}" aria-label="${done ? 'Отменить выполнение' : 'Отметить'}: ${escapeHtml(h.name)}">${pendingHabitMarks.has(h.id) ? '…' : isSkipOn(h, TODAY) ? 'Ⅱ' : checkContent}</button>`}
   `;
   return card;
 }
@@ -1755,6 +1818,7 @@ function openHabitStats(id) {
   closeHabitMenu();
   renderHabitStats();
   openSheet('hstat-overlay');
+  syncBuddiesFromServer();   // друг мог уже принять приглашение
 }
 
 // сколько раз выполнена за последние N дней и сколько из них было обязательных
@@ -1820,10 +1884,10 @@ function renderHabitStats() {
     : (h.schedule.length === 7 ? 'каждый день' : h.schedule.map(i => DAY_NAMES[i]).join(' · '));
 
   const stakeText = h.stake.mode === 'money'
-    ? `${h.stake.amount}₽ за пропуск`
+    ? `${h.stake.amount}₽ за пропуск${wallet?.payments?.live && !acceptedMoneyTerms(h.id) ? ' · не удерживается' : ''}`
     : 'Блокировка недоступна — старый тестовый режим';
 
-  body.innerHTML = `
+  body.innerHTML = duoHtml(h) + `
     <div class="hstat-grid">
       <div class="hstat-tile"><span class="ht-num">${streak}</span><span class="ht-lbl">серия сейчас</span></div>
       <div class="hstat-tile"><span class="ht-num">${best}</span><span class="ht-lbl">лучшая серия</span></div>
@@ -1955,6 +2019,12 @@ function togglePin(id) {
   });
 }
 
+const habitCardSignatures = new WeakMap();
+const boundHabitButtons = new WeakSet();
+function bindHabitButton(button, handler) {
+  if (boundHabitButtons.has(button)) return;
+  boundHabitButtons.add(button); button.addEventListener('click', handler);
+}
 function renderHabits() {
   const list = document.getElementById('habit-list');
   const offList = document.getElementById('offday-list');
@@ -1962,9 +2032,27 @@ function renderHabits() {
   const pinnedList = document.getElementById('pinned-list');
   const pinnedBlock = document.getElementById('pinned-block');
   const empty = document.getElementById('empty-state');
-  list.innerHTML = '';
-  offList.innerHTML = '';
-  pinnedList.innerHTML = '';
+  const existing = new Map([...document.querySelectorAll('#screen-today .habit[data-hid]')].map(node=>[node.dataset.hid,node]));
+  // Аватар входит в подпись: без фото и знака смена аватара не перерисовывала
+  // карточку. От фото берём отпечаток, а не весь base64 — его сравнивать дорого.
+  const photoSig = p => p ? p.length + ':' + p.slice(-24) : '';
+  const shared = JSON.stringify([authToken,TODAY,clientTimeZone,profile.name,profile.color,profile.emoji,
+    photoSig(profile.photo),profile.mark,serverFriends.map(f => ({...f, photo: photoSig(f.photo)})),friends]);
+  const reconcile = (container, items, off) => {
+    const wanted = new Set(items.map(h=>h.id));
+    [...container.children].forEach(node=>{if(!wanted.has(node.dataset.hid))node.remove();});
+    items.forEach((h,index)=>{
+      const signature=shared+JSON.stringify([h,off,pendingHabitMarks.has(h.id)]);
+      let node=existing.get(h.id);
+      if (!node || habitCardSignatures.get(node)!==signature) {
+        const next=habitCard(h,off);habitCardSignatures.set(next,signature);
+        if(node?.parentElement===container)node.replaceWith(next);
+        else node?.remove();
+        node=next;
+      }
+      if(container.children[index]!==node)container.insertBefore(node,container.children[index]||null);
+    });
+  };
 
   empty.hidden = habits.some(h => !h.archived);
   document.getElementById('btn-day-summary').hidden = habits.length === 0;
@@ -1975,12 +2063,12 @@ function renderHabits() {
   // закреплённые — отдельной секцией наверху; секции нет, пока некого показывать
   const pinned = todays.filter(h => h.pinned);
   const rest = todays.filter(h => !h.pinned);
-  pinned.forEach(h => pinnedList.appendChild(habitCard(h, false)));
+  reconcile(pinnedList,pinned,false);
   pinnedBlock.hidden = pinned.length === 0;
   document.getElementById('mine-title').hidden = rest.length === 0;
 
-  rest.forEach(h => list.appendChild(habitCard(h, false)));
-  if (settings.showOffday) off.forEach(h => offList.appendChild(habitCard(h, true)));
+  reconcile(list,rest,false);
+  reconcile(offList,settings.showOffday?off:[],true);
   offBlock.hidden = !settings.showOffday || off.length === 0;
   document.querySelectorAll('#screen-today .habit[data-hid]').forEach(card => {
     const message = habitMarkErrors.get(card.dataset.hid);
@@ -1990,9 +2078,9 @@ function renderHabits() {
   });
 
   document.querySelectorAll('#screen-today [data-check]').forEach(b =>
-    b.addEventListener('click', () => toggleHabit(b.dataset.check)));
+    bindHabitButton(b, () => toggleHabit(b.dataset.check)));
   document.querySelectorAll('#screen-today [data-min]').forEach(b =>
-    b.addEventListener('click', async () => {
+    bindHabitButton(b, async () => {
       const h = habits.find(x => x.id === b.dataset.min);
       if (!h) return;
       const saved = await toggleMinMark(h, TODAY);
@@ -2000,10 +2088,10 @@ function renderHabits() {
       if (saved) toast('Минимум сохранён');
     }));
   document.querySelectorAll('#screen-today [data-pin]').forEach(b =>
-    b.addEventListener('click', () => togglePin(b.dataset.pin)));
+    bindHabitButton(b, () => togglePin(b.dataset.pin)));
   // тап по карточке — статистика этого обещания (редактирование — в меню внутри)
   document.querySelectorAll('#screen-today [data-stats]').forEach(b => {
-    b.addEventListener('click', () => openHabitStats(b.dataset.stats));
+    bindHabitButton(b, () => openHabitStats(b.dataset.stats));
   });
 }
 
@@ -2169,17 +2257,17 @@ function renderDaySheet() {
       } else if (h.goal.type === 'count') {
         control = `
           <div class="stepper">
-            <button data-step="-1" data-h="${h.id}" aria-label="Меньше">${icon('i-minus', 'ic ic-s')}</button>
+            <button data-step="-1" data-h="${escapeHtml(h.id)}" aria-label="Меньше">${icon('i-minus', 'ic ic-s')}</button>
             <span class="stp-val ${done ? 'ok' : ''}">${min ? 'мин' : `${val}/${h.goal.target}`}</span>
-            <button data-step="1" data-h="${h.id}" aria-label="Больше">${icon('i-plus', 'ic ic-s')}</button>
+            <button data-step="1" data-h="${escapeHtml(h.id)}" aria-label="Больше">${icon('i-plus', 'ic ic-s')}</button>
           </div>`;
       } else {
         control = `
-          <button class="habit-check ${done ? '' : ''}" style="width:42px;height:42px" data-dtoggle="${h.id}"
+          <button class="habit-check ${done ? '' : ''}" style="width:42px;height:42px" data-dtoggle="${escapeHtml(h.id)}"
             aria-pressed="${done}" aria-label="${done ? 'Отменить выполнение' : 'Отметить'}: ${escapeHtml(h.name)}">${done ? icon('i-check') : ''}</button>`;
       }
       const minBtn = editable && h.min && !done && !skip
-        ? `<button class="min-btn" data-dmin="${h.id}" title="${escapeHtml(h.min)}">мин</button>` : '';
+        ? `<button class="min-btn" data-dmin="${escapeHtml(h.id)}" title="${escapeHtml(h.min)}">мин</button>` : '';
       const minBadge = min ? `<span class="min-badge">минимум</span>` : '';
       const pending = calendarPending.has(h.id+':'+key);
       const error = calendarErrors.get(h.id+':'+key);
@@ -2618,8 +2706,8 @@ function renderGoals() {
     // с путником прогресс считается сам из выполненных обещаний — крутилки ±5 не нужны
     const walking = g.steps > 0;
     const manual = `
-      <button class="mini-btn" data-gminus="${g.id}" aria-label="Минус 5%">−5</button>
-      <button class="mini-btn" data-gplus="${g.id}" aria-label="Плюс 5%">+5</button>`;
+      <button class="mini-btn" data-gminus="${escapeHtml(g.id)}" aria-label="Минус 5%">−5</button>
+      <button class="mini-btn" data-gplus="${escapeHtml(g.id)}" aria-label="Плюс 5%">+5</button>`;
     const steps = `<span class="goal-text">${Math.min(done, g.steps)} / ${g.steps} шагов</span>`;
     return `
       ${pct >= 100 && (index === 0 || ordered[index-1].pct < 100) ? '<h3 class="journey-section-label">Завершено</h3>' : ''}
@@ -2633,10 +2721,10 @@ function renderGoals() {
         <div class="goal-controls">
           <span class="g-pct">${pct}%</span>
           ${walking ? steps : manual}
-          ${walking ? `<button class="mini-btn" data-gselect="${g.id}" aria-pressed="${activeId === g.id}">${activeId === g.id ? 'Выбран' : 'Показать маршрут'}</button>` : ''}
-          ${walking && pct >= 100 ? `<button class="mini-btn journey-summary-link" data-gresult="${g.id}">Итоги</button>` : ''}
-          <button class="mini-btn" data-gedit="${g.id}">изменить</button>
-          <button class="mini-btn danger" data-gdel="${g.id}">удалить</button>
+          ${walking ? `<button class="mini-btn" data-gselect="${escapeHtml(g.id)}" aria-pressed="${activeId === g.id}">${activeId === g.id ? 'Выбран' : 'Показать маршрут'}</button>` : ''}
+          ${walking && pct >= 100 ? `<button class="mini-btn journey-summary-link" data-gresult="${escapeHtml(g.id)}">Итоги</button>` : ''}
+          <button class="mini-btn" data-gedit="${escapeHtml(g.id)}">изменить</button>
+          <button class="mini-btn danger" data-gdel="${escapeHtml(g.id)}">удалить</button>
         </div>
       </div>`;
   }).join('');
@@ -2706,7 +2794,7 @@ function buildMarathonHabits(g) {
     const checked = mine.has(h.id);
     return `
       <label class="mh-row ${taken ? 'taken' : ''}">
-        <input type="checkbox" class="mh-check" value="${h.id}"
+        <input type="checkbox" class="mh-check" value="${escapeHtml(h.id)}"
                ${checked ? 'checked' : ''} ${taken ? 'disabled' : ''} />
         <span class="mh-icon">${iconOf(h.icon)}</span>
         <span class="mh-name">${escapeHtml(h.name)}</span>
@@ -2813,7 +2901,7 @@ function saveGoal() {
   closeSheet('goal-overlay');
   render();
   if (steps > 0 && !wasEditing) {
-    toast(`Марафон запущен: ${name}. Выполняй выбранные обещания 🏃`);
+    toast('Марафон создан', 'above-nav');
   }
 }
 
@@ -2870,7 +2958,9 @@ function saveReward() {
    живёт на сервере: добавляешь по логину, связь взаимная, у друга видно
    его серию и % недели (он публикует их сам в своей «визитке»). */
 let serverFriends = [];
+let incomingFriends = [];
 let myLogin = null;
+let myInviteToken = '';   // секрет личной ссылки: по ней дружба без заявки
 let friendsLoading = false, friendsError = '', friendsRequest = 0;
 let friendsCacheOwner = null, friendsLoadedAt = 0;
 
@@ -2878,7 +2968,7 @@ async function loadFriends(force = false) {
   if (!force && authToken && friendsCacheOwner === authToken && !friendsError &&
       Date.now() - friendsLoadedAt < 15000) return;
   const request = ++friendsRequest;
-  if (!API || !authToken) { serverFriends = []; myLogin = null; friendsLoading = false; friendsError = ''; friendsCacheOwner = null; friendsLoadedAt = 0; return; }
+  if (!API || !authToken) { serverFriends = []; myLogin = null; myInviteToken = ''; friendsLoading = false; friendsError = ''; friendsCacheOwner = null; friendsLoadedAt = 0; return; }
   const token = authToken;
   if (force) readCoordinator.cancelResource(API + '/friends');
   friendsLoading = true; friendsError = ''; renderFriends();
@@ -2886,12 +2976,26 @@ async function loadFriends(force = false) {
   if (request !== friendsRequest || token !== authToken) return;
   friendsLoading = false;
   if (r.error || !Array.isArray(r.friends)) friendsError = r.error || 'Не удалось загрузить друзей';
-  else { serverFriends = r.friends; myLogin = r.me || null; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
+  else { serverFriends = r.friends; incomingFriends = r.incoming || []; myLogin = r.me || null; myInviteToken = r.inviteToken || ''; friendsCacheOwner = token; friendsLoadedAt = Date.now(); }
   renderFriends(); renderFriendsBoard();
+  // друг мог сменить аватар или отметить совместное обещание — карточки тоже
+  if (habits.some(h => h.buddy)) {
+    if (todayVisible()) renderHabits();
+    if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
+  }
 }
 
+// /invite открывает приложение (Android App Links), без него — веб-версию.
+// v — версия превью: Telegram и другие мессенджеры кэшируют карточку ссылки по
+// точному адресу, и ссылка, отправленная до появления превью, оставалась голой.
+// Меняя v при смене превью, получаем новый адрес и свежую карточку.
+const INVITE_LINK_VERSION = '2';
 function inviteLink() {
-  return myLogin ? `${BACKEND}/?add=${encodeURIComponent(myLogin)}` : BACKEND;
+  if (!myLogin) return BACKEND;
+  const q = new URLSearchParams({ add: myLogin });
+  if (myInviteToken) q.set('t', myInviteToken);
+  q.set('v', INVITE_LINK_VERSION);
+  return `${BACKEND}/invite?${q}`;
 }
 
 function renderFriends() {
@@ -2909,19 +3013,49 @@ function renderFriends() {
   const status = friendsLoading ? '<p role="status" class="hint">Обновляем друзей…</p>'
     : friendsError ? `<div class="friends-state" role="status"><p>${escapeHtml(friendsError)}</p><button class="btn-ghost" id="friends-retry">Повторить</button></div>`
     : !serverFriends.length ? '<div class="friends-state"><h3>Вместе проще</h3><p>Добавь друга по логину или отправь приглашение. Здесь будут ваши серии и совместные обещания.</p></div>' : '';
-  box.innerHTML = status + serverFriends.map(f => `
+  box.innerHTML = status + serverFriends.map(f => {
+    const fp = friendProfile(f, f.login);
+    const together = habits.filter(h => h.buddy === f.login && !h.archived);
+    // общий прогресс пары за неделю: отметки обоих по всем совместным обещаниям
+    let doneSum = 0, goalSum = 0, known = true;
+    const rows = together.map(h => {
+      const mine = sharedStatsOf(h), theirs = buddyStats(h);
+      doneSum += mine.week + (theirs?.week || 0);
+      goalSum += mine.weekGoal * 2;
+      if (!theirs) known = false;
+      return `<button class="duo-row" data-shared-habit="${escapeHtml(h.id)}">
+        <span class="duo-row-name">${escapeHtml(h.name)}</span>
+        <small>Ты ${mine.week}/${mine.weekGoal}${mine.today ? ' ✓' : ''} · ${escapeHtml(fp.name)} ${
+          theirs ? `${theirs.week}/${theirs.weekGoal}${theirs.today ? ' ✓' : ''}` : 'нет данных'}</small>
+      </button>`;
+    }).join('');
+    const pairPct = goalSum ? Math.round((doneSum / goalSum) * 100) : null;
+    return `
     <article class="friend-row friend-card">
-      <span class="friend-ava" style="background:${safeColor(f.color)}">${
-        escapeHtml(f.emoji || (f.name || f.login || '?')[0])}</span>
-      <span class="friend-name">${escapeHtml(f.name || f.login)}
+      <span class="friend-ava" style="background:${avaBg(fp)}">${friendAvaHtml(f, f.login)}</span>
+      <span class="friend-name">${escapeHtml(fp.name || f.login)}
         <small class="friend-login">@${escapeHtml(f.login)}</small></span>
-      <button class="mini-btn danger" data-fdel="${escapeHtml(f.login)}" aria-label="Удалить друга ${escapeHtml(f.name || f.login)}">✕</button>
+      <button class="mini-btn danger" data-fdel="${escapeHtml(f.login)}" aria-label="Удалить друга ${escapeHtml(fp.name || f.login)}">✕</button>
       <span class="friend-metrics">Серия ${friendMetric(f.streak, ' дн.')} · Неделя ${friendMetric(f.weekPct, '%')}</span>
-      <details class="friend-shared"><summary>Совместных обещаний: ${habits.filter(h => h.buddy === f.login).length}</summary>
-        ${habits.filter(h => h.buddy === f.login).map(h => `<button data-shared-habit="${h.id}">${escapeHtml(h.name)}<small>${isDoneToday(h) ? 'Ты выполнил' : 'У тебя не выполнено'}</small></button>`).join('') || '<p class="hint">Открой детали обещания и выбери «Делать вместе», чтобы связать его с другом.</p>'}
+      ${together.length ? `<div class="duo-total">
+        <span>Вместе на этой неделе: ${doneSum} из ${goalSum} отметок${known ? '' : ' (у друга нет данных)'}</span>
+        <span class="duo-bar" aria-hidden="true"><i style="width:${pairPct ?? 0}%"></i></span>
+      </div>` : ''}
+      <details class="friend-shared"${together.length ? ' open' : ''}><summary>Совместных обещаний: ${together.length}</summary>
+        ${rows || '<p class="hint">Открой детали обещания и выбери «Делать с другом», чтобы связать его с другом.</p>'}
       </details>
-    </article>`).join('');
+    </article>`;
+  }).join('');
   box.querySelector('#friends-retry')?.addEventListener('click', () => loadFriends(true));
+  if(friendsCacheOwner===authToken)for(const request of incomingFriends){
+    const row=document.createElement('article');row.className='friend-row friend-request';
+    const label=document.createElement('span');label.textContent='@'+request.login+' хочет добавить тебя в друзья';row.append(label);
+    for(const [text,method] of [['Принять','POST'],['Отклонить','DELETE']]){
+      const button=document.createElement('button');button.className='btn-secondary';button.textContent=text;
+      button.onclick=async()=>{const owner=authToken;row.querySelectorAll('button').forEach(b=>b.disabled=true);const result=await apiCallStrict(method,method==='POST'?'/friends':'/friends/'+encodeURIComponent(request.login),method==='POST'?{login:request.login}:undefined);if(owner!==authToken)return;if(result.error)toast(result.error);await loadFriends(true);};row.append(button);
+    }
+    box.prepend(row);
+  }
   if (friendsError && serverFriends.length) box.insertAdjacentHTML('afterbegin', '<p class="hint">Показаны последние загруженные данные. Они могут быть устаревшими.</p>');
   box.querySelectorAll('[data-shared-habit]').forEach(b => b.onclick = () => openHabitStats(b.dataset.sharedHabit));
   box.querySelectorAll('[data-fdel]').forEach(b =>
@@ -2955,17 +3089,17 @@ function renderFriendsBoard() {
   }
   // общий зачёт: я и друзья, сортировка по серии — видно, кто впереди
   const rows = [
-    { me: true, name: profile.name || 'Ты', streak: myStreak, weekPct: pct, ava: avatarHtml(profile), color: profile.color },
+    { me: true, name: profile.name || 'Ты', streak: myStreak, weekPct: pct, ava: avatarHtml(profile), bg: avaBg(profile) },
     ...serverFriends.map(f => ({
       me: false, name: f.name || f.login, streak: f.streak ?? null, weekPct: f.weekPct,
-      ava: escapeHtml(f.emoji || (f.name || f.login || '?')[0]), color: f.color
+      ava: friendAvaHtml(f, f.login), bg: avaBg(friendProfile(f, f.login))
     }))
   ].sort((a, b) => (b.streak ?? -1) - (a.streak ?? -1));
 
   box.innerHTML = rows.map((r, i) => `
     <div class="friend-row${r.me ? ' me' : ''}">
       <span class="board-place">${r.streak == null ? '·' : i + 1}</span>
-      <span class="friend-ava" style="background:${safeColor(r.color)}">${r.ava}</span>
+      <span class="friend-ava" style="background:${r.bg}">${r.ava}</span>
       <span class="friend-name">${escapeHtml(r.name)}${r.me ? ' <small class="friend-login">это ты</small>' : ''}</span>
       <span class="goal-text">Серия ${friendMetric(r.streak)} · Неделя ${friendMetric(r.weekPct, '%')}</span>
     </div>`).join('');
@@ -2994,6 +3128,85 @@ function buddyDoneToday(h) {
   const key = (h.name || '').trim().toLowerCase();
   return key in f.shared ? !!f.shared[key] : null;
 }
+// ключ совместного обещания в визитке — название, как и в shared
+function sharedKey(h) { return (h.name || '').trim().toLowerCase(); }
+// мой прогресс по одному обещанию — то же, что публикуем друзьям в sharedStats
+function sharedStatsOf(h) {
+  const now = new Date(), monday = weekStartOf(now);
+  const last7 = [];
+  for (let i = 6; i >= 0; i--) {
+    const key = dateKey(addDays(now, -i));
+    last7.push(key < h.createdAt ? null : doneOn(h, key));
+  }
+  let week = 0, scheduled = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(monday, i), key = dateKey(d);
+    if (key <= TODAY && key >= h.createdAt && doneOn(h, key)) week++;
+    if (h.schedule.includes(dayIdx(d))) scheduled++;
+  }
+  const s30 = habitStatsFor(h, 30);
+  return {
+    today: doneOn(h, TODAY), week, weekGoal: isFlexible(h) ? Number(h.weekTarget) : scheduled,
+    streak: computeStreak(h),
+    pct30: s30.required ? Math.round(((s30.required - s30.missed) / s30.required) * 100) : 100,
+    last7
+  };
+}
+// прогресс друга по этому обещанию (null — друг ещё не обновил приложение)
+function buddyStats(h) {
+  return friendByLogin(h.buddy)?.sharedStats?.[sharedKey(h)] || null;
+}
+// профиль друга в форме, которую понимает avatarHtml(): фото, знак, эмодзи, буква
+function friendProfile(f, login) {
+  const mark = f?.mark && (f.mark.startsWith('face:') || f.mark === 'traveler' || MARKS.some(m => m.id === f.mark)) ? f.mark : null;
+  return { photo: f?.photo || null, mark, emoji: f?.emoji || null, color: f?.color || null, name: f?.name || login || '?' };
+}
+function friendAvaHtml(f, login) {
+  const p = friendProfile(f, login);
+  return p.photo || p.mark || p.emoji ? avatarHtml(p) : escapeHtml(p.name[0]);
+}
+// фон кружка: у фото и знака свой, под эмодзи и буквой — выбранный цвет
+function avaBg(p) { return p.photo || p.mark ? 'transparent' : safeColor(p.color || COLORS[0]); }
+/* Блок «Вместе» в карточке совместного обещания.
+   Общий прогресс — серия и неделя по всем обещаниям каждого (как в доске друзей).
+   По этому обещанию — неделя, серия и последние 7 дней у каждого, плюс сколько
+   из этих дней вы оба выполнили. */
+function duoHtml(h) {
+  if (!h.buddy) return '';
+  const f = friendByLogin(h.buddy);
+  const fp = friendProfile(f, h.buddy);
+  const me = { ...profile, name: profile.name || 'Ты' };
+  const mine = sharedStatsOf(h), theirs = buddyStats(h);
+  const myWeekPct = weekCompletion(weekStartOf(new Date()));
+  const both = theirs ? mine.last7.filter((v, i) => v === true && theirs.last7?.[i] === true).length : null;
+  const person = (p, inner, label, s, overallStreak, overallWeek) => `
+    <div class="duo-person">
+      <span class="duo-ava${s?.today ? ' lit' : ''}" style="background:${avaBg(p)}">${inner}</span>
+      <div class="duo-main">
+        <div class="duo-name">${escapeHtml(label)}${s ? (s.today ? ' · сегодня ✓' : ' · сегодня ещё нет') : ''}</div>
+        ${s ? `<div class="duo-line">Неделя ${s.week} из ${s.weekGoal} · серия ${s.streak} ${plural(s.streak, 'день', 'дня', 'дней')}</div>
+          ${weekDots(s.last7)}`
+          : '<div class="duo-line">Нет данных по этому обещанию — у друга старая версия приложения или обещание названо иначе</div>'}
+        <div class="duo-overall">В целом: серия ${friendMetric(overallStreak, ' дн.')} · неделя ${friendMetric(overallWeek, '%')}</div>
+      </div>
+    </div>`;
+  return `
+    <section class="duo" aria-label="Совместный прогресс">
+      <div class="duo-head">
+        <span class="field-label">Вместе: ты и ${escapeHtml(fp.name)}</span>
+        <span class="duo-both">${both == null ? 'Общий прогресс появится, когда друг обновит приложение'
+          : `Оба выполнили ${both} из 7 последних дней`}</span>
+      </div>
+      ${person(me, profile.photo || profile.mark || profile.emoji ? avatarHtml(me) : escapeHtml(me.name[0]),
+        'Ты', mine, bestCurrentStreak(), myWeekPct)}
+      ${person(fp, friendAvaHtml(f, h.buddy), fp.name, theirs, f?.streak ?? null, f?.weekPct ?? null)}
+    </section>`;
+}
+// полоска последних 7 дней: ● сделано, ○ пропуск, · обещания ещё не было
+function weekDots(last7) {
+  return `<span class="duo-dots" aria-hidden="true">${(last7 || []).map(v =>
+    `<i class="${v === true ? 'on' : v === false ? 'off' : 'none'}"></i>`).join('')}</span>`;
+}
 
 /* ---------- ПРИГЛАШЕНИЕ ДЕЛАТЬ ВМЕСТЕ (QR + ссылка) ----------
    Владелец получает короткий код своего обещания; друг открывает ссылку или
@@ -3018,7 +3231,7 @@ async function openInviteSheet(habitId) {
     box.innerHTML = `<span class="qr-wait">${escapeHtml(r?.error || 'Не удалось получить код')}</span>`;
     return;
   }
-  inviteUrl = `${BACKEND}/?join=${encodeURIComponent(r.code)}`;
+  inviteUrl = `${BACKEND}/invite?join=${encodeURIComponent(r.code)}&v=${INVITE_LINK_VERSION}`;
   drawInviteQr(box, inviteUrl);
 }
 
@@ -3043,18 +3256,12 @@ function drawInviteQr(box, url) {
 let joinCode = null;
 
 async function handleJoinLink() {
-  const code = new URLSearchParams(location.search).get('join');
+  if (!API || !authToken) return;
+  const code = takePendingInvite('join');
   if (!code) return;
-  history.replaceState(null, '', location.pathname + location.hash);
-  if (!API) return;
 
   const info = await apiCall('GET', '/invites/' + encodeURIComponent(code));
   if (!info?.code) { toast('Приглашение не найдено или устарело'); return; }
-  if (!authToken) {
-    localStorage.setItem(PENDING_JOIN_KEY, code);   // примем сразу после входа
-    toast(`@${info.owner} зовёт делать «${info.name}» вместе — войди в аккаунт`);
-    return;
-  }
   joinCode = code;
   document.getElementById('join-icon').innerHTML = info.icon ? iconOf(info.icon) : '🤝';
   document.getElementById('join-who').textContent = `@${info.owner} — «${info.name}»`;
@@ -3095,11 +3302,12 @@ function openBuddySheet(habitId) {
     hint.textContent = 'Совместные обещания работают с аккаунтом — войди сначала.';
     box.innerHTML = '';
   } else if (!serverFriends.length) {
-    hint.textContent = 'Сначала добавь друга на вкладке «Друзья» — по логину или ссылке.';
+    hint.textContent = 'Друзей в аккаунте пока нет. Проще всего — «Позвать по QR / ссылке»: у друга само появится это обещание. ' +
+      'Или добавь его на вкладке «Друзья» — после того как заявку примут, друг появится здесь.';
     box.innerHTML = '';
   } else {
     hint.textContent = 'Выбери друга — вы увидите, кто уже выполнил обещание сегодня. ' +
-      'Важно: у друга обещание должна называться так же.';
+      'Важно: у друга обещание должно называться так же.';
     box.innerHTML = serverFriends.map(f => `
       <button class="row-btn buddy-pick${h.buddy === f.login ? ' on' : ''}" data-buddy="${escapeHtml(f.login)}">
         <span class="friend-ava" style="background:${safeColor(f.color)}">${
@@ -3116,7 +3324,7 @@ function openBuddySheet(habitId) {
 function setHabitBuddy(h, login) {
   h.buddy = login || '';
   save();
-  apiCall('PUT', `/habits/${h.id}`, h);
+  apiCall('PUT', `/habits/${h.id}`, { ...h, buddyChange: true });
   touchStateTs(); scheduleStatePush();      // друг должен увидеть наш статус
   closeSheet('buddy-overlay');
   render();
@@ -3125,7 +3333,7 @@ function setHabitBuddy(h, login) {
 }
 
 /* добавление друга по логину — через сервер, дружба взаимная */
-async function addFriendByLogin(login, silent = false) {
+async function addFriendByLogin(login, silent = false, token = '') {
   const button = document.getElementById('fr-save');
   if (button.disabled) return;
   const err = document.getElementById('fr-error');
@@ -3144,7 +3352,7 @@ async function addFriendByLogin(login, silent = false) {
 
   button.disabled = true;
   const owner = authToken;
-  const r = await apiCallStrict('POST', '/friends', { login });
+  const r = await apiCallStrict('POST', '/friends', token ? { login, token } : { login });
   button.disabled = false;
   if (owner !== authToken) return;
   if (r?.error) return show(r.error);
@@ -3153,16 +3361,77 @@ async function addFriendByLogin(login, silent = false) {
   renderFriends();
   renderFriendsBoard();
   if (!silent) closeSheet('friend-overlay');
-  toast('Теперь вы друзья 👥');
+  toast(r.pending ? 'Заявка отправлена. Данные друга появятся после принятия.' : 'Теперь вы друзья 👥');
+}
+
+// Приглашение из адреса (?add=<логин>, ?join=<код>) запоминаем сразу при
+// загрузке, ещё до входа: гость сначала регистрируется или входит (часто через
+// Google-редирект, который адрес теряет), а bootstrapData для гостя не идёт.
+// Раньше параметры читались только в bootstrapData — у гостя ссылка молча терялась.
+const PENDING_ADD_KEY = 'disbit_pending_add_v1';
+const pendingInvite = { add: null, join: null };   // запас, если хранилище недоступно
+function pendingInviteKey(kind) { return kind === 'add' ? PENDING_ADD_KEY : PENDING_JOIN_KEY; }
+function takePendingInvite(kind) {
+  let value = pendingInvite[kind];
+  try { value = localStorage.getItem(pendingInviteKey(kind)) || value; localStorage.removeItem(pendingInviteKey(kind)); } catch {}
+  pendingInvite[kind] = null;
+  return value;
+}
+let inviteAuthNote = '';
+// Подзаголовок экрана входа виден во всех режимах (подсказка auth-note на
+// экране регистрации скрыта), поэтому объяснение ставим туда.
+function showInviteAuthNote() {
+  const subtitle = document.getElementById('auth-subtitle');
+  if (!subtitle || !inviteAuthNote || authToken) return;
+  subtitle.textContent = inviteAuthNote;
+  subtitle.hidden = false;
+}
+// params — из адреса страницы или из ссылки, которой открыли приложение
+function captureInviteParams(params = new URLSearchParams(location.search), fromAddress = true) {
+  const add = params.get('add')?.trim(), join = params.get('join')?.trim();
+  if (!add && !join) return false;
+  // для add храним и токен ссылки: с ним дружба оформляется без заявки
+  const values = { add: add && JSON.stringify({ login: add, token: params.get('t')?.trim() || '' }), join };
+  for (const kind of ['add', 'join']) {
+    if (!values[kind]) continue;
+    pendingInvite[kind] = values[kind];
+    try { localStorage.setItem(pendingInviteKey(kind), values[kind]); } catch {}
+  }
+  if (fromAddress) {
+    params.delete('add'); params.delete('join'); params.delete('t');
+    const rest = params.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);   // чистим адрес
+  }
+  if (!authToken) {
+    // Ссылка из мессенджера часто открывается в браузере, где человек не вошёл
+    // (в приложении он вошёл). Говорим это прямо на экране входа, а не только
+    // всплывашкой, которую экран входа тут же закрывает.
+    inviteAuthNote = join
+      ? 'Тебя зовут делать обещание вместе. Войди в тот же аккаунт, что в приложении, — приглашение откроется сразу после входа.'
+      : `@${add} зовёт тебя в друзья. Войди в свой аккаунт или создай новый — и вы станете друзьями.`;
+    showInviteAuthNote();
+  }
+  return true;
+}
+// приложение открыли ссылкой https://disbit.ru/invite?… (App Links)
+async function openInviteUrl(url) {
+  let address;
+  try { address = new URL(url); } catch { return; }
+  if (address.hostname !== 'disbit.ru' || address.pathname !== '/invite') return;
+  if (!captureInviteParams(address.searchParams, false) || !authToken) return;
+  await handleInviteLink();
+  await handleJoinLink();
 }
 
 // перешёл по ссылке-приглашению (?add=login) — добавляем сразу после входа
 async function handleInviteLink() {
-  const add = new URLSearchParams(location.search).get('add');
-  if (!add) return;
-  history.replaceState(null, '', location.pathname + location.hash);   // чистим адрес
-  if (!authToken) { toast('Войди в аккаунт — и друг добавится'); return; }
-  await addFriendByLogin(add, true);
+  if (!API || !authToken) return;
+  const raw = takePendingInvite('add');
+  if (!raw) return;
+  let add = { login: raw, token: '' };              // старый формат — просто логин
+  try { const v = JSON.parse(raw); if (v && typeof v.login === 'string') add = v; } catch {}
+  if (!add.login) return;
+  await addFriendByLogin(add.login, true, typeof add.token === 'string' ? add.token : '');
   switchScreen('friends');
 }
 
@@ -3228,15 +3497,16 @@ function renderAccount() {
         <span class="ledger-icon">${icon('i-check', 'ic')}</span>
         <div class="ledger-main">
           <div class="ledger-name">@${escapeHtml(authUser.login)}</div>
-          <div class="ledger-day" style="text-transform:none">${escapeHtml(authUser.email)}</div>
+          <div class="ledger-day" style="text-transform:none">${authUser.telegramOnly ? 'Вход через Telegram' : escapeHtml(authUser.email)}</div>
         </div>
-        <span class="acc-badge">${authUser.emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'}</span>
+        <span class="acc-badge">${authUser.telegramOnly ? 'Только Telegram' : authUser.emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'}</span>
       </div>
       <button class="row-btn danger" id="btn-logout">
         ${icon('i-x')}<span>Выйти из аккаунта</span>
       </button>`;
     box.querySelector('#btn-logout').addEventListener('click', logout);
-    if (!authUser.emailVerified) { const b=document.createElement('button');b.className='row-btn';b.textContent='Подтвердить почту';b.onclick=()=>openVerifySheet(authUser.email);box.prepend(b); }
+    if (!authUser.emailVerified && !authUser.telegramOnly) { const b=document.createElement('button');b.className='row-btn';b.textContent='Подтвердить почту';b.onclick=()=>openVerifySheet(authUser.email);box.prepend(b); }
+    window.DisbitPlatform?.renderAccount?.(box, authUser);
   } else {
     box.innerHTML = `
       <p class="hint" style="margin:0 0 10px">Войди, чтобы обещания и штрафы
@@ -3309,6 +3579,7 @@ function setAuthMode(mode, email = false, updateURL = true) {
   switchLink.textContent = mode === 'login' ? 'Зарегистрироваться' : 'Войти';
   document.getElementById('auth-error').hidden = true;
   document.getElementById('auth-note').hidden = true;
+  showInviteAuthNote();   // пришли по приглашению — объяснение остаётся на экране входа
   if (updateURL && location.hash !== '#' + view) {
     if (!['#login','#register','#register-email'].includes(location.hash)) {
       authReturnHash = location.hash || '#today';
@@ -3347,10 +3618,28 @@ async function loadGoogleAvailability() {
   catch { googleAvailable = false; }
   updateGoogleControls();
 }
+// Registration consents: both boxes, never pre-ticked (152-FZ art. 9).
+function registerConsents() {
+  return {
+    acceptTerms: document.getElementById('rg-accept-terms').checked,
+    acceptPersonalData: document.getElementById('rg-accept-pd').checked
+  };
+}
+function requireConsents() {
+  const consents = registerConsents();
+  const missing = !consents.acceptTerms ? 'rg-accept-terms' : !consents.acceptPersonalData ? 'rg-accept-pd' : '';
+  for (const id of ['rg-accept-terms', 'rg-accept-pd']) document.getElementById(id).removeAttribute('aria-invalid');
+  if (!missing) return true;
+  showAuthError('Отметь согласие с соглашением и на обработку персональных данных');
+  const box = document.getElementById(missing);
+  box.setAttribute('aria-invalid', 'true'); box.focus();
+  return false;
+}
 async function startGoogleSignIn(mode) {
   if (googleBusy || !googleAvailable) return;
   const link = mode === 'link';
   if (!link && authToken) return;
+  if (!link && authMode === 'register' && !requireConsents()) return;
   const button = document.getElementById(link ? 'google-link-submit' : 'google-login-button');
   const error = document.getElementById(link ? 'google-link-error' : 'auth-error');
   const password = document.getElementById('google-link-password');
@@ -3361,11 +3650,11 @@ async function startGoogleSignIn(mode) {
   try {
     if (link) {
       clearTimeout(statePushTimer);
-      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now(), baseUpdatedAt: stateRemoteVersion });
       if (!saved?.ok) throw Error('Не удалось сохранить данные. Проверьте связь и повторите привязку.');
     }
     if (owner !== authToken) return;
-    const result = await googleRequest('google/start', { mode, ...(link ? { password: password.value } : {}) });
+    const result = await googleRequest('google/start', { mode, ...(link ? { password: password.value } : registerConsents()) });
     if (owner !== authToken) return;
     const destination = new URL(result.url);
     if (destination.origin !== 'https://accounts.google.com' || destination.pathname !== '/o/oauth2/v2/auth') throw Error('Некорректный адрес входа. Попробуйте позже.');
@@ -3397,8 +3686,10 @@ async function finishGoogleSignIn() {
       already_linked: 'К этому профилю уже привязан другой Google.',
       session_expired: 'Сессия завершена. Войдите снова и повторите привязку.',
       cancelled: 'Вход через Google отменён. Можно выбрать другой способ.',
-      expired: 'Время входа истекло. Начните снова.'
+      expired: 'Время входа истекло. Начните снова.',
+      consent_required: 'Для этого Google ещё нет аккаунта. Отметьте согласия и нажмите «Продолжить с Google» ещё раз.'
     };
+    if (result.result === 'consent_required' && !authToken) { openAuthSheet('register'); showAuthError(messages.consent_required); return; }
     throw Error(messages[result.result] || 'Не удалось завершить вход через Google. Попробуйте ещё раз.');
   } catch (err) {
     if (authToken) toast(err.message);
@@ -3482,7 +3773,7 @@ async function submitReset(resend = false) {
   try {
     if (!request && owner) {
       clearTimeout(statePushTimer);
-      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+      const saved = await apiCallStrict('PUT', '/state', { data: stateBlob(), ts: Date.now(), baseUpdatedAt: stateRemoteVersion });
       if (!saved?.ok) return show('Не удалось синхронизировать данные. Пароль не изменён. Проверьте связь и повторите сохранение.');
     }
     if (owner !== authToken) return;
@@ -3496,7 +3787,7 @@ async function submitReset(resend = false) {
       resetTimer = setInterval(updateResetResend, 1000);
       document.getElementById('reset-email-field').hidden = true;
       document.getElementById('reset-confirm-fields').hidden = false;
-      document.getElementById('reset-hint').textContent = `Если ${email} — подтверждённая почта аккаунта, код придёт в письме. Код действует 15 минут. После смены пароля войдите заново на всех устройствах.`;
+      document.getElementById('reset-hint').textContent = `Если ${email} — почта аккаунта, код придёт в письме. Код действует 15 минут. После смены пароля войдите заново на всех устройствах.`;
       button.textContent = 'Сохранить пароль';
       show('Проверьте входящие и «Спам». Если письма нет, повторите отправку через минуту (не более 3 запросов в час).', false);
     } else {
@@ -3535,6 +3826,7 @@ async function submitAuth() {
     const invalid=!input.value.trim() || (id==='rg-email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) || (id==='rg-pass' && input.value.length<6);
     if(invalid) {showAuthError(id==='rg-pass'?'Пароль должен содержать не менее 6 символов':id==='rg-email'?'Укажи корректную почту':'Заполни поле');input.setAttribute('aria-invalid','true');input.setAttribute('aria-describedby','auth-error');input.focus();return;}
   }
+  if (authMode === 'register' && !requireConsents()) return;
   btn.disabled = true;
   btn.textContent = 'Секунду…';
   try {
@@ -3548,12 +3840,14 @@ async function submitAuth() {
       res = await apiCallStrict('POST', '/auth/register', {
         login: document.getElementById('rg-login').value.trim(),
         email: document.getElementById('rg-email').value.trim(),
-        password: document.getElementById('rg-pass').value
+        password: document.getElementById('rg-pass').value,
+        ...registerConsents()
       });
     }
     if (res.error) { showAuthError(res.error); return; }
 
     setAuth(res.token, res.user);
+    if(res.pendingRegistration){openVerifySheet(res.user.email,res.verificationEmailSent);return;}
     // вошёл другой человек — стираем данные прежнего владельца и перезагружаемся
     if (claimDeviceFor(res.user)) return;
     passGate();
@@ -3607,6 +3901,11 @@ async function submitVerify() {
   button.disabled=false;button.textContent='Подтвердить';
   if(owner!==authToken) return;
   if (r?.error) { err.hidden = false; err.textContent = r.error; return; }
+  if(r.token&&r.user){
+    setAuth(r.token,r.user);
+    if(claimDeviceFor(r.user))return;
+    passGate();closeSheet('auth-overlay');apiBootstrap();
+  }
   if (authUser) { authUser.emailVerified = true; setAuth(authToken, authUser); }
   closeSheet('verify-overlay');
   renderAccount();
@@ -3632,7 +3931,7 @@ async function resendVerify() {
    выход не стоил несинхронизированных изменений. */
 async function logout() {
   if (API && authToken) {
-    const pushed = await apiCall('PUT', '/state', { data: stateBlob(), ts: Date.now() });
+    const pushed = await apiCall('PUT', '/state', { data: stateBlob(), ts: Date.now(), baseUpdatedAt: stateRemoteVersion });
     if (pushed?.error && !confirm(
       'Не удалось отправить последние изменения на сервер. Выйти всё равно? Несохранённое будет потеряно.')) return;
   }
@@ -3724,13 +4023,17 @@ async function buyCosmetic(kind, id, title) {
 }
 
 /* ---------- ЭКРАН «АВАТАР»: всё, что открывается за биты ---------- */
+let avatarRenderedSignature;
 function renderAvatar() {
   document.getElementById('bit-balance').textContent = profile.bit;
   renderBit();
+  renderGrace();
+  const signature=JSON.stringify([authToken,profile,settings]);
+  if(signature===avatarRenderedSignature)return;
+  avatarRenderedSignature=signature;
   renderThemeGrid();
   renderGearPicker();
   renderIconShop();
-  renderGrace();
   renderTravelerPreview();
   buildScenePicker('journey-scene-shop', null);
 }
@@ -3978,7 +4281,13 @@ function saveProfile() {
   }
   closeSheet('profile-overlay');
   renderProfile();
+  // мой аватар есть и на карточках совместных обещаний, и в доске друзей
+  if (todayVisible()) renderHabits();
+  renderFriends(); renderFriendsBoard();
+  if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
 }
+// «Сегодня» на экране; скрытый экран обновится сам при переходе (render())
+function todayVisible() { return !!document.getElementById('screen-today')?.classList.contains('active'); }
 
 /* мотивация: записал один раз — дальше она «зафиксирована», менять через «Изменить».
    Так текст не теряется и воспринимается как обещание себе, а не черновик. */
@@ -4014,10 +4323,16 @@ function saveMotivation() {
 }
 
 /* ---------- ЭКСПОРТ / ИМПОРТ / ОЧИСТКА ---------- */
-function exportData() {
+async function exportData() {
+  let server = null;
+  if (authToken) {
+    try { server = await apiCallStrict('GET', '/account/export'); }
+    catch { dataStatus('Не удалось получить данные аккаунта. Проверь подключение и повтори экспорт.'); return; }
+  }
   const data = {
     app: 'disbit',
     version: 5,
+    server,
     exportedAt: new Date().toISOString(),
     habits, ledger, profile, settings, friends, goals, rewards, backlog, skips,
     settled: localStorage.getItem(SETTLED_KEY)
@@ -4078,6 +4393,7 @@ function switchScreen(name, updateHash = true) {
   const previous = document.querySelector('.screen.active')?.id.slice(7);
   const changed = document.querySelector('.screen.active')?.id !== 'screen-' + name;
   if (!changed) return;
+  const navStarted=window.DisbitPerf?.start('navigation')??null;
   if (changed && previous) pathScroll.set(previous, window.scrollY);
   document.querySelectorAll('.screen').forEach(s =>
     s.classList.toggle('active', s.id === 'screen-' + name));
@@ -4108,6 +4424,8 @@ function switchScreen(name, updateHash = true) {
     window.scrollTo({ top: pathScroll.get(name) || 0, behavior: 'instant' });
     if (updateHash || name === 'operations') document.getElementById('screen-' + name).focus({ preventScroll: true });
   }
+  window.DisbitPerf?.end('navigation',navStarted);
+  window.DisbitPerf?.frame('navigation',navStarted);
 }
 
 
@@ -4120,12 +4438,19 @@ function openSheet(id) {
   el.inert = false;
   pathSheetFocus.delete(id); pathSheetFocus.set(id, document.activeElement);
   el.hidden = false;
+  // Все шторки на z-index 100, и при равенстве побеждает порядок в разметке:
+  // приглашение и выбор друга стоят раньше карточки обещания и открывались под ней.
+  // Шторка, открытая поверх другой, встаёт выше самой верхней (до 149 — тосты выше).
+  const under = [...document.querySelectorAll('.sheet-overlay:not([hidden])')].filter(o => o !== el);
+  el.style.zIndex = under.length
+    ? String(Math.min(149, 1 + Math.max(...under.map(o => Number(getComputedStyle(o).zIndex) || 100))))
+    : '';
   if (id === 'add-overlay') { document.getElementById('habit-form-error').hidden = true; updateHabitForm(); }
   queueMicrotask(() => {
     if (!el.isConnected || el.hidden || el.inert || el.contains(document.activeElement)) return;
     const touch = matchMedia('(pointer: coarse)').matches && document.documentElement.dataset.input !== 'keyboard';
     const target = (touch || id === 'auth-overlay') ? (el.querySelector('.sheet-title, .sheet h2, .sheet h3') || el.querySelector('.sheet'))
-      : el.querySelector('input:not([disabled]), button:not([disabled])');
+      : (el.querySelector('.topup-chip.on') || (id === 'topup-overlay' && el.querySelector('#topup-custom')) || el.querySelector('input:not([disabled]), button:not([disabled])'));
     if (touch && target && !target.hasAttribute('tabindex')) target.tabIndex = -1;
     target?.focus({preventScroll: true});
   });
@@ -4304,13 +4629,10 @@ function selectedDays() {
     .map(b => Number(b.dataset.day));
 }
 
-/* ---------- ПРУФ ВЫПОЛНЕНИЯ (живое фото/видео) ----------
-   Открывается сразу после отметки обещания. Камера — только живая (getUserMedia),
-   из галереи грузить нельзя. Пруф уходит на сервер в статус pending, дальше его
-   вручную проверяет админ на /review. Отказ от фото не меняет выполнение.
-   Камеру нельзя протестировать без устройства — всё обёрнуто в try/guard, чтобы
-   отсутствие камеры/разрешения не ломало приложение (остаётся кнопка «Пропустить»). */
+/* Camera or selected gallery media; the moderator sees the declared source.
+   Completion awaits upload or an available proof skip. */
 let proofHabit = null, proofStream = null, proofBlob = null, proofType = 'photo';
+let proofSource = 'camera', proofSelectionRequest = 0;
 let proofFacing = 'user', proofRecorder = null, proofChunks = [], proofRecTimer = null, proofMirrorRAF = null;
 let proofRecordStream = null;
 let proofSending = false, proofCameraRequest = 0;
@@ -4321,6 +4643,9 @@ function openProofBanner(h) {
   proofHabit = h;
   proofBlob = null;
   proofType = 'photo';
+  proofSource = 'camera'; proofSelectionRequest++;
+  document.getElementById('proof-source').hidden = true;
+  document.getElementById('proof-gallery').disabled = false;
   document.getElementById('proof-habit-name').textContent = h.name || 'Обещание';
   document.getElementById('proof-skip').disabled = false;
   proofShowCapture();
@@ -4342,6 +4667,8 @@ function proofShowCapture() {
 }
 
 async function startProofCam() {
+  proofSelectionRequest++;
+  proofSource = 'camera';
   stopProofCam();
   document.getElementById('proof-start').hidden = true;
   document.getElementById('proof-photo').disabled = true;
@@ -4382,13 +4709,13 @@ async function startProofCam() {
     //   хранилища приложения); NotFoundError — на устройстве нет камеры/микро-
     //   фона; NotReadableError — камера занята другим приложением.
     const hints = {
-      NotAllowedError: 'Нет доступа к камере. Разреши её в настройках сайта или приложения и повтори попытку. Выполнение сохранено.',
+      NotAllowedError: 'Нет доступа к камере. Разреши её в настройках сайта или приложения и нажми «Попробовать снова». Без снимка или видео пруф не отправится.',
       NotFoundError: 'Камера или микрофон не найдены на этом устройстве.',
       NotReadableError: 'Камера занята другим приложением — закрой его и попробуй снова.',
       OverconstrainedError: 'Не удалось включить выбранную камеру устройства.',
       SecurityError: 'Камера заблокирована настройками безопасности устройства.'
     };
-    err.textContent = hints[e.name] || `Не удалось включить камеру (${e.name || 'ошибка'}). Из галереи снимать нельзя — попробуй ещё раз.`;
+    err.textContent = hints[e.name] || 'Не удалось включить камеру. Попробуй снова или выбери файл из галереи.';
   }
 }
 function stopProofCam() {
@@ -4491,7 +4818,7 @@ async function proofToggleVideo() {
   proofRecordStream = recordStream;
 
   proofChunks = [];
-  try { proofRecorder = new MediaRecorder(recordStream, { mimeType: proofPickVideoMime() || undefined }); }
+  try { proofRecorder = new MediaRecorder(recordStream, { mimeType: proofPickVideoMime() || undefined, videoBitsPerSecond: 2000000, audioBitsPerSecond: 64000 }); }
   catch { cancelAnimationFrame(proofMirrorRAF); proofMirrorRAF = null; if (proofRecordStream !== proofStream) proofRecordStream?.getVideoTracks().forEach(t => t.stop()); proofRecordStream = null; document.getElementById('proof-photo').disabled = false; document.getElementById('proof-flip').disabled = false; toast('Запись видео недоступна. Можно сделать фото.'); return; }
   proofRecorder.ondataavailable = e => { if (e.data && e.data.size) proofChunks.push(e.data); };
   proofRecorder.onstop = () => {
@@ -4503,6 +4830,7 @@ async function proofToggleVideo() {
     const b = new Blob(proofChunks, { type: proofRecorder.mimeType || 'video/webm' });
     proofChunks = [];
     proofRecorder = null;
+    if (b.size > 10 * 1024 * 1024) { toast('Видео больше 10 МБ. Запиши более короткое видео.'); return; }
     proofBlob = b; proofType = 'video';
     proofShowPreview(URL.createObjectURL(b), 'video');
   };
@@ -4519,6 +4847,9 @@ async function proofToggleVideo() {
 }
 
 function proofShowPreview(url, type) {
+  const sourceLabel = document.getElementById('proof-source');
+  sourceLabel.textContent = proofSource === 'gallery' ? 'Из галереи · модератор увидит эту отметку' : 'Снято камерой приложения';
+  sourceLabel.hidden = false;
   // The captured Blob remains available for retry, but live tracks are no
   // longer needed while the user reviews it.
   stopProofCam();
@@ -4535,6 +4866,7 @@ function proofShowPreview(url, type) {
   document.getElementById('proof-confirm').hidden = false;
 }
 function proofRetake() {
+  document.getElementById('proof-source').hidden = true;
   proofBlob = null;
   if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
   proofPreviewUrl = null;
@@ -4546,21 +4878,63 @@ function proofRetake() {
   startProofCam();
 }
 
+async function proofSelectFile(file) {
+  if (!proofHabit || proofSending) return;
+  const request = ++proofSelectionRequest, habit = proofHabit;
+  const error = document.getElementById('proof-upload-error');
+  error.hidden = true;
+  const video = ['video/mp4','video/webm','video/quicktime'].includes(file.type);
+  if (!video && !['image/jpeg','image/png','image/webp'].includes(file.type)) {
+    error.textContent = 'Выбери фото JPEG, PNG, WebP или видео MP4, MOV, WebM. Для HEIC используй копию в JPEG.';
+    error.hidden = false; return;
+  }
+  if (!file.size || file.size > (video ? 10 : 5)*1024*1024) {
+    error.textContent = video ? 'Выбери видео до 10 МБ и 15 секунд.' : 'Выбери непустое фото до 5 МБ.';
+    error.hidden = false; return;
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    await new Promise((resolve,reject)=>{
+      const media = document.createElement(video ? 'video' : 'img');
+      const timer = setTimeout(()=>finish(Error('Не удалось прочитать файл. Выбери другой.')),10000);
+      const finish = err => {
+        clearTimeout(timer);media.onload=null;media.onloadedmetadata=null;media.onerror=null;
+        media.removeAttribute('src'); if(video)media.load();
+        err ? reject(err) : resolve();
+      };
+      if(video){media.preload='metadata';media.onloadedmetadata=()=>finish(Number.isFinite(media.duration)&&media.duration>0&&media.duration<=15.1 ? null : Error('Видео должно быть не длиннее 15 секунд.'));}
+      else media.onload=()=>finish(media.naturalWidth>0 ? null : Error('Не удалось открыть фото.'));
+      media.onerror=()=>finish(Error('Этот файл не удалось открыть. Выбери другой формат.'));
+      media.src=url;
+    });
+    if(request!==proofSelectionRequest || habit!==proofHabit || proofSending)return;
+    if(proofRecorder){proofRecorder.onstop=null;proofRecorder.ondataavailable=null;if(proofRecorder.state!=='inactive')proofRecorder.stop();proofRecorder=null;}
+    clearInterval(proofRecTimer);cancelAnimationFrame(proofMirrorRAF);proofChunks=[];
+    proofBlob=file;proofType=video?'video':'photo';proofSource='gallery';
+    document.getElementById('proof-cam-err').hidden=true;
+    document.getElementById('proof-start').hidden=true;
+    proofShowPreview(URL.createObjectURL(file),proofType);
+  } catch(e) {
+    if(request===proofSelectionRequest&&habit===proofHabit){error.textContent=e.message;error.hidden=false;}
+  } finally { URL.revokeObjectURL(url); }
+}
+
 async function proofSend() {
   if (!proofBlob || !proofHabit || proofSending) return;
   const uploadError = document.getElementById('proof-upload-error');
   uploadError.hidden = true;
-  if (!proofBlob.size || proofBlob.size > 25 * 1024 * 1024) {
-    uploadError.textContent = proofBlob.size ? 'Файл больше 25 МБ. Пересними более короткое видео.' : 'Файл пуст. Пересними момент.';
+  const maxProofBytes = (proofType === 'video' ? 10 : 5) * 1024 * 1024;
+  if (!proofBlob.size || proofBlob.size > maxProofBytes) {
+    uploadError.textContent = proofBlob.size ? (proofType === 'video' ? 'Видео больше 10 МБ. Пересними более короткое видео.' : 'Фото больше 5 МБ. Пересними фото.') : 'Файл пуст. Пересними момент.';
     uploadError.hidden = false; return;
   }
   if (!API || !authToken) { toast('Для отправки фото нужен аккаунт.'); return; }
   const h = proofHabit;
-  const q = new URLSearchParams({ habitId: h.id, day: TODAY, type: proofType, name: h.name || '' });
+  const q = new URLSearchParams({ habitId: h.id, day: TODAY, type: proofType, name: h.name || '', source: proofSource });
   const mime = proofBlob.type || (proofType === 'video' ? 'video/webm' : 'image/jpeg');
   const blob = proofBlob;
   proofSending = true;
-  const controls = ['proof-send', 'proof-retake', 'proof-skip', 'proof-close', 'proof-share-card'];
+  const controls = ['proof-send', 'proof-retake', 'proof-skip', 'proof-close', 'proof-share-card', 'proof-gallery'];
   controls.forEach(id => document.getElementById(id).disabled = true);
   document.getElementById('proof-send').textContent = 'Отправляем…';
   document.getElementById('proof-send').setAttribute('aria-busy', 'true');
@@ -4570,7 +4944,7 @@ async function proofSend() {
     const headers = { 'Content-Type': mime, 'X-Time-Zone': clientTimeZone };
     if (authToken) headers.Authorization = 'Bearer ' + authToken;
     const r = await fetch(API + '/proofs?' + q.toString(), { method: 'POST', headers, body: blob, signal: controller.signal });
-    if (!r.ok) throw new Error(r.status === 413 ? 'Файл больше 25 МБ.' : (await r.json().catch(() => ({}))).error || 'Не удалось отправить файл.');
+    if (!r.ok) throw new Error(r.status === 413 ? (proofType === 'video' ? 'Видео больше 10 МБ.' : 'Фото больше 5 МБ.') : (await r.json().catch(() => ({}))).error || 'Не удалось отправить файл.');
     proofSending = false;
     closeProofBanner(true);
     toast('Пруф отправлен на проверку');
@@ -4598,6 +4972,7 @@ async function proofSkip() {
 
 function closeProofBanner(authorized = false) {
   if (proofSending) return;
+  proofSelectionRequest++;
   if (proofRecorder) proofRecorder.onstop = null;
   if (proofRecorder && proofRecorder.state === 'recording') { try { proofRecorder.stop(); } catch {} }
   clearInterval(proofRecTimer);
@@ -4652,6 +5027,11 @@ function wireProof() {
   $('proof-video').onclick = proofToggleVideo;
   $('proof-retake').onclick = proofRetake;
   $('proof-send').onclick = proofSend;
+  $('proof-gallery').onclick = () => { if (!proofSending) $('proof-file').click(); };
+  $('proof-file').onchange = async event => {
+    const file = event.target.files?.[0]; event.target.value = '';
+    if (file) await proofSelectFile(file);
+  };
   $('proof-skip').onclick = proofSkip;
   $('proof-flip').onclick = () => { proofFacing = proofFacing === 'user' ? 'environment' : 'user'; startProofCam(); };
   document.addEventListener('visibilitychange', () => { if (document.hidden) suspendProofCamera(); });
@@ -4928,6 +5308,49 @@ function segValue(segId, attr) {
   return document.querySelector(`#${segId} .seg-btn.active`).dataset[attr];
 }
 
+/* ---------- ДЕНЕЖНОЕ УСЛОВИЕ (раздел 6 соглашения) ----------
+   Работает, только когда сервер подключил ЮKassa. Без отметки штраф деньгами —
+   запись в журнале; с отметкой — неустойка из депозита со следующего дня. */
+function acceptedMoneyTerms(id) {
+  return id ? (wallet?.terms || []).find(t => t.habitId === id) : null;
+}
+function updateMoneyTerms() {
+  const box = document.getElementById('money-terms');
+  if (!box) return;
+  const live = !!(API && authToken && wallet?.payments?.live);
+  const money = segValue('stake-mode', 'stake') === 'money';
+  const charity = document.querySelector('#recipient [data-rec="charity"]');
+  charity.disabled = live;
+  charity.title = live ? 'В этой редакции соглашения неустойка уплачивается только создателям' : '';
+  if (live && segValue('recipient', 'rec') !== 'creators') setSegActive('recipient', 'rec', 'creators');
+  box.hidden = !(live && money);
+  if (box.hidden) return;
+  const accepted = acceptedMoneyTerms(editingId);
+  const row = document.getElementById('money-terms-row');
+  const check = document.getElementById('f-money-accept');
+  const state = document.getElementById('money-terms-state');
+  if (accepted) {
+    row.hidden = true; check.checked = false;
+    state.textContent = `Денежное условие действует с ${formatDayLong(accepted.effectiveDay)}: ${rub(accepted.amount)} за невыполненный день. Сумму, расписание и цель изменить нельзя — для новых условий создай новое обещание.`;
+    return;
+  }
+  row.hidden = false;
+  const amount = Math.max(0, Math.round(Number(document.getElementById('f-amount').value) || 0));
+  const start = wtValue > 0 ? 'с ближайшего понедельника' : 'со следующего дня';
+  document.getElementById('money-terms-text').textContent =
+    `Включить денежное условие: неустойка ${amount} ₽ из депозита за каждый невыполненный ${wtValue > 0 ? 'период, когда недельная норма уже недостижима' : 'день по расписанию'}, ${start}. День засчитывается с отметкой и принятым пруфом. Удержание можно оспорить в течение 30 дней.`;
+  const legalOk = wallet?.legal?.current !== false;
+  check.disabled = !legalOk || amount < 10;
+  if (check.disabled) check.checked = false;
+  state.textContent = !legalOk ? 'Чтобы включить денежное условие, прими новую редакцию соглашения в разделе «Деньги».'
+    : amount < 10 ? 'Денежное условие — от 10 ₽ за день.'
+    : 'Без этой отметки штраф — только запись в журнале, деньги не удерживаются.';
+}
+function formatDayLong(day) {
+  const d = new Date(day + 'T12:00:00Z');
+  return Number.isNaN(d.valueOf()) ? day : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+}
+
 /* ---------- ФОРМА ОБЕЩАНИЯ ---------- */
 function openAddSheet() {
   editingId = null;
@@ -4935,6 +5358,9 @@ function openAddSheet() {
   document.getElementById('btn-save').textContent = 'Дать обещание';
   resetAddForm();
   restoreHabitDraft('new');
+  document.getElementById('f-money-accept').checked = false;
+  updateMoneyTerms();
+  window.DisbitBlocking?.syncLockForm();
   openSheet('add-overlay');
   document.getElementById('f-name').focus();
 }
@@ -4973,6 +5399,9 @@ function openEditSheet(id) {
   }
 
   restoreHabitDraft(id);
+  document.getElementById('f-money-accept').checked = false;
+  updateMoneyTerms();
+  window.DisbitBlocking?.syncLockForm();
   openSheet('add-overlay');
 }
 
@@ -5025,14 +5454,15 @@ async function submitHabit() {
 
   const goalType = segValue('goal-type', 'goal');
   const stakeMode = segValue('stake-mode', 'stake');
-  if (stakeMode === 'lock' && !habits.some(h => h.id === editingId && h.stake.mode === 'lock')) {
+  if (stakeMode === 'lock' && !window.DisbitBlocking?.ready() && !habits.some(h => h.id === editingId && h.stake.mode === 'lock')) {
     toast('Блокировка приложений пока недоступна'); return;
   }
 
   const data = {
     name,
-    icon: document.querySelector('#icon-picker .selected').dataset.icon,
-    color: document.querySelector('#color-picker .selected').dataset.color,
+    // цвет или иконка из старой палитры не выделены в пикере — сохраняем прежние
+    icon: document.querySelector('#icon-picker .selected')?.dataset.icon || habits.find(x => x.id === editingId)?.icon || HABIT_ICONS[0],
+    color: document.querySelector('#color-picker .selected')?.dataset.color || habits.find(x => x.id === editingId)?.color || COLORS[0],
     schedule,
     weekTarget,
     min: document.getElementById('f-min').value.trim(),
@@ -5057,6 +5487,9 @@ async function submitHabit() {
 
   const old = habits.find(h => h.id === editingId);
   const draftKey = editingId || 'new';
+  const moneyAccept = stakeMode === 'money' && !document.getElementById('money-terms').hidden &&
+    document.getElementById('f-money-accept').checked;
+  if (moneyAccept && data.stake.recipient !== 'creators') { habitFormError('Неустойка уплачивается только создателям.'); return; }
   const h = old ? { ...old, ...data } : { id: 'h' + Date.now(), ...data, createdAt: TODAY, counts: {}, history: {} };
   habitFormSaving = true;
   const saveButton = document.getElementById('btn-save');
@@ -5078,6 +5511,14 @@ async function submitHabit() {
       pendingBacklogId = null;
     }
     save(); succeeded = true;
+    if (moneyAccept) {
+      const terms = await apiCallStrict('POST', '/wallet/terms', { habitId: h.id, accept: true });
+      if (terms.error) toast('Обещание сохранено, но денежное условие не включено: ' + terms.error);
+      else {
+        toast(`Денежное условие: ${rub(terms.amount)} за пропуск с ${formatDayLong(terms.effectiveDay)}`);
+        loadWallet();
+      }
+    }
   } finally {
     habitFormSaving = false;
     saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); saveButton.textContent = label;
@@ -5191,6 +5632,24 @@ function nativePlugin(name) {
   return isNativeApp ? (window.Capacitor?.Plugins?.[name] || null) : null;
 }
 
+/* Приглашение: системное меню «Поделиться». В приложении — плагин Share
+   (в Android WebView нет navigator.share), в браузере — Web Share API,
+   иначе копируем текст вместе со ссылкой, чтобы сообщение не было голой ссылкой. */
+async function shareInvite(data) {
+  const Share = nativePlugin('Share');
+  try {
+    if (window.DisbitPlatform?.share && await window.DisbitPlatform.share(data)) return;
+    if (Share) { await Share.share({ title: data.title, text: data.text, url: data.url, dialogTitle: 'Позвать друга' }); return; }
+    if (navigator.share) { await navigator.share(data); return; }
+  } catch (error) {
+    if (error?.name === 'AbortError' || /cancel/i.test(String(error?.message || error))) return;
+  }
+  const message = `${data.text}
+${data.url}`;
+  try { await navigator.clipboard.writeText(message); toast('Текст приглашения скопирован — отправь его другу'); }
+  catch { prompt('Скопируй приглашение:', message); }
+}
+
 /* Статус-бар красим в фон текущей темы. Цвет берём из вычисленного --bg, а не
    из таблицы в коде: тем восемь, и любая новая подхватится сама. */
 function isLightBg(hex) {
@@ -5254,12 +5713,79 @@ function onBackButton() {
    по старой дате: TODAY вычисляется один раз при загрузке, и на нём висят
    отметки, автоитог и штрафы. Латать по кусочкам ненадёжно — перезагружаем
    страницу, и день пересчитывается с нуля вместе с settlePastDays(). */
+/* Друг мог принять наше приглашение, пока приложение было свёрнуто: сервер
+   уже связал обещания, а локальная копия об этом не знает. Подтягиваем только
+   поле buddy — остальное локальное состояние не трогаем. */
+let buddySyncAt = 0;
+async function syncBuddiesFromServer() {
+  if (!API || !authToken || Date.now() - buddySyncAt < 20000) return;
+  buddySyncAt = Date.now();
+  const owner = authToken;
+  const remote = await apiCall('GET', '/habits?includeArchived=1');
+  if (owner !== authToken || !Array.isArray(remote)) return;
+  let changed = false;
+  for (const r of remote) {
+    const h = habits.find(x => x.id === r.id);
+    if (h && (h.buddy || '') !== (r.buddy || '')) { h.buddy = r.buddy || ''; changed = true; }
+  }
+  if (!changed) return;
+  save(); render();
+  if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
+  loadFriends(true);
+}
 function onAppResume() {
   refreshClientTimeZone();
   if (dateKey() !== TODAY) { location.reload(); return; }
+  syncBuddiesFromServer();
   checkNotifPermission();
   scheduleNotifSync();          // расписание тоже могло протухнуть
+  // вернулись со страницы оплаты ЮKassa (она открывается в браузере) — спросим сервер
+  if (wallet?.payments?.live && wallet.pending) loadWallet();
 }
+
+/* В браузере и PWA события resume нет, а вкладка может жить сутками. Без этой
+   проверки после полуночи экран показывал вчерашний день, и отметка упиралась в
+   «День сменился. Обнови приложение». Открытую шторку или диалог не рвём —
+   перезагрузимся, как только их закроют. */
+function reloadIfDayChanged() {
+  if (dateKey() === TODAY) return false;
+  if (document.hidden || document.querySelector('.sheet-overlay:not([hidden]), dialog[open]')) return false;
+  location.reload();
+/* Друг мог принять наше приглашение, пока приложение было свёрнуто: сервер
+   уже связал обещания, а локальная копия об этом не знает. Подтягиваем только
+   поле buddy — остальное локальное состояние не трогаем. */
+let buddySyncAt = 0;
+async function syncBuddiesFromServer() {
+  if (!API || !authToken || Date.now() - buddySyncAt < 20000) return;
+  buddySyncAt = Date.now();
+  const owner = authToken;
+  const remote = await apiCall('GET', '/habits?includeArchived=1');
+  if (owner !== authToken || !Array.isArray(remote)) return;
+  let changed = false;
+  for (const r of remote) {
+    const h = habits.find(x => x.id === r.id);
+    if (h && (h.buddy || '') !== (r.buddy || '')) { h.buddy = r.buddy || ''; changed = true; }
+  }
+  if (!changed) return;
+  save(); render();
+  if (!document.getElementById('hstat-overlay').hidden) renderHabitStats();
+  loadFriends(true);
+}
+  return true;
+}
+function msToNextDay() {
+  syncBuddiesFromServer();
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5) - now;
+}
+function scheduleDayCheck(delay = msToNextDay()) {
+  setTimeout(() => {
+    if (dateKey() === TODAY) scheduleDayCheck();
+    else if (!reloadIfDayChanged()) scheduleDayCheck(30000);
+  }, Math.min(delay, 2147483647));
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !reloadIfDayChanged()) syncBuddiesFromServer(); });
+scheduleDayCheck();
 
 /* Клавиатура.
    1. resize 'native' — WebView сжимается под клавиатуру, и поле ввода вместе с
@@ -5300,6 +5826,9 @@ function wireNativeShell() {
   if (App) {
     App.addListener('backButton', onBackButton);
     App.addListener('resume', onAppResume);
+    // ссылки-приглашения: приложение уже запущено / запущено самой ссылкой
+    App.addListener('appUrlOpen', e => { openInviteUrl(e?.url); });
+    App.getLaunchUrl?.()?.then?.(r => { if (r?.url) openInviteUrl(r.url); })?.catch?.(() => {});
   }
   // Сплэш держится до этого момента (launchAutoHide выключен в конфиге):
   // прячем его, только когда экран уже отрисован, иначе видна белая вспышка.
@@ -5505,6 +6034,7 @@ function wireNotifications() {
 
 /* ---------- ИНИЦИАЛИЗАЦИЯ ---------- */
 function init() {
+  const initStarted=window.DisbitPerf?.start('startup')??null;
   wirePathUI();
   wireJourneyUI();
   wireInsightsUI();
@@ -5540,6 +6070,7 @@ function init() {
       document.querySelectorAll('#topup-amounts .topup-chip').forEach(c => c.classList.remove('on'));
       chip.classList.add('on');
       document.getElementById('topup-custom').value = '';   // выбрали готовую сумму
+      if (typeof updateTopupFee === 'function') updateTopupFee();
     }));
 
   document.getElementById('join-yes').addEventListener('click', acceptJoin);
@@ -5549,10 +6080,9 @@ function init() {
   });
   document.getElementById('invite-share').addEventListener('click', async () => {
     if (!inviteUrl) { toast('Код ещё готовится'); return; }
-    const data = { title: 'disbit', text: 'Погнали держать это обещание вместе', url: inviteUrl };
-    if (navigator.share) { try { await navigator.share(data); return; } catch {} }
-    try { await navigator.clipboard.writeText(inviteUrl); toast('Ссылка скопирована 🔗'); }
-    catch { prompt('Скопируй ссылку:', inviteUrl); }
+    const name = document.getElementById('invite-habit').textContent;
+    const data = { title: 'Disbit', text: `Предлагаю делать «${name}» вместе. Каждый день будет видно, кто уже сделал свою часть — так проще не съезжать.`, url: inviteUrl };
+    await shareInvite(data);
   });
   [['btn-open-stats','stats'],['btn-open-calendar','calendar'],['ach-card','medals']].forEach(([id,screen])=>{
     document.getElementById(id).addEventListener('click',e=>{
@@ -5579,8 +6109,14 @@ function init() {
     const money = btn.dataset.stake === 'money';
     document.getElementById('stake-money').hidden = !money;
     document.getElementById('stake-lock').hidden = money;
+    updateMoneyTerms();
   });
   wireSeg('recipient');
+  // сумма, расписание и недельная норма меняют текст денежного условия
+  ['input', 'click'].forEach(type => document.getElementById('add-overlay').addEventListener(type, event => {
+    if (event.target.closest?.('#money-terms')) return;
+    queueMicrotask(updateMoneyTerms);
+  }));
 
   // навигация (клик игнорируем, если это был «хвост» перетаскивания капли)
   // Stable tap targets: no draggable lens or hover magnification in navigation.
@@ -5755,12 +6291,8 @@ function init() {
   });
   document.getElementById('btn-share-invite').addEventListener('click', async () => {
     if (!myLogin) { toast('Сначала войди в аккаунт'); return; }
-    const data = { title: 'disbit', text: `Погнали держать обещания вместе — мой логин ${myLogin}`, url: inviteLink() };
-    if (navigator.share) { try { await navigator.share(data); } catch {} }
-    else {
-      try { await navigator.clipboard.writeText(inviteLink()); toast('Ссылка скопирована 🔗'); }
-      catch { prompt('Скопируй ссылку:', inviteLink()); }
-    }
+    const data = { title: 'Disbit', text: 'Держу обещания в Disbit — с ценой за пропуск, чтобы не съезжать. Давай вместе: будем видеть прогресс друг друга.', url: inviteLink() };
+    await shareInvite(data);
   });
 
   document.getElementById('btn-backlog-add').addEventListener('click', () => {
@@ -5832,6 +6364,7 @@ function init() {
   };
   // «Начало» — интро-воронка при первом входе. Экран плюсов внутри заменяет
   // старый 3-экранный онбординг, поэтому дальше сразу гейт/итог дня.
+  captureInviteParams();   // ?add= / ?join= — запомнить до входа
   if (new URLSearchParams(location.search).get('oauth') === 'google' && !isNativeApp && sameOrigin) finishGoogleSignIn();
   else if (!authToken && !localStorage.getItem(INTRO_KEY)
     && !sessionStorage.getItem('disbit-password-reset-complete')) openIntro(afterOnboard);
@@ -5839,6 +6372,8 @@ function init() {
 
   wireNativeShell();     // статус-бар, «назад», resume; сплэш убираем последним
   apiBootstrap();
+  window.DisbitPerf?.end('startup',initStarted);
+  window.DisbitPerf?.frame('startup',initStarted);
 }
 
 document.addEventListener('DOMContentLoaded', init);

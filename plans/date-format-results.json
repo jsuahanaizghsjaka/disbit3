@@ -1,0 +1,1 @@
+{"callsPerSample":259,"equal":true,"samples":[{"currentMs":36,"reusedFormatterMs":0.8999999999068677},{"currentMs":38.300000000046566,"reusedFormatterMs":0.9000000000232831},{"currentMs":44.90000000002328,"reusedFormatterMs":0.7999999999301508}],"note":"Microbenchmark only; not an end-to-end speedup prediction."}

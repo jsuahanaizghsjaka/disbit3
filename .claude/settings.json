@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm test:*)",
+      "Bash(node --test:*)",
+      "Bash(node tests/run-browser.mjs:*)",
+      "Bash(python legal/build.py:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(powershell:*)",
+      "Bash(pwsh:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)"
+    ],
+    "deny": [
+      "Read(./android/keystore.properties)",
+      "Read(./keystore/**)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./server-backups/**)",
+      "Read(~/.ssh/**)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  }
+}
